@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="grid two">
+    <section class="panel">
+        <h1>Upcoming Session</h1>
+        {% if upcoming_session %}
+            <h2>{{ upcoming_session.title }}</h2>
+            <p>{{ upcoming_session.starts_at }}</p>
+            <p>{{ upcoming_session.location }} · {{ upcoming_session.get_session_type_display }}</p>
+            <a class="button" href="{% url 'scheduling:session_detail' upcoming_session.id %}">Open Session</a>
+        {% else %}
+            <p class="muted">No upcoming sessions yet.</p>
+        {% endif %}
+    </section>
+    <section class="panel">
+        <h1>Sprint 1 Scope</h1>
+        <p>Training sessions, next session visibility, RSVP capture, and coach attendance overview.</p>
+    </section>
+</div>
+
+<section class="panel" style="margin-top: 16px;">
+    <h2>All Sessions</h2>
+    {% if sessions %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>When</th>
+                    <th>Location</th>
+                    <th>Type</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for session in sessions %}
+                    <tr>
+                        <td>{{ session.title }}</td>
+                        <td>{{ session.starts_at }}</td>
+                        <td>{{ session.location }}</td>
+                        <td>{{ session.get_session_type_display }}</td>
+                        <td><a href="{% url 'scheduling:session_detail' session.id %}">View</a></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">Create the first session to start Sprint 1.</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="grid two">
+    <section class="panel">
+        <h1>{{ session.title }}</h1>
+        <p>{{ session.starts_at }}</p>
+        <p>{{ session.location }} · {{ session.get_session_type_display }}</p>
+        {% if session.notes %}
+            <p>{{ session.notes }}</p>
+        {% endif %}
+        <p>Going: {{ session.going_count }} | Not Going: {{ session.not_going_count }}</p>
+    </section>
+    <section class="panel">
+        <h2>Submit RSVP</h2>
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit">Save RSVP</button>
+        </form>
+    </section>
+</div>
+
+<section class="panel" style="margin-top: 16px;">
+    <h2>Responses</h2>
+    {% if rsvps %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Player</th>
+                    <th>Status</th>
+                    <th>Updated</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rsvp in rsvps %}
+                    <tr>
+                        <td>{{ rsvp.player.name }}</td>
+                        <td>{{ rsvp.get_status_display }}</td>
+                        <td>{{ rsvp.updated_at }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">No RSVP responses yet.</p>
+    {% endif %}
+</section>
+{% endblock %}

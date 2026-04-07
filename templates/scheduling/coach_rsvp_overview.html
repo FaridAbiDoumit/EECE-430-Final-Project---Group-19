@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h1>Coach RSVP Overview</h1>
+    {% if sessions %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Session</th>
+                    <th>When</th>
+                    <th>Going</th>
+                    <th>Not Going</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for session in sessions %}
+                    <tr>
+                        <td>{{ session.title }}</td>
+                        <td>{{ session.starts_at }}</td>
+                        <td>{{ session.going_count }}</td>
+                        <td>{{ session.not_going_count }}</td>
+                        <td><a href="{% url 'scheduling:session_detail' session.id %}">Inspect</a></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">No sessions available.</p>
+    {% endif %}
+</section>
+{% endblock %}

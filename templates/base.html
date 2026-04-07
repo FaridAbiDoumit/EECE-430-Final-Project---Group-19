@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Volley Project</title>
+    <style>
+        :root {
+            --bg: #f5f1e8;
+            --panel: #fffdf8;
+            --ink: #1f2a30;
+            --accent: #0a7f6f;
+            --accent-dark: #075a4f;
+            --muted: #6b777c;
+            --line: #d9d1c3;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: Georgia, "Times New Roman", serif;
+            color: var(--ink);
+            background: linear-gradient(180deg, #f2ecdf 0%, #f8f5ef 100%);
+        }
+        .shell {
+            max-width: 1040px;
+            margin: 0 auto;
+            padding: 32px 20px 48px;
+        }
+        .topbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+        .brand {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+        nav {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        nav a, .button {
+            display: inline-block;
+            padding: 10px 14px;
+            border-radius: 999px;
+            border: 1px solid var(--ink);
+            color: var(--ink);
+            text-decoration: none;
+            background: transparent;
+        }
+        nav a:hover, .button:hover {
+            background: var(--ink);
+            color: white;
+        }
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(31, 42, 48, 0.06);
+        }
+        .grid {
+            display: grid;
+            gap: 16px;
+        }
+        .grid.two {
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        }
+        .muted { color: var(--muted); }
+        .messages {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 16px;
+            display: grid;
+            gap: 8px;
+        }
+        .messages li {
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: #d9f4ee;
+            border: 1px solid #b5e5da;
+        }
+        form {
+            display: grid;
+            gap: 14px;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            font: inherit;
+            background: #fff;
+        }
+        textarea { min-height: 120px; resize: vertical; }
+        button {
+            width: fit-content;
+            padding: 10px 16px;
+            border: 0;
+            border-radius: 999px;
+            background: var(--accent);
+            color: white;
+            font: inherit;
+            cursor: pointer;
+        }
+        button:hover { background: var(--accent-dark); }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            text-align: left;
+            padding: 12px 10px;
+            border-bottom: 1px solid var(--line);
+            vertical-align: top;
+        }
+        .stack {
+            display: grid;
+            gap: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <div class="topbar">
+            <div class="brand">Volley Sprint 1</div>
+            <nav>
+                <a href="{% url 'scheduling:dashboard' %}">Dashboard</a>
+                <a href="{% url 'scheduling:create_session' %}">Create Session</a>
+                <a href="{% url 'scheduling:next_session' %}">Next Session</a>
+                <a href="{% url 'scheduling:coach_rsvp_overview' %}">Coach RSVP View</a>
+            </nav>
+        </div>
+        {% if messages %}
+            <ul class="messages">
+                {% for message in messages %}
+                    <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>
