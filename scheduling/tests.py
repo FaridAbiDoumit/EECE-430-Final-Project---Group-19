@@ -13,11 +13,108 @@ from .models import (
     SessionPlan,
     SessionVote,
     SessionVotePoll,
+    TryoutCandidate,
+    TryoutSession,
     TrainingSession,
 )
 
 
 class SchedulingViewsTests(TestCase):
+    def test_deactivate_player_sets_player_inactive(self):
+        player = Player.objects.create(name='Player One', email='player1@example.com')
+
+        response = self.client.post(reverse('scheduling:deactivate_player', args=[player.id]))
+
+        self.assertEqual(response.status_code, 302)
+        player.refresh_from_db()
+        self.assertFalse(player.is_active)
+
+    def test_deactivate_coach_sets_coach_inactive(self):
+        coach = Player.objects.create(
+            name='Coach One',
+            email='coach1@example.com',
+            role=Player.Role.COACH,
+        )
+
+        response = self.client.post(reverse('scheduling:deactivate_coach', args=[coach.id]))
+
+        self.assertEqual(response.status_code, 302)
+        coach.refresh_from_db()
+        self.assertFalse(coach.is_active)
+
+    def test_eligible_players_only_shows_active_eligible_players(self):
+        eligible = Player.objects.create(name='Eligible Player', email='eligible@example.com')
+        Player.objects.create(
+            name='Injured Player',
+            email='injured@example.com',
+            status=Player.Status.INJURED,
+        )
+        Player.objects.create(
+            name='Inactive Player',
+            email='inactive@example.com',
+            is_active=False,
+        )
+
+        response = self.client.get(reverse('scheduling:eligible_players'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, eligible.name)
+        self.assertNotContains(response, 'Injured Player')
+        self.assertNotContains(response, 'Inactive Player')
+
+    def test_create_tryout_session_creates_record(self):
+        response = self.client.post(
+            reverse('scheduling:create_tryout_session'),
+            data={
+                'title': 'Open Tryout',
+                'starts_at': (timezone.now() + timedelta(days=5)).strftime('%Y-%m-%dT%H:%M'),
+                'location': 'Court C',
+                'registration_open': True,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(TryoutSession.objects.count(), 1)
+
+    def test_register_tryout_candidate_creates_candidate(self):
+        tryout = TryoutSession.objects.create(
+            title='Open Tryout',
+            starts_at=timezone.now() + timedelta(days=5),
+            location='Court C',
+        )
+
+        response = self.client.post(
+            reverse('scheduling:register_tryout_candidate'),
+            data={
+                'tryout_session': tryout.id,
+                'name': 'Candidate One',
+                'email': 'candidate1@example.com',
+                'notes': 'Outside hitter',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(TryoutCandidate.objects.count(), 1)
+
+    def test_convert_tryout_candidate_creates_player(self):
+        tryout = TryoutSession.objects.create(
+            title='Open Tryout',
+            starts_at=timezone.now() + timedelta(days=5),
+            location='Court C',
+        )
+        candidate = TryoutCandidate.objects.create(
+            tryout_session=tryout,
+            name='Candidate One',
+            email='candidate1@example.com',
+        )
+
+        response = self.client.post(reverse('scheduling:convert_tryout_candidate', args=[candidate.id]))
+
+        self.assertEqual(response.status_code, 302)
+        candidate.refresh_from_db()
+        self.assertEqual(candidate.status, TryoutCandidate.Status.CONVERTED)
+        self.assertTrue(Player.objects.filter(email='candidate1@example.com').exists())
+
     def test_edit_session_creates_notifications_for_players(self):
         Player.objects.create(name='Player One', email='player1@example.com')
         Player.objects.create(name='Player Two', email='player2@example.com')

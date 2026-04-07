@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h1>Player Status</h1>
+    {% if players %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Active</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for player in players %}
+                    <tr>
+                        <td>{{ player.name }}</td>
+                        <td>{{ player.get_role_display }}</td>
+                        <td>{{ player.get_status_display }}</td>
+                        <td>{% if player.is_active %}Yes{% else %}No{% endif %}</td>
+                        <td><a href="{% url 'scheduling:update_player_status' player.id %}">Update</a></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">No players yet.</p>
+    {% endif %}
+</section>
+{% endblock %}

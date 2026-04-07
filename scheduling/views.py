@@ -6,11 +6,14 @@ from django.utils import timezone
 from .forms import (
     PlayerAvailabilityForm,
     PersonalSessionNoteForm,
+    PlayerUpdateForm,
     SessionRSVPForm,
     SessionPlanForm,
     SessionVoteForm,
     SessionVotePollForm,
     TrainingSessionForm,
+    TryoutCandidateForm,
+    TryoutSessionForm,
 )
 from .models import (
     Notification,
@@ -22,6 +25,8 @@ from .models import (
     SessionVote,
     SessionVoteOption,
     SessionVotePoll,
+    TryoutCandidate,
+    TryoutSession,
     TrainingSession,
 )
 
@@ -42,6 +47,7 @@ def dashboard(request):
             'availability_count': PlayerAvailability.objects.count(),
             'poll_count': SessionVotePoll.objects.count(),
             'notification_count': Notification.objects.count(),
+            'tryout_count': TryoutSession.objects.count(),
         },
     )
 
@@ -316,3 +322,108 @@ def delete_notification(request, notification_id):
         return redirect('scheduling:notification_inbox')
 
     return render(request, 'scheduling/delete_notification.html', {'notification': notification})
+
+
+def create_tryout_session(request):
+    if request.method == 'POST':
+        form = TryoutSessionForm(request.POST)
+        if form.is_valid():
+            tryout_session = form.save()
+            messages.success(request, 'Tryout session created.')
+            return redirect('scheduling:tryout_session_detail', tryout_session_id=tryout_session.id)
+    else:
+        form = TryoutSessionForm()
+
+    return render(request, 'scheduling/create_tryout_session.html', {'form': form})
+
+
+def register_tryout_candidate(request):
+    if request.method == 'POST':
+        form = TryoutCandidateForm(request.POST)
+        if form.is_valid():
+            candidate = form.save()
+            messages.success(request, 'Tryout registration submitted.')
+            return redirect('scheduling:tryout_candidate_detail', candidate_id=candidate.id)
+    else:
+        form = TryoutCandidateForm()
+
+    return render(request, 'scheduling/register_tryout_candidate.html', {'form': form})
+
+
+def tryout_session_detail(request, tryout_session_id):
+    tryout_session = get_object_or_404(TryoutSession.objects.prefetch_related('candidates'), pk=tryout_session_id)
+    return render(request, 'scheduling/tryout_session_detail.html', {'tryout_session': tryout_session})
+
+
+def tryout_candidate_detail(request, candidate_id):
+    candidate = get_object_or_404(TryoutCandidate.objects.select_related('tryout_session'), pk=candidate_id)
+    return render(request, 'scheduling/tryout_candidate_detail.html', {'candidate': candidate})
+
+
+def convert_tryout_candidate(request, candidate_id):
+    candidate = get_object_or_404(TryoutCandidate.objects.select_related('tryout_session'), pk=candidate_id)
+
+    if request.method == 'POST' and candidate.status != TryoutCandidate.Status.CONVERTED:
+        Player.objects.get_or_create(
+            email=candidate.email,
+            defaults={'name': candidate.name, 'role': Player.Role.PLAYER},
+        )
+        candidate.status = TryoutCandidate.Status.CONVERTED
+        candidate.save(update_fields=['status'])
+        messages.success(request, 'Candidate converted to player.')
+        return redirect('scheduling:tryout_candidate_detail', candidate_id=candidate.id)
+
+    return render(request, 'scheduling/convert_tryout_candidate.html', {'candidate': candidate})
+
+
+def player_status_list(request):
+    players = Player.objects.filter(role=Player.Role.PLAYER)
+    return render(request, 'scheduling/player_status_list.html', {'players': players})
+
+
+def eligible_players(request):
+    players = Player.objects.filter(
+        role=Player.Role.PLAYER,
+        is_active=True,
+        status=Player.Status.ELIGIBLE,
+    )
+    return render(request, 'scheduling/eligible_players.html', {'players': players})
+
+
+def update_player_status(request, player_id):
+    player = get_object_or_404(Player, pk=player_id)
+
+    if request.method == 'POST':
+        form = PlayerUpdateForm(request.POST, instance=player)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Player updated.')
+            return redirect('scheduling:player_status_list')
+    else:
+        form = PlayerUpdateForm(instance=player)
+
+    return render(request, 'scheduling/update_player_status.html', {'form': form, 'player': player})
+
+
+def deactivate_player(request, player_id):
+    player = get_object_or_404(Player, pk=player_id, role=Player.Role.PLAYER)
+
+    if request.method == 'POST':
+        player.is_active = False
+        player.save(update_fields=['is_active'])
+        messages.success(request, 'Player deactivated.')
+        return redirect('scheduling:player_status_list')
+
+    return render(request, 'scheduling/deactivate_player.html', {'player': player})
+
+
+def deactivate_coach(request, coach_id):
+    coach = get_object_or_404(Player, pk=coach_id, role=Player.Role.COACH)
+
+    if request.method == 'POST':
+        coach.is_active = False
+        coach.save(update_fields=['is_active'])
+        messages.success(request, 'Coach deactivated.')
+        return redirect('scheduling:player_status_list')
+
+    return render(request, 'scheduling/deactivate_coach.html', {'coach': coach})

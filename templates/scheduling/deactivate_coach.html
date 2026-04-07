@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h1>Deactivate Coach</h1>
+    <p>Deactivate <strong>{{ coach.name }}</strong>?</p>
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit">Deactivate</button>
+    </form>
+</section>
+{% endblock %}

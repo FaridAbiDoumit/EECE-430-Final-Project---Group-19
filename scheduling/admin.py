@@ -10,14 +10,16 @@ from .models import (
     SessionVote,
     SessionVoteOption,
     SessionVotePoll,
+    TryoutCandidate,
+    TryoutSession,
     TrainingSession,
 )
 
 
 @admin.register(Player)
 class PlayerAdmin(admin.ModelAdmin):
-    list_display = ('name', 'email', 'role')
-    list_filter = ('role',)
+    list_display = ('name', 'email', 'role', 'status', 'is_active')
+    list_filter = ('role', 'status', 'is_active')
     search_fields = ('name', 'email')
 
 
@@ -77,3 +79,17 @@ class NotificationAdmin(admin.ModelAdmin):
     list_display = ('recipient', 'title', 'notification_type', 'created_at', 'read_at')
     list_filter = ('notification_type',)
     search_fields = ('recipient__name', 'title', 'message')
+
+
+@admin.register(TryoutSession)
+class TryoutSessionAdmin(admin.ModelAdmin):
+    list_display = ('title', 'starts_at', 'location', 'registration_open')
+    list_filter = ('registration_open',)
+    search_fields = ('title', 'location')
+
+
+@admin.register(TryoutCandidate)
+class TryoutCandidateAdmin(admin.ModelAdmin):
+    list_display = ('name', 'email', 'tryout_session', 'status', 'created_at')
+    list_filter = ('status',)
+    search_fields = ('name', 'email', 'tryout_session__title')

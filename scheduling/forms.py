@@ -9,6 +9,8 @@ from .models import (
     SessionVote,
     SessionVoteOption,
     SessionVotePoll,
+    TryoutCandidate,
+    TryoutSession,
     TrainingSession,
 )
 
@@ -92,3 +94,28 @@ class PersonalSessionNoteForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['player'].queryset = Player.objects.filter(role=Player.Role.PLAYER)
+
+
+class TryoutSessionForm(forms.ModelForm):
+    class Meta:
+        model = TryoutSession
+        fields = ['title', 'starts_at', 'location', 'registration_open']
+        widgets = {
+            'starts_at': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+        }
+
+
+class TryoutCandidateForm(forms.ModelForm):
+    class Meta:
+        model = TryoutCandidate
+        fields = ['tryout_session', 'name', 'email', 'notes']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['tryout_session'].queryset = TryoutSession.objects.filter(registration_open=True)
+
+
+class PlayerUpdateForm(forms.ModelForm):
+    class Meta:
+        model = Player
+        fields = ['status', 'is_active']

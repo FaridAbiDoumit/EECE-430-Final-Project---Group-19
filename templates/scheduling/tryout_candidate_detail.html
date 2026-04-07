@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h1>{{ candidate.name }}</h1>
+    <p>{{ candidate.email }}</p>
+    <p>Status: {{ candidate.get_status_display }}</p>
+    <p>Tryout: {{ candidate.tryout_session.title }}</p>
+    {% if candidate.notes %}
+        <p>{{ candidate.notes }}</p>
+    {% endif %}
+    {% if candidate.status != "converted" %}
+        <a class="button" href="{% url 'scheduling:convert_tryout_candidate' candidate.id %}">Convert to Player</a>
+    {% endif %}
+</section>
+{% endblock %}

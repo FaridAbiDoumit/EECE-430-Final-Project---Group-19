@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h1>Convert Candidate</h1>
+    <p>Convert <strong>{{ candidate.name }}</strong> into a player profile?</p>
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit">Convert</button>
+    </form>
+</section>
+{% endblock %}

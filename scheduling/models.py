@@ -7,9 +7,16 @@ class Player(models.Model):
         COACH = 'coach', 'Coach'
         PLAYER = 'player', 'Player'
 
+    class Status(models.TextChoices):
+        ELIGIBLE = 'eligible', 'Eligible'
+        INJURED = 'injured', 'Injured'
+        RECOVERING = 'recovering', 'Recovering'
+
     name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.PLAYER)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ELIGIBLE)
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['name']
@@ -180,3 +187,36 @@ class Notification(models.Model):
 
     def __str__(self):
         return f'{self.recipient} - {self.title}'
+
+
+class TryoutSession(models.Model):
+    title = models.CharField(max_length=120)
+    starts_at = models.DateTimeField()
+    location = models.CharField(max_length=120)
+    registration_open = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['starts_at', 'id']
+
+    def __str__(self):
+        return self.title
+
+
+class TryoutCandidate(models.Model):
+    class Status(models.TextChoices):
+        SUBMITTED = 'submitted', 'Submitted'
+        CONVERTED = 'converted', 'Converted'
+
+    tryout_session = models.ForeignKey(TryoutSession, on_delete=models.CASCADE, related_name='candidates')
+    name = models.CharField(max_length=100)
+    email = models.EmailField(unique=True)
+    notes = models.CharField(max_length=200, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.SUBMITTED)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+    def __str__(self):
+        return self.name

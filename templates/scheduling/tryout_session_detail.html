@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h1>{{ tryout_session.title }}</h1>
+    <p>{{ tryout_session.starts_at }}</p>
+    <p>{{ tryout_session.location }}</p>
+    <p>Registration open: {% if tryout_session.registration_open %}Yes{% else %}No{% endif %}</p>
+</section>
+
+<section class="panel" style="margin-top: 16px;">
+    <h2>Candidates</h2>
+    {% if tryout_session.candidates.all %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for candidate in tryout_session.candidates.all %}
+                    <tr>
+                        <td>{{ candidate.name }}</td>
+                        <td>{{ candidate.email }}</td>
+                        <td>{{ candidate.get_status_display }}</td>
+                        <td><a href="{% url 'scheduling:tryout_candidate_detail' candidate.id %}">Open</a></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">No candidates yet.</p>
+    {% endif %}
+</section>
+{% endblock %}

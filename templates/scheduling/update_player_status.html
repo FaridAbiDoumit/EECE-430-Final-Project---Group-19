@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h1>Update {{ player.name }}</h1>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Save</button>
+    </form>
+    {% if player.role == "player" and player.is_active %}
+        <p style="margin-top: 16px;"><a href="{% url 'scheduling:deactivate_player' player.id %}">Deactivate Player</a></p>
+    {% endif %}
+    {% if player.role == "coach" and player.is_active %}
+        <p style="margin-top: 16px;"><a href="{% url 'scheduling:deactivate_coach' player.id %}">Deactivate Coach</a></p>
+    {% endif %}
+</section>
+{% endblock %}
