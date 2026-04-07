@@ -7,4 +7,6 @@ env/
 .env
 .pytest_cache/
 staticfiles/
-
+SOP/
+log/
+docs/
