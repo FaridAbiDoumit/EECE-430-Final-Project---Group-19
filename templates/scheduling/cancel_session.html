@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h1>Cancel Training Session</h1>
+    <p>Are you sure you want to cancel <strong>{{ session.title }}</strong>?</p>
+    <p>{{ session.starts_at }} | {{ session.location }}</p>
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit">Confirm Cancellation</button>
+    </form>
+</section>
+{% endblock %}

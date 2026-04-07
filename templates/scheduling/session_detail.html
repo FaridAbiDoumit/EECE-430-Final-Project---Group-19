@@ -5,11 +5,18 @@
     <section class="panel">
         <h1>{{ session.title }}</h1>
         <p>{{ session.starts_at }}</p>
-        <p>{{ session.location }} · {{ session.get_session_type_display }}</p>
+        <p>{{ session.location }} | {{ session.get_session_type_display }}</p>
+        <p>Status: {% if session.cancelled %}Cancelled{% else %}Active{% endif %}</p>
         {% if session.notes %}
             <p>{{ session.notes }}</p>
         {% endif %}
         <p>Going: {{ session.going_count }} | Not Going: {{ session.not_going_count }}</p>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <a class="button" href="{% url 'scheduling:edit_session' session.id %}">Edit Session</a>
+            {% if not session.cancelled %}
+                <a class="button" href="{% url 'scheduling:cancel_session' session.id %}">Cancel Session</a>
+            {% endif %}
+        </div>
     </section>
     <section class="panel">
         <h2>Submit RSVP</h2>

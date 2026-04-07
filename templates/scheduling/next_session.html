@@ -9,7 +9,7 @@
                 <strong>{{ session.title }}</strong>
                 <div>{{ session.starts_at }}</div>
             </div>
-            <div>{{ session.location }} · {{ session.get_session_type_display }}</div>
+            <div>{{ session.location }} | {{ session.get_session_type_display }}</div>
             {% if session.notes %}
                 <div>{{ session.notes }}</div>
             {% endif %}

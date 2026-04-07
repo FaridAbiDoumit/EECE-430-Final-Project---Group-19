@@ -37,6 +37,33 @@ def create_session(request):
     return render(request, 'scheduling/create_session.html', {'form': form})
 
 
+def edit_session(request, session_id):
+    session = get_object_or_404(TrainingSession, pk=session_id)
+
+    if request.method == 'POST':
+        form = TrainingSessionForm(request.POST, instance=session)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Training session updated.')
+            return redirect('scheduling:session_detail', session_id=session.id)
+    else:
+        form = TrainingSessionForm(instance=session)
+
+    return render(request, 'scheduling/edit_session.html', {'form': form, 'session': session})
+
+
+def cancel_session(request, session_id):
+    session = get_object_or_404(TrainingSession, pk=session_id)
+
+    if request.method == 'POST':
+        session.cancelled = True
+        session.save(update_fields=['cancelled'])
+        messages.success(request, 'Training session cancelled.')
+        return redirect('scheduling:session_detail', session_id=session.id)
+
+    return render(request, 'scheduling/cancel_session.html', {'session': session})
+
+
 def next_session(request):
     session = (
         TrainingSession.objects.filter(starts_at__gte=timezone.now(), cancelled=False)

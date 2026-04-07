@@ -7,7 +7,7 @@
         {% if upcoming_session %}
             <h2>{{ upcoming_session.title }}</h2>
             <p>{{ upcoming_session.starts_at }}</p>
-            <p>{{ upcoming_session.location }} · {{ upcoming_session.get_session_type_display }}</p>
+            <p>{{ upcoming_session.location }} | {{ upcoming_session.get_session_type_display }}</p>
             <a class="button" href="{% url 'scheduling:session_detail' upcoming_session.id %}">Open Session</a>
         {% else %}
             <p class="muted">No upcoming sessions yet.</p>
