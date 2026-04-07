@@ -3,8 +3,21 @@ from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .forms import PlayerAvailabilityForm, SessionRSVPForm, TrainingSessionForm
-from .models import PlayerAvailability, SessionRSVP, TrainingSession
+from .forms import (
+    PlayerAvailabilityForm,
+    SessionRSVPForm,
+    SessionVoteForm,
+    SessionVotePollForm,
+    TrainingSessionForm,
+)
+from .models import (
+    PlayerAvailability,
+    SessionRSVP,
+    SessionVote,
+    SessionVoteOption,
+    SessionVotePoll,
+    TrainingSession,
+)
 
 
 def dashboard(request):
@@ -21,6 +34,7 @@ def dashboard(request):
             'sessions': sessions,
             'upcoming_session': upcoming_session,
             'availability_count': PlayerAvailability.objects.count(),
+            'poll_count': SessionVotePoll.objects.count(),
         },
     )
 
@@ -140,3 +154,67 @@ def coach_availability_overview(request):
     for slot in slots:
         grouped_slots.setdefault(slot.get_weekday_display(), []).append(slot)
     return render(request, 'scheduling/coach_availability_overview.html', {'grouped_slots': grouped_slots})
+
+
+def create_vote_poll(request):
+    if request.method == 'POST':
+        form = SessionVotePollForm(request.POST)
+        if form.is_valid():
+            poll = SessionVotePoll.objects.create(
+                title=form.cleaned_data['title'],
+                description=form.cleaned_data['description'],
+                closes_at=form.cleaned_data['closes_at'],
+            )
+            SessionVoteOption.objects.bulk_create(
+                [
+                    SessionVoteOption(
+                        poll=poll,
+                        starts_at=form.cleaned_data['option_1_starts_at'],
+                        location=form.cleaned_data['option_1_location'],
+                    ),
+                    SessionVoteOption(
+                        poll=poll,
+                        starts_at=form.cleaned_data['option_2_starts_at'],
+                        location=form.cleaned_data['option_2_location'],
+                    ),
+                ]
+            )
+            messages.success(request, 'Candidate-time poll created.')
+            return redirect('scheduling:vote_poll_detail', poll_id=poll.id)
+    else:
+        form = SessionVotePollForm()
+
+    return render(request, 'scheduling/create_vote_poll.html', {'form': form})
+
+
+def vote_poll_detail(request, poll_id):
+    poll = get_object_or_404(
+        SessionVotePoll.objects.annotate(vote_count=Count('votes')).prefetch_related('options__votes'),
+        pk=poll_id,
+    )
+
+    if request.method == 'POST':
+        form = SessionVoteForm(request.POST, poll=poll)
+        if form.is_valid():
+            SessionVote.objects.update_or_create(
+                poll=poll,
+                player=form.cleaned_data['player'],
+                defaults={'option': form.cleaned_data['option']},
+            )
+            messages.success(request, 'Vote saved.')
+            return redirect('scheduling:vote_poll_detail', poll_id=poll.id)
+    else:
+        form = SessionVoteForm(poll=poll)
+
+    options = poll.options.annotate(vote_count=Count('votes')).order_by('starts_at')
+    votes = poll.votes.select_related('player', 'option')
+    return render(
+        request,
+        'scheduling/vote_poll_detail.html',
+        {
+            'poll': poll,
+            'form': form,
+            'options': options,
+            'votes': votes,
+        },
+    )

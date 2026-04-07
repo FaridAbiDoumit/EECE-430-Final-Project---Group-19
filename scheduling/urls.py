@@ -14,5 +14,7 @@ urlpatterns = [
     path('availability/new/', views.submit_availability, name='submit_availability'),
     path('availability/<int:availability_id>/', views.availability_detail, name='availability_detail'),
     path('coach/availability/', views.coach_availability_overview, name='coach_availability_overview'),
+    path('polls/new/', views.create_vote_poll, name='create_vote_poll'),
+    path('polls/<int:poll_id>/', views.vote_poll_detail, name='vote_poll_detail'),
     path('coach/rsvps/', views.coach_rsvp_overview, name='coach_rsvp_overview'),
 ]

@@ -90,3 +90,44 @@ class PlayerAvailability(models.Model):
 
     def __str__(self):
         return f'{self.player} - {self.get_weekday_display()}'
+
+
+class SessionVotePoll(models.Model):
+    title = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    closes_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', 'id']
+
+    def __str__(self):
+        return self.title
+
+
+class SessionVoteOption(models.Model):
+    poll = models.ForeignKey(SessionVotePoll, on_delete=models.CASCADE, related_name='options')
+    starts_at = models.DateTimeField()
+    location = models.CharField(max_length=120)
+
+    class Meta:
+        ordering = ['starts_at', 'id']
+
+    def __str__(self):
+        return f'{self.poll.title} - {self.starts_at}'
+
+
+class SessionVote(models.Model):
+    poll = models.ForeignKey(SessionVotePoll, on_delete=models.CASCADE, related_name='votes')
+    option = models.ForeignKey(SessionVoteOption, on_delete=models.CASCADE, related_name='votes')
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='session_votes')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['poll', 'player'], name='unique_poll_player_vote')
+        ]
+        ordering = ['player__name']
+
+    def __str__(self):
+        return f'{self.player} - {self.option}'

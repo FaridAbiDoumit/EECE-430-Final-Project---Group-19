@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="grid two">
+    <section class="panel">
+        <h1>{{ poll.title }}</h1>
+        {% if poll.description %}
+            <p>{{ poll.description }}</p>
+        {% endif %}
+        <p>Closes at: {{ poll.closes_at }}</p>
+        <h2>Options</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>When</th>
+                    <th>Location</th>
+                    <th>Votes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for option in options %}
+                    <tr>
+                        <td>{{ option.starts_at }}</td>
+                        <td>{{ option.location }}</td>
+                        <td>{{ option.vote_count }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    <section class="panel">
+        <h2>Cast Vote</h2>
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit">Save Vote</button>
+        </form>
+    </section>
+</div>
+
+<section class="panel" style="margin-top: 16px;">
+    <h2>Votes</h2>
+    {% if votes %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Player</th>
+                    <th>Selected Option</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for vote in votes %}
+                    <tr>
+                        <td>{{ vote.player.name }}</td>
+                        <td>{{ vote.option.starts_at }} | {{ vote.option.location }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">No votes submitted yet.</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -4,10 +4,54 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Player, PlayerAvailability, SessionRSVP, TrainingSession
+from .models import (
+    Player,
+    PlayerAvailability,
+    SessionRSVP,
+    SessionVote,
+    SessionVotePoll,
+    TrainingSession,
+)
 
 
 class SchedulingViewsTests(TestCase):
+    def test_create_vote_poll_creates_two_options(self):
+        response = self.client.post(
+            reverse('scheduling:create_vote_poll'),
+            data={
+                'title': 'Wednesday Practice Vote',
+                'description': 'Pick the better slot',
+                'closes_at': (timezone.now() + timedelta(days=2)).strftime('%Y-%m-%dT%H:%M'),
+                'option_1_starts_at': (timezone.now() + timedelta(days=3)).strftime('%Y-%m-%dT%H:%M'),
+                'option_1_location': 'Court A',
+                'option_2_starts_at': (timezone.now() + timedelta(days=4)).strftime('%Y-%m-%dT%H:%M'),
+                'option_2_location': 'Court B',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        poll = SessionVotePoll.objects.get()
+        self.assertEqual(poll.options.count(), 2)
+
+    def test_vote_poll_updates_existing_player_vote(self):
+        player = Player.objects.create(name='Player One', email='player1@example.com')
+        poll = SessionVotePoll.objects.create(
+            title='Wednesday Practice Vote',
+            closes_at=timezone.now() + timedelta(days=2),
+        )
+        option_1 = poll.options.create(starts_at=timezone.now() + timedelta(days=3), location='Court A')
+        option_2 = poll.options.create(starts_at=timezone.now() + timedelta(days=4), location='Court B')
+        SessionVote.objects.create(poll=poll, option=option_1, player=player)
+
+        response = self.client.post(
+            reverse('scheduling:vote_poll_detail', args=[poll.id]),
+            data={'player': player.id, 'option': option_2.id},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(SessionVote.objects.count(), 1)
+        self.assertEqual(SessionVote.objects.get().option, option_2)
+
     def test_submit_availability_creates_slot(self):
         player = Player.objects.create(name='Player One', email='player1@example.com')
 
