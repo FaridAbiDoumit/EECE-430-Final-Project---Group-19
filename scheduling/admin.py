@@ -1,9 +1,12 @@
 from django.contrib import admin
 
 from .models import (
+    Notification,
     Player,
     PlayerAvailability,
+    PersonalSessionNote,
     SessionRSVP,
+    SessionPlan,
     SessionVote,
     SessionVoteOption,
     SessionVotePoll,
@@ -55,3 +58,22 @@ class SessionVoteOptionAdmin(admin.ModelAdmin):
 class SessionVoteAdmin(admin.ModelAdmin):
     list_display = ('poll', 'option', 'player', 'created_at')
     search_fields = ('poll__title', 'player__name')
+
+
+@admin.register(SessionPlan)
+class SessionPlanAdmin(admin.ModelAdmin):
+    list_display = ('session', 'title', 'updated_at')
+    search_fields = ('session__title', 'title')
+
+
+@admin.register(PersonalSessionNote)
+class PersonalSessionNoteAdmin(admin.ModelAdmin):
+    list_display = ('session', 'player', 'updated_at')
+    search_fields = ('session__title', 'player__name')
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ('recipient', 'title', 'notification_type', 'created_at', 'read_at')
+    list_filter = ('notification_type',)
+    search_fields = ('recipient__name', 'title', 'message')

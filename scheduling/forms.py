@@ -3,7 +3,9 @@ from django import forms
 from .models import (
     Player,
     PlayerAvailability,
+    PersonalSessionNote,
     SessionRSVP,
+    SessionPlan,
     SessionVote,
     SessionVoteOption,
     SessionVotePoll,
@@ -74,3 +76,19 @@ class SessionVoteForm(forms.Form):
         self.fields['player'].queryset = Player.objects.filter(role=Player.Role.PLAYER)
         if poll is not None:
             self.fields['option'].queryset = poll.options.all()
+
+
+class SessionPlanForm(forms.ModelForm):
+    class Meta:
+        model = SessionPlan
+        fields = ['title', 'drills']
+
+
+class PersonalSessionNoteForm(forms.ModelForm):
+    class Meta:
+        model = PersonalSessionNote
+        fields = ['player', 'content']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['player'].queryset = Player.objects.filter(role=Player.Role.PLAYER)

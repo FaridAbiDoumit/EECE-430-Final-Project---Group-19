@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h1>Delete Notification</h1>
+    <p>Delete <strong>{{ notification.title }}</strong> for {{ notification.recipient.name }}?</p>
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit">Delete</button>
+    </form>
+</section>
+{% endblock %}

@@ -5,9 +5,12 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import (
+    Notification,
     Player,
     PlayerAvailability,
+    PersonalSessionNote,
     SessionRSVP,
+    SessionPlan,
     SessionVote,
     SessionVotePoll,
     TrainingSession,
@@ -15,6 +18,75 @@ from .models import (
 
 
 class SchedulingViewsTests(TestCase):
+    def test_edit_session_creates_notifications_for_players(self):
+        Player.objects.create(name='Player One', email='player1@example.com')
+        Player.objects.create(name='Player Two', email='player2@example.com')
+        session = TrainingSession.objects.create(
+            title='Practice',
+            starts_at=timezone.now() + timedelta(days=1),
+            location='Main Gym',
+        )
+
+        response = self.client.post(
+            reverse('scheduling:edit_session', args=[session.id]),
+            data={
+                'title': 'Updated Practice',
+                'starts_at': (timezone.now() + timedelta(days=2)).strftime('%Y-%m-%dT%H:%M'),
+                'location': 'Court B',
+                'session_type': TrainingSession.SessionType.MATCH,
+                'notes': 'Bring match jerseys',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Notification.objects.count(), 2)
+
+    def test_delete_notification_removes_notification(self):
+        player = Player.objects.create(name='Player One', email='player1@example.com')
+        notification = Notification.objects.create(
+            recipient=player,
+            title='Session Updated',
+            message='Practice moved to Court B',
+        )
+
+        response = self.client.post(reverse('scheduling:delete_notification', args=[notification.id]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Notification.objects.filter(id=notification.id).exists())
+
+    def test_edit_session_plan_creates_plan(self):
+        session = TrainingSession.objects.create(
+            title='Practice',
+            starts_at=timezone.now() + timedelta(days=1),
+            location='Main Gym',
+        )
+
+        response = self.client.post(
+            reverse('scheduling:edit_session_plan', args=[session.id]),
+            data={'title': 'Warmup Plan', 'drills': 'Stretching\nServing\nScrimmage'},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(SessionPlan.objects.filter(session=session, title='Warmup Plan').exists())
+
+    def test_personal_note_updates_existing_note(self):
+        player = Player.objects.create(name='Player One', email='player1@example.com')
+        session = TrainingSession.objects.create(
+            title='Practice',
+            starts_at=timezone.now() + timedelta(days=1),
+            location='Main Gym',
+        )
+        PersonalSessionNote.objects.create(session=session, player=player, content='Bring water')
+
+        response = self.client.post(
+            reverse('scheduling:personal_note', args=[session.id]),
+            data={'player': player.id, 'content': 'Bring water and knee pads'},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(session.personal_notes.count(), 1)
+        self.assertEqual(session.personal_notes.get().content, 'Bring water and knee pads')
+
     def test_create_vote_poll_creates_two_options(self):
         response = self.client.post(
             reverse('scheduling:create_vote_poll'),

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="grid two">
+    <section class="panel">
+        <h1>Personal Session Notes</h1>
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit">Save Note</button>
+        </form>
+    </section>
+    <section class="panel">
+        <h2>Saved Notes</h2>
+        {% if existing_notes %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Player</th>
+                        <th>Note</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for note in existing_notes %}
+                        <tr>
+                            <td>{{ note.player.name }}</td>
+                            <td>{{ note.content }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="muted">No personal notes saved yet.</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

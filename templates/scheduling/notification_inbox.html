@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h1>Notifications Inbox</h1>
+    {% if notifications %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Recipient</th>
+                    <th>Title</th>
+                    <th>Message</th>
+                    <th>Received</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for notification in notifications %}
+                    <tr>
+                        <td>{{ notification.recipient.name }}</td>
+                        <td>{{ notification.title }}</td>
+                        <td>{{ notification.message }}</td>
+                        <td>{{ notification.created_at }}</td>
+                        <td><a href="{% url 'scheduling:delete_notification' notification.id %}">Delete</a></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">No notifications yet.</p>
+    {% endif %}
+</section>
+{% endblock %}

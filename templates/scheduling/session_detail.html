@@ -11,8 +11,15 @@
             <p>{{ session.notes }}</p>
         {% endif %}
         <p>Going: {{ session.going_count }} | Not Going: {{ session.not_going_count }}</p>
+        {% if session_plan %}
+            <h2>Session Plan</h2>
+            <p><strong>{{ session_plan.title }}</strong></p>
+            <pre style="white-space: pre-wrap; font: inherit;">{{ session_plan.drills }}</pre>
+        {% endif %}
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
             <a class="button" href="{% url 'scheduling:edit_session' session.id %}">Edit Session</a>
+            <a class="button" href="{% url 'scheduling:edit_session_plan' session.id %}">Session Plan</a>
+            <a class="button" href="{% url 'scheduling:personal_note' session.id %}">Personal Notes</a>
             {% if not session.cancelled %}
                 <a class="button" href="{% url 'scheduling:cancel_session' session.id %}">Cancel Session</a>
             {% endif %}

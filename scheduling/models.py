@@ -131,3 +131,52 @@ class SessionVote(models.Model):
 
     def __str__(self):
         return f'{self.player} - {self.option}'
+
+
+class SessionPlan(models.Model):
+    session = models.OneToOneField(TrainingSession, on_delete=models.CASCADE, related_name='plan')
+    title = models.CharField(max_length=120)
+    drills = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['session__starts_at']
+
+    def __str__(self):
+        return self.title
+
+
+class PersonalSessionNote(models.Model):
+    session = models.ForeignKey(TrainingSession, on_delete=models.CASCADE, related_name='personal_notes')
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='personal_notes')
+    content = models.TextField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['session', 'player'], name='unique_session_player_note')
+        ]
+        ordering = ['player__name']
+
+    def __str__(self):
+        return f'{self.player} - {self.session}'
+
+
+class Notification(models.Model):
+    class Type(models.TextChoices):
+        SESSION_UPDATED = 'session_updated', 'Session Updated'
+        GENERAL = 'general', 'General'
+
+    recipient = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='notifications')
+    title = models.CharField(max_length=120)
+    message = models.TextField()
+    notification_type = models.CharField(max_length=40, choices=Type.choices, default=Type.GENERAL)
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+    def __str__(self):
+        return f'{self.recipient} - {self.title}'
