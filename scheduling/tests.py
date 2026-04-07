@@ -4,10 +4,47 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Player, SessionRSVP, TrainingSession
+from .models import Player, PlayerAvailability, SessionRSVP, TrainingSession
 
 
 class SchedulingViewsTests(TestCase):
+    def test_submit_availability_creates_slot(self):
+        player = Player.objects.create(name='Player One', email='player1@example.com')
+
+        response = self.client.post(
+            reverse('scheduling:submit_availability'),
+            data={
+                'player': player.id,
+                'weekday': PlayerAvailability.Weekday.MONDAY,
+                'start_time': '18:00',
+                'end_time': '20:00',
+                'notes': 'After work',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(PlayerAvailability.objects.count(), 1)
+        slot = PlayerAvailability.objects.get()
+        self.assertEqual(slot.player, player)
+        self.assertEqual(slot.weekday, PlayerAvailability.Weekday.MONDAY)
+
+    def test_submit_availability_rejects_invalid_time_range(self):
+        player = Player.objects.create(name='Player One', email='player1@example.com')
+
+        response = self.client.post(
+            reverse('scheduling:submit_availability'),
+            data={
+                'player': player.id,
+                'weekday': PlayerAvailability.Weekday.MONDAY,
+                'start_time': '20:00',
+                'end_time': '18:00',
+                'notes': '',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(PlayerAvailability.objects.count(), 0)
+
     def test_edit_session_updates_existing_session(self):
         session = TrainingSession.objects.create(
             title='Practice',

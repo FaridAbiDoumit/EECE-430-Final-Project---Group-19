@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Player, SessionRSVP, TrainingSession
+from .models import Player, PlayerAvailability, SessionRSVP, TrainingSession
 
 
 @admin.register(Player)
@@ -22,3 +22,10 @@ class SessionRSVPAdmin(admin.ModelAdmin):
     list_display = ('session', 'player', 'status', 'updated_at')
     list_filter = ('status',)
     search_fields = ('session__title', 'player__name')
+
+
+@admin.register(PlayerAvailability)
+class PlayerAvailabilityAdmin(admin.ModelAdmin):
+    list_display = ('player', 'weekday', 'start_time', 'end_time')
+    list_filter = ('weekday',)
+    search_fields = ('player__name', 'notes')

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h1>Availability Slot</h1>
+    <p><strong>Player:</strong> {{ availability.player.name }}</p>
+    <p><strong>Day:</strong> {{ availability.get_weekday_display }}</p>
+    <p><strong>Time:</strong> {{ availability.start_time }} - {{ availability.end_time }}</p>
+    {% if availability.notes %}
+        <p><strong>Notes:</strong> {{ availability.notes }}</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h1>Coach Availability Overview</h1>
+    {% if grouped_slots %}
+        {% for weekday, slots in grouped_slots.items %}
+            <div style="margin-bottom: 20px;">
+                <h2>{{ weekday }}</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Player</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for slot in slots %}
+                            <tr>
+                                <td>{{ slot.player.name }}</td>
+                                <td>{{ slot.start_time }}</td>
+                                <td>{{ slot.end_time }}</td>
+                                <td>{{ slot.notes }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p class="muted">No availability slots submitted yet.</p>
+    {% endif %}
+</section>
+{% endblock %}

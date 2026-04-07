@@ -61,3 +61,32 @@ class SessionRSVP(models.Model):
 
     def __str__(self):
         return f'{self.player} - {self.get_status_display()}'
+
+
+class PlayerAvailability(models.Model):
+    class Weekday(models.IntegerChoices):
+        MONDAY = 0, 'Monday'
+        TUESDAY = 1, 'Tuesday'
+        WEDNESDAY = 2, 'Wednesday'
+        THURSDAY = 3, 'Thursday'
+        FRIDAY = 4, 'Friday'
+        SATURDAY = 5, 'Saturday'
+        SUNDAY = 6, 'Sunday'
+
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='availability_slots')
+    weekday = models.IntegerField(choices=Weekday.choices)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    notes = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        ordering = ['weekday', 'start_time', 'player__name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['player', 'weekday', 'start_time', 'end_time'],
+                name='unique_player_availability_slot',
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.player} - {self.get_weekday_display()}'

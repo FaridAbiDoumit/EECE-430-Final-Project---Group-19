@@ -11,5 +11,8 @@ urlpatterns = [
     path('sessions/<int:session_id>/', views.session_detail, name='session_detail'),
     path('sessions/<int:session_id>/edit/', views.edit_session, name='edit_session'),
     path('sessions/<int:session_id>/cancel/', views.cancel_session, name='cancel_session'),
+    path('availability/new/', views.submit_availability, name='submit_availability'),
+    path('availability/<int:availability_id>/', views.availability_detail, name='availability_detail'),
+    path('coach/availability/', views.coach_availability_overview, name='coach_availability_overview'),
     path('coach/rsvps/', views.coach_rsvp_overview, name='coach_rsvp_overview'),
 ]

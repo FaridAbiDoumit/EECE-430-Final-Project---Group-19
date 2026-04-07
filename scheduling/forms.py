@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import Player, SessionRSVP, TrainingSession
+from .models import Player, PlayerAvailability, SessionRSVP, TrainingSession
 
 
 class TrainingSessionForm(forms.ModelForm):
@@ -19,3 +19,25 @@ class SessionRSVPForm(forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['player'].queryset = Player.objects.filter(role=Player.Role.PLAYER)
+
+
+class PlayerAvailabilityForm(forms.ModelForm):
+    class Meta:
+        model = PlayerAvailability
+        fields = ['player', 'weekday', 'start_time', 'end_time', 'notes']
+        widgets = {
+            'start_time': forms.TimeInput(attrs={'type': 'time'}),
+            'end_time': forms.TimeInput(attrs={'type': 'time'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['player'].queryset = Player.objects.filter(role=Player.Role.PLAYER)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start_time = cleaned_data.get('start_time')
+        end_time = cleaned_data.get('end_time')
+        if start_time and end_time and start_time >= end_time:
+            self.add_error('end_time', 'End time must be after start time.')
+        return cleaned_data

@@ -3,8 +3,8 @@ from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .forms import SessionRSVPForm, TrainingSessionForm
-from .models import SessionRSVP, TrainingSession
+from .forms import PlayerAvailabilityForm, SessionRSVPForm, TrainingSessionForm
+from .models import PlayerAvailability, SessionRSVP, TrainingSession
 
 
 def dashboard(request):
@@ -20,6 +20,7 @@ def dashboard(request):
         {
             'sessions': sessions,
             'upcoming_session': upcoming_session,
+            'availability_count': PlayerAvailability.objects.count(),
         },
     )
 
@@ -113,3 +114,29 @@ def coach_rsvp_overview(request):
         not_going_count=Count('rsvps', filter=Q(rsvps__status=SessionRSVP.Status.NOT_GOING)),
     )
     return render(request, 'scheduling/coach_rsvp_overview.html', {'sessions': sessions})
+
+
+def submit_availability(request):
+    if request.method == 'POST':
+        form = PlayerAvailabilityForm(request.POST)
+        if form.is_valid():
+            availability = form.save()
+            messages.success(request, 'Availability saved.')
+            return redirect('scheduling:availability_detail', availability_id=availability.id)
+    else:
+        form = PlayerAvailabilityForm()
+
+    return render(request, 'scheduling/submit_availability.html', {'form': form})
+
+
+def availability_detail(request, availability_id):
+    availability = get_object_or_404(PlayerAvailability.objects.select_related('player'), pk=availability_id)
+    return render(request, 'scheduling/availability_detail.html', {'availability': availability})
+
+
+def coach_availability_overview(request):
+    slots = PlayerAvailability.objects.select_related('player')
+    grouped_slots = {}
+    for slot in slots:
+        grouped_slots.setdefault(slot.get_weekday_display(), []).append(slot)
+    return render(request, 'scheduling/coach_availability_overview.html', {'grouped_slots': grouped_slots})
