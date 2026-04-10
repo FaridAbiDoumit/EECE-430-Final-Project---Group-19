@@ -1,12 +1,290 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Time Poll | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #3f5e4a;
+            --paper: #d9d9d9;
+            --ink: #111111;
+            --line: #8a8a8a;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--forest);
+            color: var(--ink);
+            font-family: 'Josefin Sans', sans-serif;
+        }
+        a { color: inherit; text-decoration: none; }
+        .poll-shell {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 24px 16px 36px;
+            display: grid;
+            gap: 24px;
+        }
+        .poll-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+        }
+        .back-button {
+            flex-shrink: 0;
+            background: none;
+            border: none;
+            font-size: 2rem;
+            color: #ffffff;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+        .back-button:hover {
+            opacity: 0.8;
+        }
+        .poll-title {
+            margin: 0;
+            color: #ffffff;
+            font-size: clamp(1.5rem, 3vw, 2rem);
+            font-weight: 500;
+            line-height: 1.2;
+        }
+        .poll-panel {
+            background: var(--paper);
+            border-radius: 10px;
+            padding: 24px;
+            display: grid;
+            gap: 20px;
+        }
+        .poll-intro {
+            margin: 0;
+            font-size: 1.05rem;
+            font-weight: 500;
+            color: var(--ink);
+        }
+        .poll-form {
+            display: grid;
+            gap: 20px;
+        }
+        .form-group {
+            display: grid;
+            gap: 8px;
+        }
+        .form-group label {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        .form-group input,
+        .form-group textarea {
+            padding: 10px 12px;
+            border: 1px solid var(--ink);
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            color: var(--ink);
+            background: #ffffff;
+        }
+        .form-group textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #2d4630;
+            box-shadow: 0 0 0 2px rgba(63, 94, 74, 0.1);
+        }
+        .poll-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .option-column {
+            display: grid;
+            gap: 12px;
+        }
+        .option-title {
+            font-weight: 600;
+            font-size: 1rem;
+            margin: 0;
+        }
+        .option-fields {
+            display: grid;
+            gap: 12px;
+        }
+        .field-input {
+            display: grid;
+            gap: 6px;
+        }
+        .field-input label {
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .field-input input {
+            padding: 10px 12px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            color: var(--ink);
+            background: #ffffff;
+        }
+        .field-input input:focus {
+            outline: none;
+            border-color: #2d4630;
+            box-shadow: 0 0 0 2px rgba(63, 94, 74, 0.1);
+        }
+        .field-input input::placeholder {
+            color: #999;
+        }
+        .poll-actions {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 12px;
+        }
+        .poll-button {
+            background: var(--paper);
+            border: 1px solid var(--ink);
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-family: inherit;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .poll-button:hover {
+            background: var(--ink);
+            color: var(--paper);
+        }
+        .submit-button {
+            background: #c4e5c0;
+            border: 1px solid var(--ink);
+        }
+        .submit-button:hover {
+            background: #b0d9ac;
+        }
+        .messages {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: grid;
+            gap: 8px;
+        }
+        .messages li {
+            padding: 12px 14px;
+            border-radius: 8px;
+            background: #ffeaea;
+            border: 1px solid #ffcccc;
+            font-size: 0.9rem;
+        }
+        @media (max-width: 600px) {
+            .poll-shell {
+                padding: 16px 12px 24px;
+            }
+            .poll-panel {
+                padding: 16px;
+            }
+            .poll-options {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="poll-shell">
+        <header class="poll-header">
+            <button class="back-button" onclick="history.back();">←</button>
+            <h1 class="poll-title">Team Training Time Poll</h1>
+        </header>
 
-{% block content %}
-<section class="panel">
-    <h1>Create Candidate-Time Poll</h1>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit">Create Poll</button>
-    </form>
-</section>
-{% endblock %}
+        {% if messages %}
+            <ul class="messages">
+                {% for message in messages %}
+                    <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        <section class="poll-panel">
+            <p class="poll-intro">Select two possible session times for the team to vote on</p>
+            
+            <form method="post" class="poll-form">
+                {% csrf_token %}
+                
+                <!-- Poll Title -->
+                <div class="form-group">
+                    <label for="id_title">Poll Title</label>
+                    {{ form.title }}
+                </div>
+
+                <!-- Poll Description -->
+                <div class="form-group">
+                    <label for="id_description">Description</label>
+                    {{ form.description }}
+                </div>
+
+                <!-- Poll Close Time -->
+                <div class="form-group">
+                    <label for="id_closes_at">Closes At</label>
+                    {{ form.closes_at }}
+                </div>
+
+                <!-- Two-Column Options -->
+                <div class="poll-options">
+                    <!-- Option 1 -->
+                    <div class="option-column">
+                        <h3 class="option-title">Option 1</h3>
+                        <div class="option-fields">
+                            <div class="field-input">
+                                <label for="id_option_1_starts_at">Date & Time</label>
+                                {{ form.option_1_starts_at }}
+                            </div>
+                            <div class="field-input">
+                                <label for="id_option_1_location">Location</label>
+                                {{ form.option_1_location }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Option 2 -->
+                    <div class="option-column">
+                        <h3 class="option-title">Option 2</h3>
+                        <div class="option-fields">
+                            <div class="field-input">
+                                <label for="id_option_2_starts_at">Date & Time</label>
+                                {{ form.option_2_starts_at }}
+                            </div>
+                            <div class="field-input">
+                                <label for="id_option_2_location">Location</label>
+                                {{ form.option_2_location }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Errors -->
+                {% if form.non_field_errors %}
+                    <div style="background: #ffe5e5; border: 1px solid #ffcccc; border-radius: 8px; padding: 12px; color: #c00;">
+                        {% for error in form.non_field_errors %}
+                            <p>{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                <!-- Submit Actions -->
+                <div class="poll-actions">
+                    <button type="submit" class="poll-button submit-button">Send Poll</button>
+                </div>
+            </form>
+        </section>
+    </main>
+</body>
+</html>

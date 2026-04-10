@@ -1,64 +1,374 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ poll.title }} | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #3f5e4a;
+            --paper: #d9d9d9;
+            --ink: #111111;
+            --line: #8a8a8a;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--forest);
+            color: var(--ink);
+            font-family: 'Josefin Sans', sans-serif;
+        }
+        a { color: inherit; text-decoration: none; }
+        .poll-shell {
+            max-width: 1220px;
+            margin: 0 auto;
+            padding: 24px 16px 36px;
+            display: grid;
+            gap: 20px;
+        }
+        .poll-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .back-button {
+            flex-shrink: 0;
+            background: none;
+            border: none;
+            font-size: 2rem;
+            color: #ffffff;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+        .back-button:hover {
+            opacity: 0.8;
+        }
+        .poll-title-block {
+            flex: 1;
+            min-width: 250px;
+        }
+        .poll-title {
+            margin: 0 0 8px;
+            color: #ffffff;
+            font-size: clamp(1.8rem, 3vw, 2.4rem);
+            font-weight: 600;
+            line-height: 1.2;
+        }
+        .poll-meta {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.95rem;
+        }
+        .poll-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+        .poll-panel {
+            background: var(--paper);
+            border-radius: 10px;
+            padding: 20px;
+            display: grid;
+            gap: 16px;
+        }
+        .poll-description {
+            margin: 0;
+            font-size: 1rem;
+            color: #333;
+            font-weight: 500;
+        }
+        .options-section h3 {
+            margin: 0 0 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        .options-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+        .options-table thead {
+            background: #e5e5e5;
+        }
+        .options-table th {
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid var(--line);
+        }
+        .options-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .options-table tr:hover {
+            background: #f9f9f9;
+        }
+        .vote-count {
+            background: #d4f4dd;
+            border: 1px solid #8fcfa0;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-weight: 600;
+            display: inline-block;
+        }
+        .vote-form {
+            display: grid;
+            gap: 14px;
+        }
+        .form-group {
+            display: grid;
+            gap: 8px;
+        }
+        .form-group label {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        .form-group select,
+        .form-group input {
+            padding: 10px 12px;
+            border: 1px solid var(--ink);
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            color: var(--ink);
+            background: #ffffff;
+        }
+        .form-group select:focus,
+        .form-group input:focus {
+            outline: none;
+            border-color: #2d4630;
+            box-shadow: 0 0 0 2px rgba(63, 94, 74, 0.1);
+        }
+        .form-group ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: grid;
+            gap: 10px;
+        }
+        .form-group li {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .form-group input[type="radio"] {
+            width: auto;
+            margin: 0;
+            cursor: pointer;
+        }
+        .form-group label[for] {
+            font-weight: 400;
+            margin: 0;
+            cursor: pointer;
+        }
+        .vote-button {
+            background: #c4e5c0;
+            border: 1px solid var(--ink);
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-family: inherit;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .vote-button:hover {
+            background: #b0d9ac;
+        }
+        .votes-list {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        .votes-list thead {
+            background: #e5e5e5;
+        }
+        .votes-list th {
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid var(--line);
+        }
+        .votes-list td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .votes-list tr:hover {
+            background: #f9f9f9;
+        }
+        .votes-empty {
+            color: #666;
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+        }
+        .poll-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .action-button {
+            background: var(--paper);
+            border: 1px solid var(--ink);
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-family: inherit;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.2s;
+        }
+        .action-button:hover {
+            background: var(--ink);
+            color: var(--paper);
+        }
+        @media (max-width: 900px) {
+            .poll-content {
+                grid-template-columns: 1fr;
+            }
+        }
+        .errorlist {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 12px;
+            background: #ffe5e5;
+            border: 1px solid #ffcccc;
+            border-radius: 8px;
+            padding: 12px;
+            color: #c00;
+        }
+        .errorlist li {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <main class="poll-shell">
+        <header class="poll-header">
+            <button class="back-button" onclick="history.back();">←</button>
+            <div class="poll-title-block">
+                <h1 class="poll-title">{{ poll.title }}</h1>
+                <div class="poll-meta">
+                    {% now "U" as current_timestamp %}
+                    {% if poll.closes_at.timestamp > current_timestamp %}
+                        <span style="color: #90EE90;">●</span> Open
+                    {% else %}
+                        <span style="color: #FFB6C6;">●</span> Closed
+                    {% endif %}
+                    — Closes {{ poll.closes_at|date:"M j, Y g:i a" }}
+                </div>
+            </div>
+            <div class="poll-actions">
+                <a class="action-button" href="{% url 'scheduling:polls_list' %}">All Polls</a>
+                <a class="action-button" href="{% url 'scheduling:sessions_calendar' %}">Calendar</a>
+                <a class="action-button" href="{% url 'scheduling:player_home' %}">Home</a>
+            </div>
+        </header>
 
-{% block content %}
-<div class="grid two">
-    <section class="panel">
-        <h1>{{ poll.title }}</h1>
-        {% if poll.description %}
-            <p>{{ poll.description }}</p>
-        {% endif %}
-        <p>Closes at: {{ poll.closes_at }}</p>
-        <h2>Options</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>When</th>
-                    <th>Location</th>
-                    <th>Votes</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for option in options %}
-                    <tr>
-                        <td>{{ option.starts_at }}</td>
-                        <td>{{ option.location }}</td>
-                        <td>{{ option.vote_count }}</td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </section>
-    <section class="panel">
-        <h2>Cast Vote</h2>
-        <form method="post">
-            {% csrf_token %}
-            {{ form.as_p }}
-            <button type="submit">Save Vote</button>
-        </form>
-    </section>
-</div>
+        <div class="poll-content">
+            <!-- Left: Poll Info & Options -->
+            <section class="poll-panel">
+                {% if poll.description %}
+                    <p class="poll-description">{{ poll.description }}</p>
+                {% endif %}
 
-<section class="panel" style="margin-top: 16px;">
-    <h2>Votes</h2>
-    {% if votes %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Player</th>
-                    <th>Selected Option</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for vote in votes %}
-                    <tr>
-                        <td>{{ vote.player.name }}</td>
-                        <td>{{ vote.option.starts_at }} | {{ vote.option.location }}</td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <p class="muted">No votes submitted yet.</p>
-    {% endif %}
-</section>
-{% endblock %}
+                <div class="options-section">
+                    <h3>Available Options</h3>
+                    <table class="options-table">
+                        <thead>
+                            <tr>
+                                <th>Date & Time</th>
+                                <th>Location</th>
+                                <th>Votes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for option in options %}
+                                <tr>
+                                    <td>{{ option.starts_at|date:"M j, Y g:i a" }}</td>
+                                    <td>{{ option.location }}</td>
+                                    <td><span class="vote-count">{{ option.vote_count }}</span></td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if votes %}
+                    <div class="options-section">
+                        <h3>Votes Submitted ({{ votes.count }})</h3>
+                        <table class="votes-list">
+                            <thead>
+                                <tr>
+                                    <th>Player</th>
+                                    <th>Selected Option</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for vote in votes %}
+                                    <tr>
+                                        <td><strong>{{ vote.player.name }}</strong></td>
+                                        <td>{{ vote.option.starts_at|date:"M j, Y g:i a" }} — {{ vote.option.location }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="votes-empty">
+                        No votes submitted yet.
+                    </div>
+                {% endif %}
+            </section>
+
+            <!-- Right: Cast Vote Form -->
+            <section class="poll-panel">
+                <h3 style="margin-top: 0;">Cast Your Vote</h3>
+                
+                {% if form.non_field_errors %}
+                    <ul class="errorlist">
+                        {% for error in form.non_field_errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+
+                <form method="post" class="vote-form">
+                    {% csrf_token %}
+                    
+                    {% if form.player.errors %}
+                        <div style="background: #ffe5e5; border: 1px solid #ffcccc; border-radius: 8px; padding: 12px; color: #c00;">
+                            {{ form.player.errors }}
+                        </div>
+                    {% endif %}
+                    <div class="form-group">
+                        <label for="id_player">{{ form.player.label }}</label>
+                        {{ form.player }}
+                    </div>
+
+                    {% if form.option.errors %}
+                        <div style="background: #ffe5e5; border: 1px solid #ffcccc; border-radius: 8px; padding: 12px; color: #c00;">
+                            {{ form.option.errors }}
+                        </div>
+                    {% endif %}
+                    <div class="form-group">
+                        <label>{{ form.option.label }}</label>
+                        {{ form.option }}
+                    </div>
+
+                    <button type="submit" class="vote-button">Save Vote</button>
+                </form>
+            </section>
+        </div>
+    </main>
+</body>
+</html>

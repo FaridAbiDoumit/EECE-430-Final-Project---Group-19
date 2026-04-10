@@ -721,6 +721,11 @@ def vote_poll_detail(request, poll_id):
     )
 
 
+def polls_list(request):
+    polls = SessionVotePoll.objects.annotate(vote_count=Count('votes')).order_by('-created_at')
+    return render(request, 'scheduling/polls_list.html', {'polls': polls})
+
+
 def edit_session_plan(request, session_id):
     session = get_object_or_404(TrainingSession, pk=session_id)
     try:

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polls | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #3f5e4a;
+            --paper: #d9d9d9;
+            --ink: #111111;
+            --line: #8a8a8a;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--forest);
+            color: var(--ink);
+            font-family: 'Josefin Sans', sans-serif;
+        }
+        a { color: inherit; text-decoration: none; }
+        .polls-shell {
+            max-width: 1220px;
+            margin: 0 auto;
+            padding: 24px 16px 36px;
+            display: grid;
+            gap: 16px;
+        }
+        .polls-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .polls-title {
+            margin: 0;
+            color: #ffffff;
+            font-size: clamp(2rem, 3.5vw, 3.4rem);
+            font-weight: 500;
+            line-height: 1;
+        }
+        .polls-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .polls-button {
+            border: 1px solid #1f1f1f;
+            background: var(--paper);
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 0.98rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.2s;
+        }
+        .polls-button:hover {
+            background: #111111;
+            color: white;
+        }
+        .polls-panel {
+            background: var(--paper);
+            border-radius: 10px;
+            padding: 14px;
+        }
+        .polls-list {
+            display: grid;
+            gap: 10px;
+        }
+        .poll-card {
+            background: #ececec;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 14px;
+            display: grid;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .poll-card:hover {
+            background: #e0e0e0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .poll-card a {
+            text-decoration: none;
+            color: inherit;
+        }
+        .poll-title {
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin: 0;
+        }
+        .poll-meta {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            font-size: 0.9rem;
+            color: #555;
+        }
+        .poll-description {
+            margin: 0;
+            font-size: 0.95rem;
+            color: #333;
+        }
+        .poll-stats {
+            display: flex;
+            gap: 14px;
+            font-size: 0.85rem;
+        }
+        .stat {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+        .stat-label {
+            color: #666;
+        }
+        .stat-value {
+            font-weight: 600;
+        }
+        .empty {
+            margin: 0;
+            color: #2f2f2f;
+            text-align: center;
+            padding: 20px;
+        }
+        .status-open {
+            display: inline-block;
+            background: #d4f4dd;
+            border: 1px solid #8fcfa0;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .status-closed {
+            display: inline-block;
+            background: #f4d4d4;
+            border: 1px solid #cfa0a0;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <main class="polls-shell">
+        <header class="polls-header">
+            <h1 class="polls-title">Training Time Polls</h1>
+            <div class="polls-actions">
+                <a class="polls-button" href="{% url 'scheduling:create_vote_poll' %}">Create Poll</a>
+                <a class="polls-button" href="{% url 'scheduling:sessions_calendar' %}">Calendar</a>
+                <a class="polls-button" href="{% url 'scheduling:player_home' %}">Home</a>
+            </div>
+        </header>
+
+        <section class="polls-panel" aria-label="Active and closed polls">
+            {% if polls %}
+                <div class="polls-list">
+                    {% for poll in polls %}
+                        <a href="{% url 'scheduling:vote_poll_detail' poll.id %}" class="poll-card">
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <h3 class="poll-title">{{ poll.title }}</h3>
+                                {% now "U" as current_timestamp %}
+                                {% if poll.closes_at.timestamp > current_timestamp %}
+                                    <span class="status-open">Open</span>
+                                {% else %}
+                                    <span class="status-closed">Closed</span>
+                                {% endif %}
+                            </div>
+
+                            {% if poll.description %}
+                                <p class="poll-description">{{ poll.description }}</p>
+                            {% endif %}
+
+                            <div class="poll-meta">
+                                <span>Closes: {{ poll.closes_at|date:"M j, Y g:i a" }}</span>
+                                <span>{{ poll.options.count }} option{{ poll.options.count|pluralize }}</span>
+                            </div>
+
+                            <div class="poll-stats">
+                                <div class="stat">
+                                    <span class="stat-label">Votes:</span>
+                                    <span class="stat-value">{{ poll.vote_count }}</span>
+                                </div>
+                            </div>
+                        </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="empty">No polls yet. <a href="{% url 'scheduling:create_vote_poll' %}">Create one</a>.</p>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>
