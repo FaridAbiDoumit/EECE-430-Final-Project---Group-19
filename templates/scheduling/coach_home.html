@@ -215,7 +215,7 @@
                     </svg>
                 </a>
 
-                <a class="hub-card" href="{% url 'scheduling:next_session' %}">
+                <a class="hub-card" href="{% url 'scheduling:sessions_calendar' %}">
                     <h2>My calendar and schedules</h2>
                     <p>{% if next_session %}Next: {{ next_session.title }}{% else %}No upcoming session{% endif %}</p>
                     <svg class="hub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

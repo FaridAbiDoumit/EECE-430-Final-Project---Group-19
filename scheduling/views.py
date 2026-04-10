@@ -1,8 +1,12 @@
+import calendar
+from datetime import date, datetime, time, timedelta
+
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Count, Q
+from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
@@ -260,6 +264,184 @@ def next_session(request):
         .first()
     )
     return render(request, 'scheduling/next_session.html', {'session': session})
+
+
+@login_required(login_url='scheduling:login')
+def sessions_calendar(request):
+    profile = getattr(request.user, 'player_profile', None)
+    can_add_sessions = request.user.is_staff or (
+        profile is not None and profile.role == Player.Role.COACH
+    )
+
+    today = timezone.localdate()
+    default_year = 2026
+    default_month = 2
+    default_day = 16
+
+    date_params = request.POST if request.method == 'POST' else request.GET
+
+    try:
+        year = int(date_params.get('year', default_year))
+        month = int(date_params.get('month', default_month))
+        if month < 1 or month > 12:
+            raise ValueError
+    except (TypeError, ValueError):
+        year = default_year
+        month = default_month
+
+    month_start = date(year, month, 1)
+    next_month = date(year + (month // 12), (month % 12) + 1, 1)
+    month_end_day = calendar.monthrange(year, month)[1]
+
+    try:
+        selected_day = int(date_params.get('day', default_day))
+    except (TypeError, ValueError):
+        selected_day = default_day
+    selected_day = max(1, min(selected_day, month_end_day))
+    selected_date = date(year, month, selected_day)
+
+    local_tz = timezone.get_current_timezone()
+    selected_query = f"{reverse('scheduling:sessions_calendar')}?year={year}&month={month}&day={selected_day}"
+
+    action = request.POST.get('calendar_action') if request.method == 'POST' else ''
+
+    quick_add = {
+        'title': request.POST.get('quick_title', '').strip() if action == 'quick_add' else '',
+        'start_time': request.POST.get('quick_start_time', '') if action == 'quick_add' else '',
+        'end_time': request.POST.get('quick_end_time', '') if action == 'quick_add' else '',
+        'location': request.POST.get('quick_location', '').strip() if action == 'quick_add' else '',
+    }
+
+    if request.method == 'POST':
+        if action == 'rsvp':
+            session_id = request.POST.get('session_id')
+            rsvp_status = request.POST.get('rsvp_status')
+            if profile is None:
+                messages.error(request, 'This account cannot RSVP because it is not linked to a player profile.')
+            elif rsvp_status not in {SessionRSVP.Status.GOING, SessionRSVP.Status.NOT_GOING}:
+                messages.error(request, 'Invalid RSVP action.')
+            else:
+                target_session = TrainingSession.objects.filter(pk=session_id, cancelled=False).first()
+                if target_session is None:
+                    messages.error(request, 'Session is no longer available for RSVP.')
+                else:
+                    SessionRSVP.objects.update_or_create(
+                        session=target_session,
+                        player=profile,
+                        defaults={'status': rsvp_status},
+                    )
+                    messages.success(request, 'RSVP updated.')
+            return redirect(selected_query)
+
+        if action == 'quick_add':
+            if not can_add_sessions:
+                messages.error(request, 'Only coach and admin accounts can add sessions.')
+            else:
+                title = quick_add['title']
+                location = quick_add['location']
+                start_time_raw = quick_add['start_time']
+                end_time_raw = quick_add['end_time']
+
+                if not title or not location or not start_time_raw or not end_time_raw:
+                    messages.error(request, 'Please fill in session name, start time, end time, and location.')
+                else:
+                    try:
+                        start_clock = time.fromisoformat(start_time_raw)
+                        end_clock = time.fromisoformat(end_time_raw)
+                    except ValueError:
+                        messages.error(request, 'Please use valid time values for start and end.')
+                    else:
+                        if end_clock <= start_clock:
+                            messages.error(request, 'End time must be later than start time.')
+                        else:
+                            starts_at_local = timezone.make_aware(
+                                datetime.combine(selected_date, start_clock),
+                                local_tz,
+                            )
+                            TrainingSession.objects.create(
+                                title=title,
+                                starts_at=starts_at_local,
+                                location=location,
+                                session_type=TrainingSession.SessionType.PRACTICE,
+                                notes=f'Calendar quick-add. End time: {end_clock.strftime("%I:%M %p").lstrip("0")}.',
+                            )
+                            messages.success(request, 'Session added to the schedule.')
+                            return redirect(selected_query)
+
+    month_start_dt = timezone.make_aware(datetime.combine(month_start, time.min), local_tz)
+    next_month_dt = timezone.make_aware(datetime.combine(next_month, time.min), local_tz)
+
+    month_sessions = list(
+        TrainingSession.objects.filter(
+            starts_at__gte=month_start_dt,
+            starts_at__lt=next_month_dt,
+            cancelled=False,
+        ).order_by('starts_at')
+    )
+
+    sessions_by_day = {}
+    for training_session in month_sessions:
+        local_starts = timezone.localtime(training_session.starts_at, local_tz)
+        day_key = local_starts.date()
+        sessions_by_day.setdefault(day_key, []).append(training_session)
+
+    calendar_weeks = []
+    cal = calendar.Calendar(firstweekday=6)
+    for week in cal.monthdatescalendar(year, month):
+        week_days = []
+        for week_day in week:
+            event_count = len(sessions_by_day.get(week_day, []))
+            week_days.append(
+                {
+                    'day': week_day.day,
+                    'date': week_day,
+                    'in_month': week_day.month == month,
+                    'is_today': week_day == today,
+                    'is_selected': week_day == selected_date,
+                    'event_count': event_count,
+                }
+            )
+        calendar_weeks.append(week_days)
+
+    selected_day_sessions = sessions_by_day.get(selected_date, [])
+    timeline_events = []
+    for training_session in selected_day_sessions:
+        local_start = timezone.localtime(training_session.starts_at, local_tz)
+        local_end = local_start + timedelta(hours=2)
+        timeline_events.append(
+            {
+                'id': training_session.id,
+                'title': training_session.title,
+                'location': training_session.location,
+                'start_label': local_start.strftime('%I:%M %p').lstrip('0').lower(),
+                'end_label': local_end.strftime('%I:%M %p').lstrip('0').lower(),
+            }
+        )
+    timeline_hours = []
+    for hour in range(6, 17):
+        suffix = 'am' if hour < 12 else 'pm'
+        display_hour = hour if hour <= 12 else hour - 12
+        timeline_hours.append(f'{display_hour}{suffix}')
+
+    prev_month = date(year - 1, 12, 1) if month == 1 else date(year, month - 1, 1)
+    next_month_nav = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+
+    context = {
+        'home_url': _post_login_route_for(request.user),
+        'role_label': profile.get_role_display() if profile is not None else ('Admin' if request.user.is_staff else 'Member'),
+        'calendar_title': month_start.strftime('%B %Y'),
+        'selected_date': selected_date,
+        'calendar_weeks': calendar_weeks,
+        'timeline_hours': timeline_hours,
+        'timeline_events': timeline_events,
+        'featured_event': timeline_events[0] if timeline_events else None,
+        'month_prev': prev_month,
+        'month_next': next_month_nav,
+        'quick_add': quick_add,
+        'can_add_sessions': can_add_sessions,
+        'active_nav': 'schedule',
+    }
+    return render(request, 'scheduling/sessions_calendar.html', context)
 
 
 def session_detail(request, session_id):

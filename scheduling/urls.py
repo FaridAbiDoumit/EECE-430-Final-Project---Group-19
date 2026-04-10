@@ -15,6 +15,7 @@ urlpatterns = [
     path('staff/home/', views.admin_home, name='admin_home'),
     path('sessions/new/', views.create_session, name='create_session'),
     path('sessions/next/', views.next_session, name='next_session'),
+    path('sessions/calendar/', views.sessions_calendar, name='sessions_calendar'),
     path('sessions/<int:session_id>/', views.session_detail, name='session_detail'),
     path('sessions/<int:session_id>/edit/', views.edit_session, name='edit_session'),
     path('sessions/<int:session_id>/cancel/', views.cancel_session, name='cancel_session'),

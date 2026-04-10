@@ -1,0 +1,10 @@
+<a class="sched-day{% if not day.in_month %} is-out-month{% endif %}{% if day.is_selected %} is-selected{% endif %}{% if day.is_today %} is-today{% endif %}"
+   href="?year={{ day.date.year }}&month={{ day.date.month }}&day={{ day.date.day }}"
+   aria-label="{{ day.date }}">
+    <span class="sched-day-number">{{ day.day }}</span>
+    {% if day.event_count %}
+        <span class="sched-day-chip">
+            {{ day.event_count }} event{% if day.event_count != 1 %}s{% endif %}
+        </span>
+    {% endif %}
+</a>

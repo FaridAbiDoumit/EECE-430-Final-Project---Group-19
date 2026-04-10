@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scheduling | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Josefin+Sans:wght@400;500;600&family=Mulish:wght@400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #3f5e4a;
+            --paper: #d9d9d9;
+            --card-green: rgba(12, 153, 19, 0.25);
+            --event-green: rgba(166, 201, 168, 0.74);
+            --ink: #000000;
+            --border-blue: #1321e2;
+            --radius-lg: 10px;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--forest);
+            color: var(--ink);
+            font-family: 'Josefin Sans', sans-serif;
+        }
+        a { color: inherit; text-decoration: none; }
+        .scheduling-shell {
+            width: min(1380px, 100%);
+            margin: 0 auto;
+            padding: 18px 14px 22px;
+            display: grid;
+            grid-template-columns: 84px 1fr;
+            gap: 20px;
+        }
+        .sched-sidebar {
+            background: var(--paper);
+            border-radius: 20px;
+            width: 60px;
+            height: 985px;
+            position: relative;
+            justify-self: center;
+        }
+        .sched-nav-item {
+            width: 56px;
+            height: 42px;
+            border-radius: 4px;
+            display: grid;
+            place-items: center;
+            border: 1px solid transparent;
+            background: transparent;
+            padding: 0;
+            cursor: pointer;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .sched-nav-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        .sched-nav-item.is-active {
+            border-color: #000;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+        }
+        .sched-nav-home { top: 21px; width: 71px; height: 41px; }
+        .sched-main {
+            display: grid;
+            grid-template-columns: minmax(660px, 1fr) minmax(280px, 339px);
+            gap: 20px;
+            align-content: start;
+        }
+        .sched-titlebar {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+        .sched-titlebar h1 {
+            margin: 0;
+            color: #fff;
+            font-size: clamp(40px, 4vw, 72px);
+            font-weight: 400;
+            line-height: 1;
+        }
+        .sched-quick-actions {
+            display: flex;
+            gap: 18px;
+            flex-wrap: wrap;
+        }
+        .sched-quick-actions a {
+            min-height: 62px;
+            border-radius: 10px;
+            background: var(--paper);
+            padding: 18px 22px;
+            font-size: 16px;
+            font-weight: 500;
+            display: grid;
+            align-items: center;
+        }
+        .calendar-panel,
+        .timeline-panel,
+        .add-event-panel {
+            background: var(--paper);
+            border-radius: var(--radius-lg);
+        }
+        .calendar-panel {
+            padding: 22px 18px 18px;
+        }
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        .calendar-month {
+            margin: 0;
+            font-size: clamp(28px, 2.8vw, 36px);
+            font-weight: 400;
+        }
+        .calendar-nav {
+            display: flex;
+            gap: 8px;
+        }
+        .calendar-nav a {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1px solid #000;
+            display: grid;
+            place-items: center;
+            font-size: 18px;
+            line-height: 1;
+        }
+        .calendar-weekdays,
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .calendar-weekdays {
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        .calendar-weekdays span {
+            text-align: center;
+        }
+        .sched-day {
+            background: var(--card-green);
+            border-radius: var(--radius-lg);
+            min-height: 98px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            border: 1px solid transparent;
+        }
+        .sched-day.is-out-month {
+            opacity: 0.45;
+        }
+        .sched-day.is-selected {
+            border: 3px solid var(--border-blue);
+        }
+        .sched-day.is-today {
+            box-shadow: inset 0 0 0 2px #2b2b2b;
+        }
+        .sched-day-number {
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+        }
+        .sched-day-chip {
+            align-self: flex-start;
+            background: var(--paper);
+            border-radius: 10px;
+            padding: 2px 8px;
+            font-size: 12px;
+        }
+        .timeline-panel {
+            padding: 16px;
+            min-height: 677px;
+            display: grid;
+            grid-template-rows: auto 1fr;
+        }
+        .timeline-panel h2 {
+            margin: 4px 0 14px;
+            font-size: 28px;
+            font-weight: 400;
+        }
+        .timeline-grid {
+            display: grid;
+            grid-template-columns: 50px 1fr;
+            gap: 10px;
+            align-content: start;
+            max-height: 590px;
+            overflow: auto;
+            padding-right: 4px;
+        }
+        .timeline-labels {
+            display: grid;
+            grid-template-rows: repeat(11, 54px);
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+        }
+        .timeline-lines {
+            display: grid;
+            grid-template-rows: repeat(11, 54px);
+            border-left: 1px solid #111;
+            position: relative;
+            padding-left: 10px;
+        }
+        .timeline-lines::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            border-left: 1px solid #111;
+        }
+        .timeline-slot {
+            border-top: 1px solid #111;
+        }
+        .timeline-events {
+            position: absolute;
+            inset: 0 0 0 10px;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding-top: 110px;
+            padding-right: 6px;
+        }
+        .timeline-event {
+            pointer-events: auto;
+            background: var(--event-green);
+            border-radius: 10px;
+            padding: 8px 10px;
+            font-size: 12px;
+            display: grid;
+            gap: 4px;
+        }
+        .timeline-event h4 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 400;
+        }
+        .timeline-event-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        .timeline-event-actions {
+            font-family: 'Mulish', sans-serif;
+            font-size: 10px;
+            display: flex;
+            gap: 6px;
+        }
+        .timeline-event-actions form {
+            margin: 0;
+        }
+        .timeline-event-actions button {
+            border: 0;
+            background: transparent;
+            padding: 0;
+            font: inherit;
+            color: inherit;
+            cursor: pointer;
+        }
+        .timeline-event-actions button:hover {
+            text-decoration: underline;
+        }
+        .timeline-event-row {
+            margin: 0;
+        }
+        .timeline-event-links {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .add-event-panel {
+            grid-column: 1 / -1;
+            min-height: 81px;
+            padding: 20px 12px;
+        }
+        .add-event-grid {
+            display: grid;
+            grid-template-columns: 1fr 140px 140px 1fr 238px;
+            gap: 10px;
+            align-items: center;
+            font-size: 12px;
+        }
+        .add-event-field {
+            background: rgba(166, 201, 168, 0.8);
+            border: 1px solid #000;
+            border-radius: 10px;
+            padding: 6px 10px;
+            min-height: 28px;
+            display: flex;
+            align-items: center;
+        }
+        .add-event-input {
+            width: 100%;
+            border: 0;
+            background: transparent;
+            font: inherit;
+            color: inherit;
+            outline: none;
+        }
+        .add-event-action {
+            background: rgba(166, 201, 168, 0.8);
+            border: 1px solid #000;
+            border-radius: 10px;
+            min-height: 28px;
+            display: grid;
+            place-items: center;
+            font-size: 12px;
+            font-family: inherit;
+            cursor: pointer;
+        }
+        .add-event-action:disabled,
+        .add-event-input:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .add-event-note {
+            grid-column: 1 / -1;
+            margin: 0;
+            font-size: 12px;
+        }
+        @media (max-width: 1260px) {
+            .sched-main {
+                grid-template-columns: 1fr;
+            }
+            .timeline-panel {
+                min-height: 520px;
+            }
+        }
+        @media (max-width: 900px) {
+            .scheduling-shell {
+                grid-template-columns: 1fr;
+                padding: 12px;
+            }
+            .sched-sidebar {
+                min-height: auto;
+                width: auto;
+                height: auto;
+                display: flex;
+                flex-direction: row;
+                justify-content: flex-start;
+                flex-wrap: wrap;
+                position: static;
+                border-radius: 12px;
+                padding: 10px;
+                gap: 8px;
+            }
+            .sched-nav-item {
+                position: static;
+                transform: none;
+            }
+            .calendar-weekdays {
+                font-size: 18px;
+            }
+            .add-event-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="scheduling-shell">
+        {% include "scheduling/components/schedule_sidebar.html" %}
+
+        <main class="sched-main">
+            <header class="sched-titlebar">
+                <h1>Calendar</h1>
+                <div class="sched-quick-actions">
+                    <a href="{% url 'scheduling:create_vote_poll' %}">Create Training Time Poll</a>
+                    <a href="{% url 'scheduling:coach_availability_overview' %}">View Player Availability</a>
+                </div>
+            </header>
+
+            <section class="calendar-panel" aria-label="Monthly calendar">
+                <div class="calendar-header">
+                    <h2 class="calendar-month">{{ calendar_title }}</h2>
+                    <div class="calendar-nav">
+                        <a href="?year={{ month_prev.year }}&month={{ month_prev.month }}&day=1" aria-label="Previous month">&#x2039;</a>
+                        <a href="?year={{ month_next.year }}&month={{ month_next.month }}&day=1" aria-label="Next month">&#x203A;</a>
+                    </div>
+                </div>
+
+                <div class="calendar-weekdays" aria-hidden="true">
+                    <span>Sun</span>
+                    <span>Mon</span>
+                    <span>Tue</span>
+                    <span>Wed</span>
+                    <span>Thu</span>
+                    <span>Fri</span>
+                    <span>Sat</span>
+                </div>
+
+                <div class="calendar-grid">
+                    {% for week in calendar_weeks %}
+                        {% for day in week %}
+                            {% include "scheduling/components/schedule_day_cell.html" with day=day %}
+                        {% endfor %}
+                    {% endfor %}
+                </div>
+            </section>
+
+            <section class="timeline-panel" aria-label="Selected day timeline">
+                <h2>{{ selected_date|date:"l, F j, Y" }}</h2>
+                <div class="timeline-grid">
+                    <div class="timeline-labels">
+                        {% for label in timeline_hours %}
+                            <span>{{ label }}</span>
+                        {% endfor %}
+                    </div>
+                    <div class="timeline-lines">
+                        {% for _ in timeline_hours %}
+                            <div class="timeline-slot"></div>
+                        {% endfor %}
+                        <div class="timeline-events">
+                            {% for timeline_session in timeline_events %}
+                                {% include "scheduling/components/schedule_timeline_event.html" with timeline_session=timeline_session %}
+                            {% empty %}
+                                <article class="timeline-event">
+                                    <h4>No scheduled events</h4>
+                                    <p class="timeline-event-row">Use the action below to create one.</p>
+                                </article>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="add-event-panel" aria-label="Add event summary">
+                <form method="post" class="add-event-grid">
+                    {% csrf_token %}
+                    <input type="hidden" name="calendar_action" value="quick_add">
+                    <input type="hidden" name="year" value="{{ selected_date.year }}">
+                    <input type="hidden" name="month" value="{{ selected_date.month }}">
+                    <input type="hidden" name="day" value="{{ selected_date.day }}">
+                    <div class="add-event-field">
+                        <input
+                            class="add-event-input"
+                            type="text"
+                            name="quick_title"
+                            placeholder="Name of event"
+                            value="{{ quick_add.title }}"
+                                {% if not can_add_sessions %}disabled{% endif %}
+                            required>
+                    </div>
+                    <div class="add-event-field">
+                        <input
+                            class="add-event-input"
+                            type="time"
+                            name="quick_start_time"
+                            value="{{ quick_add.start_time }}"
+                                {% if not can_add_sessions %}disabled{% endif %}
+                            required>
+                    </div>
+                    <div class="add-event-field">
+                        <input
+                            class="add-event-input"
+                            type="time"
+                            name="quick_end_time"
+                            value="{{ quick_add.end_time }}"
+                                {% if not can_add_sessions %}disabled{% endif %}
+                            required>
+                    </div>
+                    <div class="add-event-field">
+                        <input
+                            class="add-event-input"
+                            type="text"
+                            name="quick_location"
+                            placeholder="Location"
+                            value="{{ quick_add.location }}"
+                            {% if not can_add_sessions %}disabled{% endif %}
+                            required>
+                    </div>
+                    <button class="add-event-action" type="submit" {% if not can_add_sessions %}disabled{% endif %}>Press to add event to schedule</button>
+                    {% if not can_add_sessions %}
+                        <p class="add-event-note">Only Coach and Admin can add sessions.</p>
+                    {% endif %}
+                </form>
+            </section>
+        </main>
+    </div>
+</body>
+</html>
