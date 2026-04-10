@@ -25,6 +25,7 @@ urlpatterns = [
     path('polls/new/', views.create_vote_poll, name='create_vote_poll'),
     path('polls/<int:poll_id>/', views.vote_poll_detail, name='vote_poll_detail'),
     path('sessions/<int:session_id>/plan/', views.edit_session_plan, name='edit_session_plan'),
+    path('sessions/personal-note/', views.personal_notes_overview, name='personal_notes_overview'),
     path('sessions/<int:session_id>/personal-note/', views.personal_note, name='personal_note'),
     path('notifications/', views.notification_inbox, name='notification_inbox'),
     path('notifications/<int:notification_id>/delete/', views.delete_notification, name='delete_notification'),

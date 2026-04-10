@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -41,6 +42,7 @@ class TrainingSession(models.Model):
 
     title = models.CharField(max_length=120)
     starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField()
     location = models.CharField(max_length=120)
     session_type = models.CharField(max_length=20, choices=SessionType.choices, default=SessionType.PRACTICE)
     notes = models.TextField(blank=True)
@@ -52,6 +54,11 @@ class TrainingSession(models.Model):
 
     def __str__(self):
         return f'{self.title} @ {self.location}'
+
+    def clean(self):
+        super().clean()
+        if self.ends_at <= self.starts_at:
+            raise ValidationError({'ends_at': 'End time must be after start time.'})
 
     @property
     def is_upcoming(self):

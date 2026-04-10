@@ -257,13 +257,36 @@ def cancel_session(request, session_id):
     return render(request, 'scheduling/cancel_session.html', {'session': session})
 
 
+@login_required(login_url='scheduling:login')
 def next_session(request):
     session = (
         TrainingSession.objects.filter(starts_at__gte=timezone.now(), cancelled=False)
         .order_by('starts_at')
         .first()
     )
-    return render(request, 'scheduling/next_session.html', {'session': session})
+
+    if session is not None:
+        local_start = timezone.localtime(session.starts_at)
+        calendar_url = (
+            f"{reverse('scheduling:sessions_calendar')}"
+            f"?year={local_start.year}&month={local_start.month}&day={local_start.day}"
+        )
+    else:
+        today = timezone.localdate()
+        calendar_url = (
+            f"{reverse('scheduling:sessions_calendar')}"
+            f"?year={today.year}&month={today.month}&day={today.day}"
+        )
+
+    return render(
+        request,
+        'scheduling/next_session.html',
+        {
+            'session': session,
+            'home_url': _post_login_route_for(request.user),
+            'calendar_url': calendar_url,
+        },
+    )
 
 
 @login_required(login_url='scheduling:login')
@@ -274,9 +297,9 @@ def sessions_calendar(request):
     )
 
     today = timezone.localdate()
-    default_year = 2026
-    default_month = 2
-    default_day = 16
+    default_year = today.year
+    default_month = today.month
+    default_day = today.day
 
     date_params = request.POST if request.method == 'POST' else request.GET
 
@@ -354,16 +377,15 @@ def sessions_calendar(request):
                         if end_clock <= start_clock:
                             messages.error(request, 'End time must be later than start time.')
                         else:
-                            starts_at_local = timezone.make_aware(
-                                datetime.combine(selected_date, start_clock),
-                                local_tz,
-                            )
+                            starts_at_local = timezone.make_aware(datetime.combine(selected_date, start_clock), local_tz)
+                            ends_at_local = timezone.make_aware(datetime.combine(selected_date, end_clock), local_tz)
                             TrainingSession.objects.create(
                                 title=title,
                                 starts_at=starts_at_local,
+                                ends_at=ends_at_local,
                                 location=location,
                                 session_type=TrainingSession.SessionType.PRACTICE,
-                                notes=f'Calendar quick-add. End time: {end_clock.strftime("%I:%M %p").lstrip("0")}.',
+                                notes='Calendar quick-add.',
                             )
                             messages.success(request, 'Session added to the schedule.')
                             return redirect(selected_query)
@@ -404,24 +426,90 @@ def sessions_calendar(request):
         calendar_weeks.append(week_days)
 
     selected_day_sessions = sessions_by_day.get(selected_date, [])
-    timeline_events = []
+    timeline_start_hour = 0
+    timeline_end_hour = 24
+    timeline_pixels_per_hour = 72
+    timeline_total_minutes = (timeline_end_hour - timeline_start_hour) * 60
+    timeline_canvas_height = int((timeline_total_minutes / 60) * timeline_pixels_per_hour)
+
+    raw_timeline_events = []
     for training_session in selected_day_sessions:
         local_start = timezone.localtime(training_session.starts_at, local_tz)
-        local_end = local_start + timedelta(hours=2)
-        timeline_events.append(
+        local_end = timezone.localtime(training_session.ends_at, local_tz)
+        start_minutes = int((local_start.hour - timeline_start_hour) * 60 + local_start.minute)
+        end_minutes = int((local_end.hour - timeline_start_hour) * 60 + local_end.minute)
+        clipped_start = max(0, start_minutes)
+        clipped_end = min(timeline_total_minutes, end_minutes)
+        if clipped_end <= 0 or clipped_start >= timeline_total_minutes:
+            continue
+
+        raw_timeline_events.append(
             {
                 'id': training_session.id,
                 'title': training_session.title,
                 'location': training_session.location,
                 'start_label': local_start.strftime('%I:%M %p').lstrip('0').lower(),
                 'end_label': local_end.strftime('%I:%M %p').lstrip('0').lower(),
+                'start_minutes': clipped_start,
+                'end_minutes': clipped_end,
             }
         )
-    timeline_hours = []
-    for hour in range(6, 17):
-        suffix = 'am' if hour < 12 else 'pm'
-        display_hour = hour if hour <= 12 else hour - 12
-        timeline_hours.append(f'{display_hour}{suffix}')
+
+    raw_timeline_events.sort(key=lambda item: (item['start_minutes'], item['end_minutes'], item['id']))
+
+    overlap_clusters = []
+    current_cluster = []
+    current_cluster_end = None
+    for event in raw_timeline_events:
+        if not current_cluster or event['start_minutes'] < current_cluster_end:
+            current_cluster.append(event)
+            current_cluster_end = max(current_cluster_end or event['end_minutes'], event['end_minutes'])
+        else:
+            overlap_clusters.append(current_cluster)
+            current_cluster = [event]
+            current_cluster_end = event['end_minutes']
+    if current_cluster:
+        overlap_clusters.append(current_cluster)
+
+    timeline_events = []
+    for cluster in overlap_clusters:
+        active_columns = []
+        max_columns = 0
+        for event in cluster:
+            active_columns = [item for item in active_columns if item['end_minutes'] > event['start_minutes']]
+            used_columns = {item['column'] for item in active_columns}
+            column = 0
+            while column in used_columns:
+                column += 1
+            event['column'] = column
+            active_columns.append({'column': column, 'end_minutes': event['end_minutes']})
+            max_columns = max(max_columns, len(active_columns), column + 1)
+
+        width_pct = 100 / max_columns if max_columns else 100
+        for event in cluster:
+            event['top_px'] = int((event['start_minutes'] / 60) * timeline_pixels_per_hour)
+            event['height_px'] = max(56, int(((event['end_minutes'] - event['start_minutes']) / 60) * timeline_pixels_per_hour))
+            event['left_pct'] = event['column'] * width_pct
+            event['width_pct'] = width_pct
+            timeline_events.append(event)
+
+    timeline_markers = []
+    for hour in range(timeline_start_hour, timeline_end_hour + 1):
+        display_hour = hour % 12 or 12
+        suffix = 'am' if hour < 12 or hour == 24 else 'pm'
+        timeline_markers.append(
+            {
+                'label': f'{display_hour}{suffix}',
+                'top_px': hour * timeline_pixels_per_hour,
+            }
+        )
+
+    current_time_top_px = None
+    if selected_date == today:
+        now_local = timezone.localtime(timezone.now(), local_tz)
+        current_minutes = now_local.hour * 60 + now_local.minute
+        current_time_top_px = int((current_minutes / 60) * timeline_pixels_per_hour)
+        current_time_top_px = max(0, min(current_time_top_px, timeline_canvas_height))
 
     prev_month = date(year - 1, 12, 1) if month == 1 else date(year, month - 1, 1)
     next_month_nav = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
@@ -432,8 +520,10 @@ def sessions_calendar(request):
         'calendar_title': month_start.strftime('%B %Y'),
         'selected_date': selected_date,
         'calendar_weeks': calendar_weeks,
-        'timeline_hours': timeline_hours,
+        'timeline_markers': timeline_markers,
+        'timeline_canvas_height': timeline_canvas_height,
         'timeline_events': timeline_events,
+        'current_time_top_px': current_time_top_px,
         'featured_event': timeline_events[0] if timeline_events else None,
         'month_prev': prev_month,
         'month_next': next_month_nav,
@@ -466,7 +556,54 @@ def session_detail(request, session_id):
     else:
         form = SessionRSVPForm()
 
-    rsvps = session.rsvps.select_related('player')
+    rsvps = list(session.rsvps.select_related('player'))
+    rsvp_by_player_id = {rsvp.player_id: rsvp for rsvp in rsvps}
+    active_players = list(
+        Player.objects.filter(role=Player.Role.PLAYER, is_active=True).order_by('name')
+    )
+
+    participant_rows = []
+    for player in active_players:
+        rsvp = rsvp_by_player_id.get(player.id)
+        if rsvp is None:
+            status_text = 'Pending'
+            status_class = 'is-pending'
+        elif rsvp.status == SessionRSVP.Status.GOING:
+            status_text = 'Going'
+            status_class = 'is-going'
+        else:
+            status_text = 'Not Going'
+            status_class = 'is-not-going'
+        participant_rows.append(
+            {
+                'player': player,
+                'status_text': status_text,
+                'status_class': status_class,
+            }
+        )
+
+    available_rows = []
+    for player in active_players:
+        is_available = player.status == Player.Status.ELIGIBLE
+        available_rows.append(
+            {
+                'player': player,
+                'status_text': 'Available' if is_available else 'On Break',
+                'status_class': 'is-available' if is_available else 'is-on-break',
+            }
+        )
+
+    user_profile = getattr(request.user, 'player_profile', None)
+    personal_note_preview = None
+    if user_profile is not None:
+        personal_note_preview = session.personal_notes.filter(player=user_profile).first()
+
+    local_starts = timezone.localtime(session.starts_at)
+    calendar_back_url = (
+        f"{reverse('scheduling:sessions_calendar')}"
+        f"?year={local_starts.year}&month={local_starts.month}&day={local_starts.day}"
+    )
+
     session_plan = getattr(session, 'plan', None)
     return render(
         request,
@@ -475,6 +612,12 @@ def session_detail(request, session_id):
             'session': session,
             'form': form,
             'rsvps': rsvps,
+            'participant_rows': participant_rows[:5],
+            'available_rows': available_rows[:5],
+            'personal_note_preview': personal_note_preview,
+            'user_profile': user_profile,
+            'can_edit_personal_note': user_profile is not None and user_profile.role == Player.Role.PLAYER,
+            'calendar_back_url': calendar_back_url,
             'session_plan': session_plan,
         },
     )
@@ -600,34 +743,58 @@ def edit_session_plan(request, session_id):
     return render(request, 'scheduling/edit_session_plan.html', {'form': form, 'session': session})
 
 
+@login_required(login_url='scheduling:login')
+def personal_notes_overview(request):
+    profile = getattr(request.user, 'player_profile', None)
+    notes = PersonalSessionNote.objects.select_related('session', 'player').order_by('-updated_at')
+    back_session_url = None
+
+    source_session_id = request.GET.get('from_session')
+    if source_session_id:
+        try:
+            back_session_url = reverse('scheduling:session_detail', args=[int(source_session_id)])
+        except (TypeError, ValueError):
+            back_session_url = None
+
+    if profile is not None and profile.role == Player.Role.PLAYER:
+        notes = notes.filter(player=profile)
+
+    return render(
+        request,
+        'scheduling/personal_notes_overview.html',
+        {
+            'notes': notes,
+            'home_url': _post_login_route_for(request.user),
+            'back_session_url': back_session_url,
+        },
+    )
+
+
+@login_required(login_url='scheduling:login')
 def personal_note(request, session_id):
     session = get_object_or_404(TrainingSession, pk=session_id)
     note = None
 
-    if request.method == 'POST':
-        player_id = request.POST.get('player')
-        if player_id:
-            note = PersonalSessionNote.objects.filter(session=session, player_id=player_id).first()
-        form = PersonalSessionNoteForm(request.POST, instance=note)
-        if form.is_valid():
-            note = form.save(commit=False)
-            note.session = session
-            note.save()
-            messages.success(request, 'Personal note saved.')
-            return redirect('scheduling:personal_note', session_id=session.id)
-    else:
-        form = PersonalSessionNoteForm()
+    if request.method != 'POST':
+        return redirect('scheduling:personal_notes_overview')
 
-    existing_notes = session.personal_notes.select_related('player')
-    return render(
-        request,
-        'scheduling/personal_note.html',
-        {
-            'session': session,
-            'form': form,
-            'existing_notes': existing_notes,
-        },
-    )
+    profile = getattr(request.user, 'player_profile', None)
+    if profile is None or profile.role != Player.Role.PLAYER:
+        messages.error(request, 'Only player accounts can add personal notes.')
+        return redirect('scheduling:session_detail', session_id=session.id)
+
+    note = PersonalSessionNote.objects.filter(session=session, player=profile).first()
+    form = PersonalSessionNoteForm(request.POST, instance=note)
+    if form.is_valid():
+        note = form.save(commit=False)
+        note.session = session
+        note.player = profile
+        note.save()
+        messages.success(request, 'Personal note saved.')
+    else:
+        messages.error(request, 'Could not save personal note. Please check the note content.')
+
+    return redirect('scheduling:session_detail', session_id=session.id)
 
 
 @login_required(login_url='scheduling:login')

@@ -189,57 +189,68 @@
             font-size: 28px;
             font-weight: 400;
         }
-        .timeline-grid {
+        .timeline-scroll {
             display: grid;
-            grid-template-columns: 50px 1fr;
+            grid-template-columns: 54px 1fr;
             gap: 10px;
-            align-content: start;
             max-height: 590px;
             overflow: auto;
             padding-right: 4px;
         }
         .timeline-labels {
-            display: grid;
-            grid-template-rows: repeat(11, 54px);
-            font-family: 'Inter', sans-serif;
-            font-size: 16px;
-        }
-        .timeline-lines {
-            display: grid;
-            grid-template-rows: repeat(11, 54px);
-            border-left: 1px solid #111;
             position: relative;
-            padding-left: 10px;
+            font-family: 'Inter', sans-serif;
+            font-size: 15px;
+            height: var(--timeline-height);
         }
-        .timeline-lines::before {
-            content: '';
+        .timeline-label {
             position: absolute;
             left: 0;
-            top: 0;
-            bottom: 0;
-            border-left: 1px solid #111;
+            width: 100%;
         }
-        .timeline-slot {
-            border-top: 1px solid #111;
+        .timeline-label span {
+            position: absolute;
+            top: -10px;
+            left: 0;
+        }
+        .timeline-canvas {
+            position: relative;
+            height: var(--timeline-height);
+            border-left: 1px solid #111;
+            padding-left: 10px;
+            background-image:
+                repeating-linear-gradient(
+                    to bottom,
+                    rgba(17, 17, 17, 0.9) 0,
+                    rgba(17, 17, 17, 0.9) 1px,
+                    transparent 1px,
+                    transparent 72px
+                ),
+                repeating-linear-gradient(
+                    to bottom,
+                    transparent 0,
+                    transparent 36px,
+                    rgba(17, 17, 17, 0.22) 36px,
+                    rgba(17, 17, 17, 0.22) 37px,
+                    transparent 37px,
+                    transparent 72px
+                );
         }
         .timeline-events {
             position: absolute;
             inset: 0 0 0 10px;
-            pointer-events: none;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            padding-top: 110px;
-            padding-right: 6px;
         }
         .timeline-event {
-            pointer-events: auto;
+            position: absolute;
             background: var(--event-green);
             border-radius: 10px;
             padding: 8px 10px;
             font-size: 12px;
             display: grid;
             gap: 4px;
+            overflow: hidden;
+            border: 1px solid rgba(17, 17, 17, 0.18);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
         }
         .timeline-event h4 {
             margin: 0;
@@ -280,6 +291,24 @@
             justify-content: space-between;
             gap: 8px;
             flex-wrap: wrap;
+        }
+        .timeline-now-line {
+            position: absolute;
+            left: 10px;
+            right: 0;
+            height: 2px;
+            background: #c62828;
+            z-index: 3;
+        }
+        .timeline-now-line::before {
+            content: '';
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #c62828;
+            left: -5px;
+            top: -4px;
         }
         .add-event-panel {
             grid-column: 1 / -1;
@@ -413,21 +442,21 @@
 
             <section class="timeline-panel" aria-label="Selected day timeline">
                 <h2>{{ selected_date|date:"l, F j, Y" }}</h2>
-                <div class="timeline-grid">
+                <div class="timeline-scroll" style="--timeline-height: {{ timeline_canvas_height }}px;">
                     <div class="timeline-labels">
-                        {% for label in timeline_hours %}
-                            <span>{{ label }}</span>
+                        {% for marker in timeline_markers %}
+                            <div class="timeline-label" style="top: {{ marker.top_px }}px;"><span>{{ marker.label }}</span></div>
                         {% endfor %}
                     </div>
-                    <div class="timeline-lines">
-                        {% for _ in timeline_hours %}
-                            <div class="timeline-slot"></div>
-                        {% endfor %}
+                    <div class="timeline-canvas">
+                        {% if current_time_top_px is not None %}
+                            <div class="timeline-now-line" style="top: {{ current_time_top_px }}px;"></div>
+                        {% endif %}
                         <div class="timeline-events">
                             {% for timeline_session in timeline_events %}
                                 {% include "scheduling/components/schedule_timeline_event.html" with timeline_session=timeline_session %}
                             {% empty %}
-                                <article class="timeline-event">
+                                <article class="timeline-event" style="top: 16px; height: 72px;">
                                     <h4>No scheduled events</h4>
                                     <p class="timeline-event-row">Use the action below to create one.</p>
                                 </article>

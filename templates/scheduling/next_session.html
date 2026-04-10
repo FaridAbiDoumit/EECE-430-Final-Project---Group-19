@@ -1,24 +1,202 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Next Session | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #3f5e4a;
+            --paper: #d9d9d9;
+            --card: rgba(166, 201, 168, 0.74);
+            --ink: #111111;
+            --muted: #2e3d35;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--forest);
+            color: var(--ink);
+            font-family: 'Josefin Sans', sans-serif;
+        }
+        a { color: inherit; text-decoration: none; }
+        .next-shell {
+            max-width: 1220px;
+            margin: 0 auto;
+            padding: 22px 16px 36px;
+            display: grid;
+            gap: 18px;
+        }
+        .next-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .next-title {
+            margin: 0;
+            color: #ffffff;
+            font-size: clamp(2.2rem, 4vw, 4.5rem);
+            font-weight: 400;
+            line-height: 1;
+        }
+        .next-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .next-button {
+            min-height: 56px;
+            border-radius: 10px;
+            background: var(--paper);
+            border: 1px solid #1f1f1f;
+            padding: 14px 18px;
+            display: grid;
+            align-items: center;
+            font-size: 1rem;
+        }
+        .next-grid {
+            display: grid;
+            grid-template-columns: minmax(320px, 1.2fr) minmax(260px, 0.8fr);
+            gap: 18px;
+        }
+        .next-panel {
+            background: var(--paper);
+            border-radius: 10px;
+            padding: 18px;
+        }
+        .session-card {
+            background: var(--card);
+            border-radius: 10px;
+            padding: 18px;
+            display: grid;
+            gap: 14px;
+            min-height: 260px;
+        }
+        .session-card h2,
+        .summary-panel h2 {
+            margin: 0;
+            font-size: 1.9rem;
+            font-weight: 500;
+        }
+        .session-meta {
+            display: grid;
+            gap: 10px;
+            font-size: 1.1rem;
+        }
+        .session-notes {
+            background: rgba(255, 255, 255, 0.55);
+            border-radius: 10px;
+            padding: 12px;
+            white-space: pre-wrap;
+        }
+        .session-links {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .session-link {
+            border-radius: 999px;
+            background: #f7f7f7;
+            border: 1px solid #1f1f1f;
+            padding: 10px 14px;
+        }
+        .summary-panel {
+            display: grid;
+            gap: 14px;
+            align-content: start;
+        }
+        .summary-row {
+            background: #ececec;
+            border-radius: 10px;
+            padding: 12px 14px;
+            display: grid;
+            gap: 4px;
+        }
+        .summary-label {
+            font-size: 0.94rem;
+            color: var(--muted);
+        }
+        .empty-state {
+            background: var(--paper);
+            border-radius: 10px;
+            padding: 26px 20px;
+            text-align: center;
+            display: grid;
+            gap: 14px;
+        }
+        .empty-state p {
+            margin: 0;
+            font-size: 1.05rem;
+        }
+        @media (max-width: 860px) {
+            .next-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="next-shell">
+        <header class="next-header">
+            <h1 class="next-title">Next Session</h1>
+            <div class="next-actions">
+                <a class="next-button" href="{{ calendar_url }}">Go to Calendar</a>
+                <a class="next-button" href="{% url home_url %}">Home</a>
+            </div>
+        </header>
 
-{% block content %}
-<section class="panel">
-    <h1>Next Session</h1>
-    {% if session %}
-        <div class="stack">
-            <div>
-                <strong>{{ session.title }}</strong>
-                <div>{{ session.starts_at }}</div>
-            </div>
-            <div>{{ session.location }} | {{ session.get_session_type_display }}</div>
-            {% if session.notes %}
-                <div>{{ session.notes }}</div>
-            {% endif %}
-            <div>
-                <a class="button" href="{% url 'scheduling:session_detail' session.id %}">Open Details</a>
-            </div>
-        </div>
-    {% else %}
-        <p class="muted">No upcoming session is available.</p>
-    {% endif %}
-</section>
-{% endblock %}
+        {% if session %}
+            <section class="next-grid" aria-label="Upcoming session overview">
+                <article class="next-panel">
+                    <div class="session-card">
+                        <h2>{{ session.title }}</h2>
+                        <div class="session-meta">
+                            <div><strong>Date:</strong> {{ session.starts_at|date:"l, F j, Y" }}</div>
+                            <div><strong>Time:</strong> {{ session.starts_at|date:"g:i a" }} - {{ session.ends_at|date:"g:i a" }}</div>
+                            <div><strong>Location:</strong> {{ session.location }}</div>
+                            <div><strong>Type:</strong> {{ session.get_session_type_display }}</div>
+                            <div><strong>Status:</strong> {% if session.cancelled %}Cancelled{% else %}Upcoming{% endif %}</div>
+                        </div>
+                        {% if session.notes %}
+                            <div class="session-notes">{{ session.notes }}</div>
+                        {% endif %}
+                        <div class="session-links">
+                            <a class="session-link" href="{% url 'scheduling:session_detail' session.id %}">Open Details</a>
+                            <a class="session-link" href="{{ calendar_url }}">View on Calendar</a>
+                        </div>
+                    </div>
+                </article>
+
+                <aside class="next-panel summary-panel">
+                    <h2>Session Summary</h2>
+                    <div class="summary-row">
+                        <span class="summary-label">Session ID</span>
+                        <strong>#{{ session.id }}</strong>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">Plan</span>
+                        <strong>{% if session.plan %}Attached{% else %}Not added yet{% endif %}</strong>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">RSVP</span>
+                        <strong>{{ session.rsvps.count }} response{{ session.rsvps.count|pluralize }}</strong>
+                    </div>
+                </aside>
+            </section>
+        {% else %}
+            <section class="empty-state">
+                <p>No upcoming session is available.</p>
+                <div class="next-actions" style="justify-content:center;">
+                    <a class="next-button" href="{{ calendar_url }}">Go to Calendar</a>
+                </div>
+            </section>
+        {% endif %}
+    </main>
+</body>
+</html>

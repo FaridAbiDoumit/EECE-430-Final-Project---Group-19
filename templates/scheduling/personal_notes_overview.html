@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saved Notes | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #3f5e4a;
+            --paper: #d9d9d9;
+            --ink: #111111;
+            --line: #8a8a8a;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--forest);
+            color: var(--ink);
+            font-family: 'Josefin Sans', sans-serif;
+        }
+        a { color: inherit; text-decoration: none; }
+        .notes-shell {
+            max-width: 1220px;
+            margin: 0 auto;
+            padding: 24px 16px 36px;
+            display: grid;
+            gap: 16px;
+        }
+        .notes-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .notes-title {
+            margin: 0;
+            color: #ffffff;
+            font-size: clamp(2rem, 3.5vw, 3.4rem);
+            font-weight: 500;
+            line-height: 1;
+        }
+        .notes-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .notes-button {
+            border: 1px solid #1f1f1f;
+            background: var(--paper);
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 0.98rem;
+        }
+        .notes-panel {
+            background: var(--paper);
+            border-radius: 10px;
+            padding: 14px;
+        }
+        .notes-list {
+            display: grid;
+            gap: 10px;
+        }
+        .note-card {
+            background: #ececec;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 10px 12px;
+            display: grid;
+            gap: 6px;
+        }
+        .note-meta {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            font-size: 0.95rem;
+        }
+        .note-content {
+            margin: 0;
+            white-space: pre-wrap;
+        }
+        .empty {
+            margin: 0;
+            color: #2f2f2f;
+        }
+    </style>
+</head>
+<body>
+    <main class="notes-shell">
+        <header class="notes-header">
+            <h1 class="notes-title">Saved Notes</h1>
+            <div class="notes-actions">
+                {% if back_session_url %}
+                    <a class="notes-button" href="{{ back_session_url }}">Back to Session Details</a>
+                {% else %}
+                    <a class="notes-button" href="{% url 'scheduling:sessions_calendar' %}">Back to Calendar</a>
+                {% endif %}
+                <a class="notes-button" href="{% url home_url %}">Home</a>
+            </div>
+        </header>
+
+        <section class="notes-panel" aria-label="Saved notes across sessions">
+            {% if notes %}
+                <div class="notes-list">
+                    {% for note in notes %}
+                        <article class="note-card">
+                            <div class="note-meta">
+                                <strong>{{ note.session.title }}</strong>
+                                <span>{{ note.session.starts_at|date:"M j, Y g:i a" }}</span>
+                                <span>{{ note.player.name }}</span>
+                                <span>Updated {{ note.updated_at|date:"M j, Y g:i a" }}</span>
+                            </div>
+                            <p class="note-content">{{ note.content }}</p>
+                        </article>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="empty">No saved personal notes yet.</p>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>
