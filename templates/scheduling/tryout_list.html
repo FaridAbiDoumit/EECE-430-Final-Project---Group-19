@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tryout Details | Volley Project</title>
+    <title>Current Tryouts | Volley Project</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -28,12 +28,12 @@
             background: var(--forest);
         }
         a { color: inherit; text-decoration: none; }
-        .detail-shell {
+        .tryout-shell {
             min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
-        .detail-header {
+        .tryout-header {
             background: linear-gradient(90deg, var(--header-left) 0%, var(--header-right) 100%);
             padding: 42px 34px 36px;
             display: flex;
@@ -41,7 +41,7 @@
             justify-content: space-between;
             gap: 16px;
         }
-        .detail-title {
+        .tryout-title {
             margin: 0;
             font-size: clamp(2rem, 2vw + 1.4rem, 3.1rem);
             font-weight: 600;
@@ -49,12 +49,12 @@
             display: inline-block;
             padding-bottom: 14px;
         }
-        .detail-title::after {
+        .tryout-title::after {
             content: '';
             position: absolute;
             left: 0;
             bottom: 0;
-            width: min(100%, 220px);
+            width: min(100%, 235px);
             height: 3px;
             background: var(--accent);
             box-shadow: 0 0 8px rgba(255, 255, 255, 0.25);
@@ -78,40 +78,32 @@
         .create-button {
             background: #ffffff;
         }
-        .detail-content {
+        .tryout-content {
             flex: 1;
             padding: 36px 34px 56px;
             max-width: 1180px;
             width: 100%;
             margin: 0 auto;
         }
-        .summary-grid {
+        .message-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 18px;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 16px;
-            margin-bottom: 24px;
+            gap: 10px;
         }
-        .summary-card,
-        .table-card,
-        .overview-card,
-        .empty-state {
+        .message-list li {
+            padding: 12px 14px;
+            background: #f1f7ef;
+            border: 1px solid #8eb38a;
+            border-radius: 10px;
+        }
+        .table-card {
             background: var(--paper);
             border-radius: 18px;
             padding: 18px;
             box-shadow: var(--shadow);
-        }
-        .summary-card strong {
-            display: block;
-            font-size: 1.35rem;
-            margin-bottom: 4px;
-        }
-        .overview-card {
-            margin-bottom: 20px;
-        }
-        .overview-card h2,
-        .table-card h2,
-        .empty-state h2 {
-            margin-top: 0;
+            overflow-x: auto;
         }
         table {
             width: 100%;
@@ -121,6 +113,12 @@
             text-align: left;
             padding: 12px 10px;
             border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        th {
+            font-size: 1rem;
+        }
+        td {
+            font-size: 0.98rem;
         }
         .status-pill {
             display: inline-block;
@@ -137,85 +135,75 @@
             background: #ffffff;
             border: 1px solid #8ea698;
         }
-        .muted { color: var(--muted); }
+        .empty-state {
+            background: var(--paper);
+            border-radius: 18px;
+            padding: 28px 22px;
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
         @media (max-width: 700px) {
-            .detail-header {
+            .tryout-header {
                 flex-direction: column;
                 align-items: stretch;
             }
             .header-actions {
                 justify-content: flex-start;
             }
-            .detail-content {
+            .tryout-content {
                 padding: 24px 18px 40px;
             }
         }
     </style>
 </head>
 <body>
-    <div class="detail-shell">
-        <header class="detail-header">
+    <div class="tryout-shell">
+        <header class="tryout-header">
             <div>
-                <h1 class="detail-title">Tryout Details</h1>
+                <h1 class="tryout-title">Current Tryouts</h1>
             </div>
             <div class="header-actions">
                 <span class="header-chip">Coach</span>
-                <a class="header-link" href="{% url 'scheduling:tryout_list' %}">Back to tryouts</a>
+                <a class="header-link" href="{% url 'scheduling:coach_home' %}">Back to welcome page</a>
                 <a class="create-button" href="{% url 'scheduling:create_tryout_session' %}">Create Tryout</a>
             </div>
         </header>
 
-        <main class="detail-content">
-            <section class="overview-card">
-                <h2>{{ tryout_session.title }}</h2>
-                <p class="muted">Review the current tryout session and the submitted candidates below.</p>
-                {% if tryout_session.description %}
-                    <p><strong>Details:</strong> {{ tryout_session.description }}</p>
-                {% endif %}
-            </section>
+        <main class="tryout-content">
+            {% if messages %}
+                <ul class="message-list">
+                    {% for message in messages %}
+                        <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
 
-            <section class="summary-grid" aria-label="Tryout summary">
-                <article class="summary-card">
-                    <strong>{{ tryout_session.starts_at|date:"M d, Y" }}</strong>
-                    <span>Date</span>
-                </article>
-                <article class="summary-card">
-                    <strong>{{ tryout_session.starts_at|date:"H:i" }}</strong>
-                    <span>Time</span>
-                </article>
-                <article class="summary-card">
-                    <strong>{{ tryout_session.location }}</strong>
-                    <span>Location</span>
-                </article>
-                <article class="summary-card">
-                    <strong>{{ candidate_count }}</strong>
-                    <span>Candidates</span>
-                </article>
-                <article class="summary-card">
-                    <strong>{% if tryout_session.registration_open %}Open{% else %}Closed{% endif %}</strong>
-                    <span>Registration</span>
-                </article>
-            </section>
-
-            {% if tryout_session.candidates.all %}
+            {% if tryouts %}
                 <section class="table-card">
-                    <h2>Candidates</h2>
                     <table>
                         <thead>
                             <tr>
-                                <th>Name</th>
-                                <th>Email</th>
+                                <th>Tryout</th>
+                                <th>Date</th>
+                                <th>Location</th>
                                 <th>Status</th>
                                 <th></th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for candidate in tryout_session.candidates.all %}
+                            {% for tryout in tryouts %}
                                 <tr>
-                                    <td>{{ candidate.name }}</td>
-                                    <td>{{ candidate.email }}</td>
-                                    <td><span class="status-pill">{{ candidate.get_status_display }}</span></td>
-                                    <td><a class="details-link" href="{% url 'scheduling:tryout_candidate_detail' candidate.id %}">More Details</a></td>
+                                    <td>{{ tryout.title }}</td>
+                                    <td>{{ tryout.starts_at|date:"M d, Y • H:i" }}</td>
+                                    <td>{{ tryout.location }}</td>
+                                    <td>
+                                        <span class="status-pill">
+                                            {% if tryout.registration_open %}Registration Open{% else %}Closed{% endif %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <a class="details-link" href="{% url 'scheduling:tryout_session_detail' tryout.id %}">More Details</a>
+                                    </td>
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -223,8 +211,9 @@
                 </section>
             {% else %}
                 <section class="empty-state">
-                    <h2>No candidates yet</h2>
-                    <p class="muted">Registrations will appear here once players submit the tryout form.</p>
+                    <h2>No tryouts yet</h2>
+                    <p>Create the first tryout session to get started.</p>
+                    <p><a class="create-button" href="{% url 'scheduling:create_tryout_session' %}">Create Tryout</a></p>
                 </section>
             {% endif %}
         </main>

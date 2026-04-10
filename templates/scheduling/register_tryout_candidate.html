@@ -1,12 +1,135 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tryout Registration | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #46674f;
+            --paper: #dedede;
+            --header-left: #eceeed;
+            --header-right: #b7c9b4;
+            --ink: #111111;
+            --accent: #0df2dc;
+            --shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+            --muted: #4b5563;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Josefin Sans', sans-serif;
+            color: var(--ink);
+            background: var(--forest);
+        }
+        .page-shell { min-height: 100vh; display: flex; flex-direction: column; }
+        .page-header {
+            background: linear-gradient(90deg, var(--header-left) 0%, var(--header-right) 100%);
+            padding: 42px 34px 36px;
+        }
+        .page-title {
+            margin: 0;
+            font-size: clamp(2rem, 2vw + 1.4rem, 3.1rem);
+            font-weight: 600;
+            position: relative;
+            display: inline-block;
+            padding-bottom: 14px;
+        }
+        .page-title::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: min(100%, 240px);
+            height: 3px;
+            background: var(--accent);
+        }
+        .page-content {
+            flex: 1;
+            padding: 36px 34px 56px;
+            max-width: 1180px;
+            width: 100%;
+            margin: 0 auto;
+            display: grid;
+            gap: 20px;
+        }
+        .card, .tryout-card {
+            background: var(--paper);
+            border-radius: 18px;
+            padding: 18px;
+            box-shadow: var(--shadow);
+        }
+        .tryout-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+        }
+        .tryout-card h2 { margin-top: 0; }
+        .muted { color: var(--muted); }
+        form { display: grid; gap: 14px; }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid #8ea698;
+            font: inherit;
+            background: #fff;
+        }
+        textarea { min-height: 110px; resize: vertical; }
+        button {
+            width: fit-content;
+            padding: 10px 16px;
+            border: 0;
+            border-radius: 8px;
+            background: #0b6f62;
+            color: white;
+            font: inherit;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-shell">
+        <header class="page-header">
+            <h1 class="page-title">Tryout Registration</h1>
+        </header>
 
-{% block content %}
-<section class="panel">
-    <h1>Tryout Registration</h1>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit">Register</button>
-    </form>
-</section>
-{% endblock %}
+        <main class="page-content">
+            <section class="card">
+                <h2>Available Tryouts</h2>
+                <p class="muted">Pick one of the open tryouts below and use the registration form to sign up.</p>
+                {% if open_tryouts %}
+                    <div class="tryout-grid">
+                        {% for tryout in open_tryouts %}
+                            <article class="tryout-card">
+                                <h2>{{ tryout.title }}</h2>
+                                <p><strong>Date:</strong> {{ tryout.starts_at|date:"M d, Y" }}</p>
+                                <p><strong>Time:</strong> {{ tryout.starts_at|date:"H:i" }}</p>
+                                <p><strong>Location:</strong> {{ tryout.location }}</p>
+                                {% if tryout.description %}
+                                    <p><strong>Details:</strong> {{ tryout.description }}</p>
+                                {% endif %}
+                            </article>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="muted">There are no open tryouts at the moment.</p>
+                {% endif %}
+            </section>
+
+            <section class="card">
+                <h2>Register</h2>
+                <form method="post">
+                    {% csrf_token %}
+                    {{ form.as_p }}
+                    <button type="submit">Register</button>
+                </form>
+            </section>
+        </main>
+    </div>
+</body>
+</html>

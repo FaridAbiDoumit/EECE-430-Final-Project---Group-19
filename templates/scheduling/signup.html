@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #496951;
+            --mint: #b5d0b1;
+            --paper: #d9d9d9;
+            --ink: #151318;
+            --line: #2d2d2d;
+            --white: #ffffff;
+            --danger: #9c2f2f;
+            --shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Josefin Sans', sans-serif;
+            color: var(--ink);
+            background: var(--forest);
+        }
+        a { color: inherit; }
+        .signup-shell {
+            min-height: 100vh;
+            display: grid;
+            grid-template-columns: minmax(360px, 720px) 1fr;
+            gap: 0;
+        }
+        .signup-card {
+            background: var(--paper);
+            border-radius: 0 24px 24px 0;
+            margin: 18px 0 18px 18px;
+            padding: 72px 64px 56px;
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .signup-title {
+            margin: 0 0 28px;
+            font-size: clamp(2.25rem, 2vw + 1.4rem, 3rem);
+            font-weight: 600;
+        }
+        .avatar-badge {
+            width: 86px;
+            height: 86px;
+            border-radius: 50%;
+            margin-bottom: 28px;
+            display: grid;
+            place-items: center;
+            color: #1f1d22;
+        }
+        .signup-form {
+            width: min(100%, 350px);
+        }
+        .auth-input {
+            width: 100%;
+            height: 46px;
+            border: 1px solid #7a7a7a;
+            background: #f9f9f9;
+            font: inherit;
+            font-size: 1.35rem;
+            padding: 10px 18px;
+        }
+        .field + .field,
+        .role-block,
+        .submit-row,
+        .switch-link {
+            margin-top: 34px;
+        }
+        .field-errors,
+        .non-field-errors {
+            margin: 8px 0 0;
+            padding: 0;
+            list-style: none;
+            color: var(--danger);
+            font-size: 0.95rem;
+        }
+        .password-field {
+            position: relative;
+        }
+        .password-field .auth-input {
+            padding-right: 56px;
+        }
+        .toggle-password {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            border: 0;
+            background: transparent;
+            cursor: pointer;
+            padding: 4px;
+            color: var(--ink);
+        }
+        .role-label {
+            text-align: center;
+            font-size: 1.55rem;
+            margin: 0 0 16px;
+        }
+        .role-options {
+            display: flex;
+            gap: 14px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .role-chip {
+            position: relative;
+            display: inline-flex;
+        }
+        .role-chip input {
+            position: absolute;
+            opacity: 0;
+            inset: 0;
+            cursor: pointer;
+        }
+        .role-chip span {
+            min-width: 88px;
+            text-align: center;
+            padding: 8px 18px;
+            border: 1px solid #5b6b57;
+            border-radius: 8px;
+            background: var(--mint);
+            font-size: 1.45rem;
+            transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+        }
+        .role-chip input:checked + span {
+            background: #8eb38a;
+            box-shadow: 0 0 0 2px #2f4a35 inset;
+            transform: translateY(-1px);
+        }
+        .submit-row {
+            display: flex;
+            justify-content: center;
+        }
+        .submit-button {
+            border: 1px solid #5b6b57;
+            border-radius: 8px;
+            background: var(--mint);
+            font: inherit;
+            font-size: 1.55rem;
+            padding: 12px 24px;
+            min-width: 196px;
+            cursor: pointer;
+        }
+        .switch-link {
+            text-align: center;
+            font-size: 1rem;
+        }
+        .marketing-panel {
+            position: relative;
+            color: var(--white);
+            padding: 110px 72px 70px 90px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .marketing-arrow {
+            position: absolute;
+            left: -28px;
+            top: 50%;
+            width: 0;
+            height: 0;
+            border-top: 18px solid transparent;
+            border-bottom: 18px solid transparent;
+            border-right: 28px solid var(--forest);
+            transform: translateY(-50%);
+            filter: brightness(1.2);
+        }
+        .marketing-title {
+            text-align: center;
+            font-size: clamp(2.3rem, 1.8vw + 1.8rem, 3.5rem);
+            line-height: 1.1;
+            font-weight: 600;
+            max-width: 680px;
+            margin: 0 auto 96px;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(200px, 1fr));
+            gap: 74px 88px;
+            max-width: 760px;
+            margin: 0 auto;
+        }
+        .feature {
+            text-align: center;
+        }
+        .feature svg {
+            width: 54px;
+            height: 54px;
+            margin-bottom: 14px;
+        }
+        .feature h2 {
+            margin: 0 0 10px;
+            font-size: 1.9rem;
+            font-weight: 500;
+        }
+        .feature p {
+            margin: 0;
+            font-size: 1.15rem;
+            line-height: 1.1;
+        }
+        .message-list {
+            width: min(100%, 350px);
+            margin: 0 0 18px;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 10px;
+        }
+        .message-list li {
+            padding: 12px 14px;
+            background: #f1f7ef;
+            border: 1px solid #8eb38a;
+            border-radius: 10px;
+            font-size: 0.95rem;
+        }
+        @media (max-width: 1100px) {
+            .signup-shell {
+                grid-template-columns: 1fr;
+            }
+            .signup-card {
+                margin: 18px;
+                border-radius: 24px;
+            }
+            .marketing-panel {
+                padding: 30px 24px 72px;
+            }
+            .marketing-arrow {
+                display: none;
+            }
+        }
+        @media (max-width: 700px) {
+            .signup-card {
+                padding: 48px 22px;
+            }
+            .feature-grid {
+                grid-template-columns: 1fr;
+                gap: 42px;
+            }
+            .role-options {
+                gap: 10px;
+            }
+            .role-chip span,
+            .submit-button,
+            .auth-input {
+                font-size: 1.15rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="signup-shell">
+        <section class="signup-card">
+            <h1 class="signup-title">Sign Up</h1>
+            <div class="avatar-badge" aria-hidden="true">
+                <svg viewBox="0 0 64 64" fill="none">
+                    <circle cx="32" cy="32" r="30" stroke="currentColor" stroke-width="4"/>
+                    <circle cx="32" cy="24" r="10" fill="currentColor"/>
+                    <path d="M16 50c4-8 11-12 16-12s12 4 16 12" fill="currentColor"/>
+                </svg>
+            </div>
+
+            {% if messages %}
+                <ul class="message-list">
+                    {% for message in messages %}
+                        <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            <form method="post" class="signup-form" novalidate>
+                {% csrf_token %}
+                {% if form.non_field_errors %}
+                    <ul class="non-field-errors">
+                        {% for error in form.non_field_errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+
+                <div class="field">
+                    {{ form.name }}
+                    {% if form.name.errors %}
+                        <ul class="field-errors">{% for error in form.name.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                    {% endif %}
+                </div>
+
+                <div class="field">
+                    {{ form.email }}
+                    {% if form.email.errors %}
+                        <ul class="field-errors">{% for error in form.email.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                    {% endif %}
+                </div>
+
+                <div class="field password-field">
+                    {{ form.password }}
+                    <button class="toggle-password" type="button" aria-label="Show password" data-password-toggle="id_signup_password">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 3l18 18"/>
+                            <path d="M10.58 10.58A3 3 0 0012 15a3 3 0 002.42-4.42"/>
+                            <path d="M9.88 5.09A10.94 10.94 0 0112 5c5 0 9.27 3.11 11 7-0.62 1.4-1.64 2.7-2.96 3.8"/>
+                            <path d="M6.61 6.61C4.62 7.86 3.08 9.74 2 12c1.73 3.89 6 7 10 7 1.7 0 3.34-.39 4.82-1.09"/>
+                        </svg>
+                    </button>
+                    {% if form.password.errors %}
+                        <ul class="field-errors">{% for error in form.password.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                    {% endif %}
+                </div>
+
+                <div class="role-block">
+                    <p class="role-label">Choose your role</p>
+                    <div class="role-options">
+                        {% for radio in form.role %}
+                            <label class="role-chip">
+                                {{ radio.tag }}
+                                <span>{{ radio.choice_label }}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                    {% if form.role.errors %}
+                        <ul class="field-errors">{% for error in form.role.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                    {% endif %}
+                </div>
+
+                <div class="submit-row">
+                    <button class="submit-button" type="submit">Create Account</button>
+                </div>
+
+                <p class="switch-link">
+                    Already have an account ?
+                    <a href="{% url 'scheduling:login' %}">Click here to Login</a>
+                </p>
+            </form>
+        </section>
+
+        <aside class="marketing-panel">
+            <div class="marketing-arrow" aria-hidden="true"></div>
+            <h2 class="marketing-title">Your Complete Volleyball Club Management Solution</h2>
+
+            <div class="feature-grid">
+                <article class="feature">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M8 2v4M16 2v4M3 9h18"/>
+                        <rect x="3" y="5" width="18" height="16" rx="2"/>
+                        <path d="M8 13h3M8 17h3M14 13h2M14 17h2"/>
+                    </svg>
+                    <h2>Scheduling</h2>
+                    <p>Plan every practice, match, and event with clarity and control</p>
+                </article>
+
+                <article class="feature">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M4 5h16a2 2 0 012 2v7a2 2 0 01-2 2h-4.6L11 20v-4H4a2 2 0 01-2-2V7a2 2 0 012-2z"/>
+                    </svg>
+                    <h2>Communication</h2>
+                    <p>Keep your team connected, informed, and aligned in one place</p>
+                </article>
+
+                <article class="feature">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M5 19c4-2 6-7 6-14"/>
+                        <path d="M9 13l3 1 2-3 2 1"/>
+                        <path d="M4 20h14"/>
+                        <circle cx="18" cy="5" r="2" fill="currentColor" stroke="none"/>
+                    </svg>
+                    <h2>Player Statistics</h2>
+                    <p>Track development, analyze performance, and turn data into wins</p>
+                </article>
+
+                <article class="feature">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M5 20V10"/>
+                        <path d="M12 20V4"/>
+                        <path d="M19 20v-7"/>
+                        <path d="M3 20h18"/>
+                    </svg>
+                    <h2>Management</h2>
+                    <p>Lead smarter with AI-powered insights and streamlined club operations</p>
+                </article>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        for (const button of document.querySelectorAll('[data-password-toggle]')) {
+            button.addEventListener('click', () => {
+                const input = document.getElementById(button.dataset.passwordToggle);
+                if (!input) {
+                    return;
+                }
+                const isPassword = input.type === 'password';
+                input.type = isPassword ? 'text' : 'password';
+                button.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+            });
+        }
+    </script>
+</body>
+</html>

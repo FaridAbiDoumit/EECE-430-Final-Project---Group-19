@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -19,7 +20,258 @@ from .models import (
 )
 
 
+User = get_user_model()
+
+
 class SchedulingViewsTests(TestCase):
+    def test_signup_creates_player_profile_and_logs_user_in(self):
+        response = self.client.post(
+            reverse('scheduling:signup'),
+            data={
+                'name': 'New Player',
+                'email': 'newplayer@example.com',
+                'password': 'strong-pass-123',
+                'role': 'player',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        user = User.objects.get(username='newplayer@example.com')
+        player = Player.objects.get(email='newplayer@example.com')
+        self.assertEqual(player.user, user)
+        self.assertEqual(player.role, Player.Role.PLAYER)
+        self.assertEqual(self.client.session.get('_auth_user_id'), str(user.id))
+
+    def test_signup_creates_staff_user_for_admin_role(self):
+        response = self.client.post(
+            reverse('scheduling:signup'),
+            data={
+                'name': 'Admin User',
+                'email': 'admin@example.com',
+                'password': 'strong-pass-123',
+                'role': 'admin',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        user = User.objects.get(username='admin@example.com')
+        self.assertTrue(user.is_staff)
+        self.assertFalse(Player.objects.filter(email='admin@example.com').exists())
+
+    def test_login_view_authenticates_with_email(self):
+        user = User.objects.create_user(
+            username='member@example.com',
+            email='member@example.com',
+            password='strong-pass-123',
+        )
+
+        response = self.client.post(
+            reverse('scheduling:login'),
+            data={'username': 'member@example.com', 'password': 'strong-pass-123'},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.client.session.get('_auth_user_id'), str(user.id))
+
+    def test_signup_rejects_duplicate_email(self):
+        User.objects.create_user(
+            username='duplicate@example.com',
+            email='duplicate@example.com',
+            password='strong-pass-123',
+        )
+
+        response = self.client.post(
+            reverse('scheduling:signup'),
+            data={
+                'name': 'Duplicate User',
+                'email': 'duplicate@example.com',
+                'password': 'strong-pass-123',
+                'role': 'coach',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'An account with this email already exists.')
+
+    def test_root_landing_page_shows_login_and_register_options(self):
+        response = self.client.get('/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Login')
+        self.assertContains(response, 'Register')
+        self.assertNotContains(response, 'Upcoming Session')
+
+    def test_root_redirects_authenticated_user_to_role_home(self):
+        user = User.objects.create_user(
+            username='landingplayer@example.com',
+            email='landingplayer@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=user,
+            name='Landing Player',
+            email='landingplayer@example.com',
+            role=Player.Role.PLAYER,
+        )
+
+        self.client.force_login(user)
+        response = self.client.get('/')
+
+        self.assertRedirects(response, reverse('scheduling:player_home'))
+
+    def test_dashboard_requires_login(self):
+        response = self.client.get(reverse('scheduling:dashboard'))
+
+        self.assertRedirects(response, f"{reverse('scheduling:login')}?next={reverse('scheduling:dashboard')}")
+
+    def test_player_signup_redirects_to_player_home(self):
+        response = self.client.post(
+            reverse('scheduling:signup'),
+            data={
+                'name': 'Player Home',
+                'email': 'playerhome@example.com',
+                'password': 'strong-pass-123',
+                'role': 'player',
+            },
+        )
+
+        self.assertRedirects(response, reverse('scheduling:player_home'))
+
+    def test_player_home_requires_logged_in_player_and_shows_name(self):
+        user = User.objects.create_user(
+            username='playerview@example.com',
+            email='playerview@example.com',
+            password='strong-pass-123',
+            first_name='Player View',
+        )
+        Player.objects.create(
+            user=user,
+            name='Player View',
+            email='playerview@example.com',
+            role=Player.Role.PLAYER,
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:player_home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Welcome, Player View!')
+        self.assertContains(response, 'My personal stats')
+        self.assertContains(response, 'My calendar and schedules')
+
+    def test_non_player_is_redirected_away_from_player_home(self):
+        user = User.objects.create_user(
+            username='coachview@example.com',
+            email='coachview@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=user,
+            name='Coach View',
+            email='coachview@example.com',
+            role=Player.Role.COACH,
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:player_home'))
+
+        self.assertRedirects(response, reverse('scheduling:dashboard'))
+
+    def test_coach_signup_redirects_to_coach_home(self):
+        response = self.client.post(
+            reverse('scheduling:signup'),
+            data={
+                'name': 'Coach Home',
+                'email': 'coachhome@example.com',
+                'password': 'strong-pass-123',
+                'role': 'coach',
+            },
+        )
+
+        self.assertRedirects(response, reverse('scheduling:coach_home'))
+
+    def test_coach_home_requires_logged_in_coach_and_shows_name(self):
+        user = User.objects.create_user(
+            username='coachdashboard@example.com',
+            email='coachdashboard@example.com',
+            password='strong-pass-123',
+            first_name='Coach View',
+        )
+        Player.objects.create(
+            user=user,
+            name='Coach View',
+            email='coachdashboard@example.com',
+            role=Player.Role.COACH,
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:coach_home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Welcome, Coach View!')
+        self.assertContains(response, 'Tryouts')
+        self.assertContains(response, 'Dashboard')
+
+    def test_non_coach_is_redirected_away_from_coach_home(self):
+        user = User.objects.create_user(
+            username='playerview@example.com',
+            email='playerview@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=user,
+            name='Player Redirect',
+            email='playerview@example.com',
+            role=Player.Role.PLAYER,
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:coach_home'))
+
+        self.assertRedirects(response, reverse('scheduling:dashboard'))
+
+    def test_admin_signup_redirects_to_admin_home(self):
+        response = self.client.post(
+            reverse('scheduling:signup'),
+            data={
+                'name': 'Admin Home',
+                'email': 'adminhome@example.com',
+                'password': 'strong-pass-123',
+                'role': 'admin',
+            },
+        )
+
+        self.assertRedirects(response, reverse('scheduling:admin_home'))
+
+    def test_admin_home_requires_staff_user_and_shows_name(self):
+        user = User.objects.create_user(
+            username='adminview@example.com',
+            email='adminview@example.com',
+            password='strong-pass-123',
+            first_name='Admin View',
+            is_staff=True,
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:admin_home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Welcome, Admin View!')
+        self.assertContains(response, 'User management')
+        self.assertContains(response, 'System dashboard')
+
+    def test_non_admin_is_redirected_away_from_admin_home(self):
+        user = User.objects.create_user(
+            username='regular@example.com',
+            email='regular@example.com',
+            password='strong-pass-123',
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:admin_home'))
+
+        self.assertRedirects(response, reverse('scheduling:dashboard'))
+
     def test_deactivate_player_sets_player_inactive(self):
         player = Player.objects.create(name='Player One', email='player1@example.com')
 
@@ -62,25 +314,189 @@ class SchedulingViewsTests(TestCase):
         self.assertNotContains(response, 'Injured Player')
         self.assertNotContains(response, 'Inactive Player')
 
-    def test_create_tryout_session_creates_record(self):
+    def test_tryouts_index_requires_logged_in_coach(self):
+        response = self.client.get(reverse('scheduling:tryout_list'))
+
+        self.assertRedirects(response, f"{reverse('scheduling:login')}?next={reverse('scheduling:tryout_list')}")
+
+    def test_tryouts_index_shows_tryouts_for_coach(self):
+        user = User.objects.create_user(
+            username='tryoutcoach@example.com',
+            email='tryoutcoach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=user,
+            name='Tryout Coach',
+            email='tryoutcoach@example.com',
+            role=Player.Role.COACH,
+        )
+        first_tryout = TryoutSession.objects.create(
+            title='Open Tryout',
+            starts_at=timezone.now() + timedelta(days=5),
+            location='Court C',
+        )
+        second_tryout = TryoutSession.objects.create(
+            title='Junior Tryout',
+            starts_at=timezone.now() + timedelta(days=8),
+            location='Court A',
+            registration_open=False,
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:tryout_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Current Tryouts')
+        self.assertContains(response, first_tryout.title)
+        self.assertContains(response, second_tryout.title)
+        self.assertContains(response, 'Create Tryout')
+        self.assertContains(response, reverse('scheduling:tryout_session_detail', args=[first_tryout.id]))
+
+    def test_non_coach_is_redirected_away_from_tryouts_index(self):
+        user = User.objects.create_user(
+            username='notcoach@example.com',
+            email='notcoach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=user,
+            name='Not Coach',
+            email='notcoach@example.com',
+            role=Player.Role.PLAYER,
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:tryout_list'))
+
+        self.assertRedirects(response, reverse('scheduling:dashboard'))
+
+    def test_create_tryout_session_requires_logged_in_coach(self):
+        response = self.client.get(reverse('scheduling:create_tryout_session'))
+
+        self.assertRedirects(response, f"{reverse('scheduling:login')}?next={reverse('scheduling:create_tryout_session')}")
+
+    def test_create_tryout_session_creates_record_with_saved_details(self):
+        user = User.objects.create_user(
+            username='createtryoutcoach@example.com',
+            email='createtryoutcoach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=user,
+            name='Create Tryout Coach',
+            email='createtryoutcoach@example.com',
+            role=Player.Role.COACH,
+        )
+
+        self.client.force_login(user)
         response = self.client.post(
             reverse('scheduling:create_tryout_session'),
             data={
                 'title': 'Open Tryout',
                 'starts_at': (timezone.now() + timedelta(days=5)).strftime('%Y-%m-%dT%H:%M'),
                 'location': 'Court C',
+                'description': 'Bring sportswear and arrive 15 minutes early.',
                 'registration_open': True,
             },
         )
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(TryoutSession.objects.count(), 1)
+        self.assertEqual(
+            TryoutSession.objects.get().description,
+            'Bring sportswear and arrive 15 minutes early.',
+        )
+
+    def test_tryout_detail_requires_logged_in_coach(self):
+        tryout = TryoutSession.objects.create(
+            title='Open Tryout',
+            starts_at=timezone.now() + timedelta(days=5),
+            location='Court C',
+        )
+
+        response = self.client.get(reverse('scheduling:tryout_session_detail', args=[tryout.id]))
+
+        self.assertRedirects(
+            response,
+            f"{reverse('scheduling:login')}?next={reverse('scheduling:tryout_session_detail', args=[tryout.id])}",
+        )
+
+    def test_tryout_detail_shows_tryout_info_and_candidates_for_coach(self):
+        user = User.objects.create_user(
+            username='detailcoach@example.com',
+            email='detailcoach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=user,
+            name='Detail Coach',
+            email='detailcoach@example.com',
+            role=Player.Role.COACH,
+        )
+        tryout = TryoutSession.objects.create(
+            title='Elite Tryout',
+            starts_at=timezone.now() + timedelta(days=7),
+            location='Court B',
+        )
+        candidate = TryoutCandidate.objects.create(
+            tryout_session=tryout,
+            name='Candidate One',
+            email='candidate1@example.com',
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:tryout_session_detail', args=[tryout.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Tryout Details')
+        self.assertContains(response, tryout.title)
+        self.assertContains(response, candidate.name)
+        self.assertContains(response, 'More Details')
+
+    def test_non_coach_is_redirected_away_from_tryout_detail(self):
+        user = User.objects.create_user(
+            username='detailplayer@example.com',
+            email='detailplayer@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=user,
+            name='Detail Player',
+            email='detailplayer@example.com',
+            role=Player.Role.PLAYER,
+        )
+        tryout = TryoutSession.objects.create(
+            title='Elite Tryout',
+            starts_at=timezone.now() + timedelta(days=7),
+            location='Court B',
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:tryout_session_detail', args=[tryout.id]))
+
+        self.assertRedirects(response, reverse('scheduling:dashboard'))
+
+    def test_register_tryout_candidate_page_shows_tryout_details(self):
+        tryout = TryoutSession.objects.create(
+            title='Open Tryout',
+            starts_at=timezone.now() + timedelta(days=5),
+            location='Court C',
+            description='Bring sportswear and arrive 15 minutes early.',
+        )
+
+        response = self.client.get(reverse('scheduling:register_tryout_candidate'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, tryout.title)
+        self.assertContains(response, 'Bring sportswear and arrive 15 minutes early.')
 
     def test_register_tryout_candidate_creates_candidate(self):
         tryout = TryoutSession.objects.create(
             title='Open Tryout',
             starts_at=timezone.now() + timedelta(days=5),
             location='Court C',
+            description='Bring sportswear and arrive 15 minutes early.',
         )
 
         response = self.client.post(
@@ -138,14 +554,68 @@ class SchedulingViewsTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(Notification.objects.count(), 2)
 
+    def test_notification_inbox_requires_login(self):
+        response = self.client.get(reverse('scheduling:notification_inbox'))
+
+        self.assertRedirects(response, f"{reverse('scheduling:login')}?next={reverse('scheduling:notification_inbox')}")
+
+    def test_player_notification_inbox_only_shows_their_notifications(self):
+        user = User.objects.create_user(
+            username='notifyplayer@example.com',
+            email='notifyplayer@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(
+            user=user,
+            name='Notify Player',
+            email='notifyplayer@example.com',
+            role=Player.Role.PLAYER,
+        )
+        other = Player.objects.create(name='Other Player', email='othernotify@example.com')
+        Notification.objects.create(recipient=player, title='Mine', message='Visible to me')
+        Notification.objects.create(recipient=other, title='Other', message='Should be hidden')
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:notification_inbox'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Mine')
+        self.assertNotContains(response, 'Other')
+        self.assertIsNotNone(Notification.objects.get(recipient=player, title='Mine').read_at)
+
+    def test_admin_notification_inbox_can_see_all_notifications(self):
+        admin = User.objects.create_user(
+            username='notifyadmin@example.com',
+            email='notifyadmin@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+        first = Player.objects.create(name='Player One', email='player1@example.com')
+        second = Player.objects.create(name='Player Two', email='player2@example.com')
+        Notification.objects.create(recipient=first, title='First Notice', message='One')
+        Notification.objects.create(recipient=second, title='Second Notice', message='Two')
+
+        self.client.force_login(admin)
+        response = self.client.get(reverse('scheduling:notification_inbox'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'First Notice')
+        self.assertContains(response, 'Second Notice')
+
     def test_delete_notification_removes_notification(self):
-        player = Player.objects.create(name='Player One', email='player1@example.com')
+        user = User.objects.create_user(
+            username='player1@example.com',
+            email='player1@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(user=user, name='Player One', email='player1@example.com')
         notification = Notification.objects.create(
             recipient=player,
             title='Session Updated',
             message='Practice moved to Court B',
         )
 
+        self.client.force_login(user)
         response = self.client.post(reverse('scheduling:delete_notification', args=[notification.id]))
 
         self.assertEqual(response.status_code, 302)

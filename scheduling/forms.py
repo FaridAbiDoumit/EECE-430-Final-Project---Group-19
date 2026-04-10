@@ -1,4 +1,7 @@
 from django import forms
+from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import AuthenticationForm
+from django.utils import timezone
 
 from .models import (
     Player,
@@ -13,6 +16,9 @@ from .models import (
     TryoutSession,
     TrainingSession,
 )
+
+
+User = get_user_model()
 
 
 class TrainingSessionForm(forms.ModelForm):
@@ -99,10 +105,29 @@ class PersonalSessionNoteForm(forms.ModelForm):
 class TryoutSessionForm(forms.ModelForm):
     class Meta:
         model = TryoutSession
-        fields = ['title', 'starts_at', 'location', 'registration_open']
+        fields = ['title', 'starts_at', 'location', 'description', 'registration_open']
         widgets = {
             'starts_at': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'description': forms.Textarea(attrs={'rows': 5}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['title'].widget.attrs.update({'class': 'auth-input', 'placeholder': 'Tryout title'})
+        self.fields['starts_at'].widget.attrs.update({'class': 'auth-input'})
+        self.fields['location'].widget.attrs.update({'class': 'auth-input', 'placeholder': 'Location'})
+        self.fields['description'].widget.attrs.update(
+            {
+                'class': 'auth-textarea',
+                'placeholder': 'Details for players: what to bring, arrival time, expectations, and any notes.',
+            }
+        )
+
+    def clean_starts_at(self):
+        starts_at = self.cleaned_data['starts_at']
+        if starts_at <= timezone.now():
+            raise forms.ValidationError('Tryout date and time must be in the future.')
+        return starts_at
 
 
 class TryoutCandidateForm(forms.ModelForm):
@@ -119,3 +144,83 @@ class PlayerUpdateForm(forms.ModelForm):
     class Meta:
         model = Player
         fields = ['status', 'is_active']
+
+
+class SignUpForm(forms.Form):
+    ROLE_CHOICES = [
+        ('player', 'Player'),
+        ('coach', 'Coach'),
+        ('admin', 'Admin'),
+    ]
+
+    name = forms.CharField(max_length=100)
+    email = forms.EmailField()
+    password = forms.CharField(widget=forms.PasswordInput(render_value=True))
+    role = forms.ChoiceField(choices=ROLE_CHOICES, widget=forms.RadioSelect)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        input_class = 'auth-input'
+        self.fields['name'].widget.attrs.update({'class': input_class, 'placeholder': 'Name'})
+        self.fields['email'].widget.attrs.update(
+            {'class': input_class, 'placeholder': 'Email', 'autocomplete': 'email'}
+        )
+        self.fields['password'].widget.attrs.update(
+            {
+                'class': input_class,
+                'placeholder': 'Password',
+                'autocomplete': 'new-password',
+                'id': 'id_signup_password',
+            }
+        )
+
+    def clean_email(self):
+        email = self.cleaned_data['email'].strip().lower()
+        if User.objects.filter(username__iexact=email).exists() or User.objects.filter(
+            email__iexact=email
+        ).exists():
+            raise forms.ValidationError('An account with this email already exists.')
+        if Player.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError('This email is already assigned to a player profile.')
+        return email
+
+    def save(self):
+        name = self.cleaned_data['name'].strip()
+        email = self.cleaned_data['email']
+        password = self.cleaned_data['password']
+        role = self.cleaned_data['role']
+
+        user = User.objects.create_user(
+            username=email,
+            email=email,
+            password=password,
+            first_name=name,
+        )
+
+        if role == 'admin':
+            user.is_staff = True
+            user.save(update_fields=['is_staff'])
+        else:
+            player_role = Player.Role.COACH if role == 'coach' else Player.Role.PLAYER
+            Player.objects.create(user=user, name=name, email=email, role=player_role)
+
+        return user
+
+
+class EmailAuthenticationForm(AuthenticationForm):
+    username = forms.EmailField(label='Email')
+
+    def __init__(self, request=None, *args, **kwargs):
+        super().__init__(request, *args, **kwargs)
+        input_class = 'auth-input'
+        self.fields['username'].widget.attrs.update(
+            {'class': input_class, 'placeholder': 'Email', 'autocomplete': 'email'}
+        )
+        self.fields['password'].widget.attrs.update(
+            {
+                'class': input_class,
+                'placeholder': 'Password',
+                'autocomplete': 'current-password',
+                'id': 'id_login_password',
+            }
+        )

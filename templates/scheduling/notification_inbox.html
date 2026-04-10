@@ -1,33 +1,256 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notifications | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #46674f;
+            --paper: #dedede;
+            --header-left: #eceeed;
+            --header-right: #b7c9b4;
+            --ink: #111111;
+            --accent: #0df2dc;
+            --chip-border: #81918a;
+            --shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+            --muted: #4b5563;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Josefin Sans', sans-serif;
+            color: var(--ink);
+            background: var(--forest);
+        }
+        a { color: inherit; text-decoration: none; }
+        .notifications-shell {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .notifications-header {
+            background: linear-gradient(90deg, var(--header-left) 0%, var(--header-right) 100%);
+            padding: 42px 34px 36px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+        }
+        .notifications-title {
+            margin: 0;
+            font-size: clamp(2rem, 2vw + 1.4rem, 3.1rem);
+            font-weight: 600;
+            position: relative;
+            display: inline-block;
+            padding-bottom: 14px;
+        }
+        .notifications-title::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: min(100%, 235px);
+            height: 3px;
+            background: var(--accent);
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.25);
+        }
+        .header-meta {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .role-chip,
+        .back-link {
+            padding: 8px 12px;
+            border: 1px solid var(--chip-border);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.15);
+            font-size: 0.98rem;
+        }
+        .back-link {
+            background: #f7f7f7;
+        }
+        .notifications-content {
+            flex: 1;
+            padding: 36px 34px 56px;
+            max-width: 1180px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .summary-card {
+            background: var(--paper);
+            border-radius: 16px;
+            padding: 16px 18px;
+            box-shadow: var(--shadow);
+        }
+        .summary-card strong {
+            display: block;
+            font-size: 1.5rem;
+            margin-bottom: 4px;
+        }
+        .message-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 18px;
+            display: grid;
+            gap: 10px;
+        }
+        .message-list li {
+            padding: 12px 14px;
+            background: #f1f7ef;
+            border: 1px solid #8eb38a;
+            border-radius: 10px;
+        }
+        .notification-grid {
+            display: grid;
+            gap: 16px;
+        }
+        .notification-card {
+            background: var(--paper);
+            border-radius: 18px;
+            padding: 18px 18px 16px;
+            box-shadow: var(--shadow);
+            border-left: 6px solid transparent;
+        }
+        .notification-card.unread {
+            border-left-color: var(--accent);
+        }
+        .notification-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+        .notification-top h2 {
+            margin: 0;
+            font-size: 1.45rem;
+        }
+        .notification-meta {
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+        .notification-body {
+            margin: 0 0 12px;
+            font-size: 1rem;
+            line-height: 1.4;
+        }
+        .notification-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .status-badge {
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #f5f5f5;
+            border: 1px solid #b7c9b4;
+            font-size: 0.9rem;
+        }
+        .delete-link {
+            padding: 8px 12px;
+            border-radius: 8px;
+            background: #ffffff;
+            border: 1px solid #b7c9b4;
+        }
+        .empty-state {
+            background: var(--paper);
+            border-radius: 18px;
+            padding: 28px 22px;
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+        @media (max-width: 700px) {
+            .notifications-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .header-meta {
+                justify-content: flex-start;
+            }
+            .notifications-content {
+                padding: 24px 18px 40px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="notifications-shell">
+        <header class="notifications-header">
+            <div>
+                <h1 class="notifications-title">Notifications</h1>
+            </div>
+            <div class="header-meta">
+                <span class="role-chip">{{ role_label }}</span>
+                <a class="back-link" href="{% url home_url %}">Back to welcome page</a>
+            </div>
+        </header>
 
-{% block content %}
-<section class="panel">
-    <h1>Notifications Inbox</h1>
-    {% if notifications %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Recipient</th>
-                    <th>Title</th>
-                    <th>Message</th>
-                    <th>Received</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for notification in notifications %}
-                    <tr>
-                        <td>{{ notification.recipient.name }}</td>
-                        <td>{{ notification.title }}</td>
-                        <td>{{ notification.message }}</td>
-                        <td>{{ notification.created_at }}</td>
-                        <td><a href="{% url 'scheduling:delete_notification' notification.id %}">Delete</a></td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <p class="muted">No notifications yet.</p>
-    {% endif %}
-</section>
-{% endblock %}
+        <main class="notifications-content">
+            {% if messages %}
+                <ul class="message-list">
+                    {% for message in messages %}
+                        <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            <section class="summary-grid" aria-label="Notification summary">
+                <article class="summary-card">
+                    <strong>{{ notification_count }}</strong>
+                    <span>Total notifications</span>
+                </article>
+                <article class="summary-card">
+                    <strong>{{ unread_count }}</strong>
+                    <span>Just marked as read</span>
+                </article>
+            </section>
+
+            {% if notifications %}
+                <section class="notification-grid" aria-label="Notification list">
+                    {% for notification in notifications %}
+                        <article class="notification-card {% if notification.was_unread %}unread{% endif %}">
+                            <div class="notification-top">
+                                <div>
+                                    <h2>{{ notification.title }}</h2>
+                                    <div class="notification-meta">
+                                        {% if role_label == 'Admin' %}
+                                            For {{ notification.recipient.name }}
+                                            •
+                                        {% endif %}
+                                        {{ notification.created_at|date:"M d, Y • H:i" }}
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="notification-body">{{ notification.message }}</p>
+                            <div class="notification-actions">
+                                <span class="status-badge">{% if notification.was_unread %}Newly read{% else %}Seen{% endif %}</span>
+                                <a class="delete-link" href="{% url 'scheduling:delete_notification' notification.id %}">Delete</a>
+                            </div>
+                        </article>
+                    {% endfor %}
+                </section>
+            {% else %}
+                <section class="empty-state">
+                    <h2>No notifications yet</h2>
+                    <p>Your inbox is clear for now.</p>
+                </section>
+            {% endif %}
+        </main>
+    </div>
+</body>
+</html>

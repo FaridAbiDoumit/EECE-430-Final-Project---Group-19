@@ -1,12 +1,80 @@
-{% extends "base.html" %}
-
-{% block content %}
-<section class="panel">
-    <h1>Delete Notification</h1>
-    <p>Delete <strong>{{ notification.title }}</strong> for {{ notification.recipient.name }}?</p>
-    <form method="post">
-        {% csrf_token %}
-        <button type="submit">Delete</button>
-    </form>
-</section>
-{% endblock %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delete Notification | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #46674f;
+            --paper: #dedede;
+            --mint: #b5d0b1;
+            --ink: #111111;
+            --danger: #8f3434;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 20px;
+            background: var(--forest);
+            color: var(--ink);
+            font-family: 'Josefin Sans', sans-serif;
+        }
+        .confirm-card {
+            width: min(100%, 520px);
+            background: var(--paper);
+            border-radius: 22px;
+            padding: 28px 24px;
+            box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18);
+        }
+        h1 { margin-top: 0; }
+        .button-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        button, a {
+            display: inline-block;
+            border-radius: 8px;
+            padding: 10px 16px;
+            font: inherit;
+            text-decoration: none;
+        }
+        button {
+            border: 0;
+            background: var(--danger);
+            color: white;
+            cursor: pointer;
+        }
+        a {
+            border: 1px solid #7b8d84;
+            background: #ffffff;
+            color: var(--ink);
+        }
+        form { margin: 0; }
+    </style>
+</head>
+<body>
+    <section class="confirm-card">
+        <h1>Delete Notification</h1>
+        <p>
+            Delete <strong>{{ notification.title }}</strong>
+            {% if notification.recipient %}for {{ notification.recipient.name }}{% endif %}?
+        </p>
+        <div class="button-row">
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit">Delete</button>
+            </form>
+            <a href="{% url 'scheduling:notification_inbox' %}">Cancel</a>
+        </div>
+    </section>
+</body>
+</html>

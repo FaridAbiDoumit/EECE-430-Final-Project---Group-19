@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -14,6 +15,13 @@ class Player(models.Model):
 
     name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='player_profile',
+        null=True,
+        blank=True,
+    )
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.PLAYER)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ELIGIBLE)
     is_active = models.BooleanField(default=True)
@@ -193,6 +201,7 @@ class TryoutSession(models.Model):
     title = models.CharField(max_length=120)
     starts_at = models.DateTimeField()
     location = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
     registration_open = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

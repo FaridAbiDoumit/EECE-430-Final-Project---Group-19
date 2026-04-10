@@ -1,12 +1,168 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Tryout | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #46674f;
+            --paper: #dedede;
+            --header-left: #eceeed;
+            --header-right: #b7c9b4;
+            --ink: #111111;
+            --accent: #0df2dc;
+            --chip-border: #81918a;
+            --shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+            --muted: #4b5563;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Josefin Sans', sans-serif;
+            color: var(--ink);
+            background: var(--forest);
+        }
+        .page-shell { min-height: 100vh; display: flex; flex-direction: column; }
+        .page-header {
+            background: linear-gradient(90deg, var(--header-left) 0%, var(--header-right) 100%);
+            padding: 42px 34px 36px;
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: flex-start;
+        }
+        .page-title {
+            margin: 0;
+            font-size: clamp(2rem, 2vw + 1.4rem, 3.1rem);
+            font-weight: 600;
+            position: relative;
+            display: inline-block;
+            padding-bottom: 14px;
+        }
+        .page-title::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: min(100%, 220px);
+            height: 3px;
+            background: var(--accent);
+        }
+        .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .header-chip, .header-link {
+            padding: 8px 12px;
+            border: 1px solid var(--chip-border);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.15);
+            font-size: 0.98rem;
+            text-decoration: none;
+            color: inherit;
+        }
+        .header-link { background: #fff; }
+        .page-content {
+            flex: 1;
+            padding: 36px 34px 56px;
+            max-width: 980px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        .form-card {
+            background: var(--paper);
+            border-radius: 18px;
+            padding: 22px;
+            box-shadow: var(--shadow);
+        }
+        .field-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(220px, 1fr));
+            gap: 16px;
+        }
+        .field-grid .full { grid-column: 1 / -1; }
+        label { display: block; margin-bottom: 6px; font-weight: 600; }
+        .auth-input, .auth-textarea, select {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid #8ea698;
+            font: inherit;
+            background: #fff;
+        }
+        .auth-textarea { min-height: 120px; resize: vertical; }
+        .help-text { margin: 0 0 16px; color: var(--muted); }
+        .errorlist { margin: 6px 0 0; color: #8f3434; }
+        .submit-row { margin-top: 18px; display: flex; gap: 12px; flex-wrap: wrap; }
+        .submit-button, .secondary-link {
+            display: inline-block;
+            padding: 10px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            font: inherit;
+        }
+        .submit-button { border: 0; background: #0b6f62; color: #fff; cursor: pointer; }
+        .secondary-link { border: 1px solid #8ea698; background: #fff; color: inherit; }
+        @media (max-width: 700px) {
+            .page-header { flex-direction: column; }
+            .page-content { padding: 24px 18px 40px; }
+            .field-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-shell">
+        <header class="page-header">
+            <div>
+                <h1 class="page-title">Create Tryout</h1>
+            </div>
+            <div class="header-actions">
+                <span class="header-chip">Coach</span>
+                <a class="header-link" href="{% url 'scheduling:tryout_list' %}">Back to tryouts</a>
+            </div>
+        </header>
 
-{% block content %}
-<section class="panel">
-    <h1>Create Tryout Session</h1>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit">Create Tryout</button>
-    </form>
-</section>
-{% endblock %}
+        <main class="page-content">
+            <section class="form-card">
+                <p class="help-text">Save the tryout details here so players can later see the date, time, location, and instructions before registering.</p>
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="field-grid">
+                        <div>
+                            <label for="{{ form.title.id_for_label }}">Title</label>
+                            {{ form.title }}
+                            {{ form.title.errors }}
+                        </div>
+                        <div>
+                            <label for="{{ form.starts_at.id_for_label }}">Date & time</label>
+                            {{ form.starts_at }}
+                            {{ form.starts_at.errors }}
+                        </div>
+                        <div class="full">
+                            <label for="{{ form.location.id_for_label }}">Location</label>
+                            {{ form.location }}
+                            {{ form.location.errors }}
+                        </div>
+                        <div class="full">
+                            <label for="{{ form.description.id_for_label }}">Details</label>
+                            {{ form.description }}
+                            {{ form.description.errors }}
+                        </div>
+                        <div class="full">
+                            <label for="{{ form.registration_open.id_for_label }}">Registration status</label>
+                            {{ form.registration_open }}
+                            {{ form.registration_open.errors }}
+                        </div>
+                    </div>
+                    <div class="submit-row">
+                        <button class="submit-button" type="submit">Create Tryout</button>
+                        <a class="secondary-link" href="{% url 'scheduling:tryout_list' %}">Cancel</a>
+                    </div>
+                </form>
+            </section>
+        </main>
+    </div>
+</body>
+</html>

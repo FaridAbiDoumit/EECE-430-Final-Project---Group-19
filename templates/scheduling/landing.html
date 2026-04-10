@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #496951;
+            --paper: #d9d9d9;
+            --mint: #b5d0b1;
+            --ink: #151318;
+            --line: #5b6b57;
+            --white: #ffffff;
+            --shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            background: radial-gradient(circle at top, #5a8063 0%, var(--forest) 56%);
+            font-family: 'Josefin Sans', sans-serif;
+            color: var(--ink);
+        }
+        .landing-card {
+            width: min(100%, 760px);
+            background: var(--paper);
+            border-radius: 28px;
+            padding: 52px 34px;
+            text-align: center;
+            box-shadow: var(--shadow);
+        }
+        h1 {
+            margin: 0 0 16px;
+            font-size: clamp(2.3rem, 2vw + 1.3rem, 3.5rem);
+        }
+        p {
+            margin: 0 auto 28px;
+            max-width: 600px;
+            font-size: 1.1rem;
+            line-height: 1.4;
+        }
+        .cta-row {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-top: 24px;
+        }
+        .cta-link {
+            display: inline-block;
+            min-width: 150px;
+            padding: 12px 20px;
+            border-radius: 10px;
+            border: 1px solid var(--line);
+            background: var(--mint);
+            color: var(--ink);
+            text-decoration: none;
+            font-size: 1.2rem;
+        }
+        .cta-link.secondary {
+            background: #f5f5f5;
+        }
+        .feature-copy {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-top: 34px;
+            text-align: left;
+        }
+        .feature-copy article {
+            background: rgba(255, 255, 255, 0.55);
+            border-radius: 14px;
+            padding: 14px 16px;
+        }
+        .feature-copy h2 {
+            margin: 0 0 8px;
+            font-size: 1.2rem;
+        }
+        .feature-copy p {
+            margin: 0;
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+    <main class="landing-card">
+        <h1>Welcome to Volley Project</h1>
+        <p>
+            Start here with a simple entry page. Choose to <strong>Login</strong> or
+            <strong>Register</strong>, then you will be redirected to the correct welcome page
+            for your role.
+        </p>
+
+        <div class="cta-row">
+            <a class="cta-link" href="{% url 'scheduling:login' %}">Login</a>
+            <a class="cta-link secondary" href="{% url 'scheduling:signup' %}">Register</a>
+        </div>
+
+        <section class="feature-copy" aria-label="Platform highlights">
+            <article>
+                <h2>Scheduling</h2>
+                <p>Create sessions, check calendars, and coordinate the next event.</p>
+            </article>
+            <article>
+                <h2>Communication</h2>
+                <p>Keep players and coaches informed with notifications and updates.</p>
+            </article>
+            <article>
+                <h2>Team Management</h2>
+                <p>Use role-based welcome pages for players, coaches, and admins.</p>
+            </article>
+        </section>
+    </main>
+</body>
+</html>

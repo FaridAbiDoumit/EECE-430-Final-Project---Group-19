@@ -1,14 +1,19 @@
+from django.contrib.auth import login as auth_login
+from django.contrib.auth import logout as auth_logout
+from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from .forms import (
+    EmailAuthenticationForm,
     PlayerAvailabilityForm,
     PersonalSessionNoteForm,
     PlayerUpdateForm,
     SessionRSVPForm,
     SessionPlanForm,
+    SignUpForm,
     SessionVoteForm,
     SessionVotePollForm,
     TrainingSessionForm,
@@ -31,6 +36,150 @@ from .models import (
 )
 
 
+def _post_login_route_for(user):
+    player = getattr(user, 'player_profile', None)
+    if player is not None:
+        if player.role == Player.Role.PLAYER:
+            return 'scheduling:player_home'
+        if player.role == Player.Role.COACH:
+            return 'scheduling:coach_home'
+    if user.is_staff:
+        return 'scheduling:admin_home'
+    return 'scheduling:dashboard'
+
+
+def landing_page(request):
+    if request.user.is_authenticated:
+        return redirect(_post_login_route_for(request.user))
+    return render(request, 'scheduling/landing.html')
+
+
+def signup(request):
+    if request.user.is_authenticated:
+        return redirect(_post_login_route_for(request.user))
+
+    if request.method == 'POST':
+        form = SignUpForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            auth_login(request, user)
+            messages.success(request, 'Account created successfully.')
+            return redirect(_post_login_route_for(user))
+    else:
+        form = SignUpForm(initial={'role': 'player'})
+
+    return render(request, 'scheduling/signup.html', {'form': form})
+
+
+def login_view(request):
+    if request.user.is_authenticated:
+        return redirect(_post_login_route_for(request.user))
+
+    if request.method == 'POST':
+        form = EmailAuthenticationForm(request, data=request.POST)
+        if form.is_valid():
+            user = form.get_user()
+            auth_login(request, user)
+            messages.success(request, 'Signed in successfully.')
+            return redirect(_post_login_route_for(user))
+    else:
+        form = EmailAuthenticationForm(request)
+
+    return render(request, 'scheduling/login.html', {'form': form})
+
+
+def logout_view(request):
+    if request.method == 'POST':
+        auth_logout(request)
+        messages.success(request, 'Signed out successfully.')
+    return redirect('scheduling:login')
+
+
+@login_required(login_url='scheduling:login')
+def player_home(request):
+    player = getattr(request.user, 'player_profile', None)
+    if player is None or player.role != Player.Role.PLAYER:
+        messages.info(request, 'This page is currently available only for player accounts.')
+        return redirect('scheduling:dashboard')
+
+    next_session = (
+        TrainingSession.objects.filter(starts_at__gte=timezone.now(), cancelled=False)
+        .order_by('starts_at')
+        .first()
+    )
+    context = {
+        'player': player,
+        'welcome_name': player.name,
+        'next_session': next_session,
+        'unread_notifications': player.notifications.filter(read_at__isnull=True).count(),
+        'rsvp_count': player.session_rsvps.count(),
+        'availability_count': player.availability_slots.count(),
+    }
+    return render(request, 'scheduling/player_home.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def coach_home(request):
+    coach = getattr(request.user, 'player_profile', None)
+    if coach is None or coach.role != Player.Role.COACH:
+        messages.info(request, 'This page is currently available only for coach accounts.')
+        return redirect('scheduling:dashboard')
+
+    next_session = (
+        TrainingSession.objects.filter(starts_at__gte=timezone.now(), cancelled=False)
+        .order_by('starts_at')
+        .first()
+    )
+    context = {
+        'coach': coach,
+        'welcome_name': coach.name,
+        'next_session': next_session,
+        'unread_notifications': coach.notifications.filter(read_at__isnull=True).count(),
+        'open_tryouts': TryoutSession.objects.filter(registration_open=True).count(),
+        'poll_count': SessionVotePoll.objects.count(),
+        'session_count': TrainingSession.objects.count(),
+    }
+    return render(request, 'scheduling/coach_home.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def tryout_list(request):
+    coach = getattr(request.user, 'player_profile', None)
+    if coach is None or coach.role != Player.Role.COACH:
+        messages.info(request, 'This page is currently available only for coach accounts.')
+        return redirect('scheduling:dashboard')
+
+    tryouts = TryoutSession.objects.all()
+    return render(
+        request,
+        'scheduling/tryout_list.html',
+        {
+            'coach': coach,
+            'tryouts': tryouts,
+        },
+    )
+
+
+@login_required(login_url='scheduling:login')
+def admin_home(request):
+    if not request.user.is_staff:
+        messages.info(request, 'This page is currently available only for admin accounts.')
+        return redirect('scheduling:dashboard')
+
+    welcome_name = request.user.first_name or request.user.username
+    context = {
+        'welcome_name': welcome_name,
+        'active_players': Player.objects.filter(role=Player.Role.PLAYER, is_active=True).count(),
+        'coach_count': Player.objects.filter(role=Player.Role.COACH, is_active=True).count(),
+        'open_tryouts': TryoutSession.objects.filter(registration_open=True).count(),
+        'session_count': TrainingSession.objects.count(),
+        'notification_count': Notification.objects.count(),
+        'poll_count': SessionVotePoll.objects.count(),
+    }
+    return render(request, 'scheduling/admin_home.html', context)
+
+
+@login_required(login_url='scheduling:login')
 def dashboard(request):
     sessions = TrainingSession.objects.all()
     upcoming_session = (
@@ -299,22 +448,49 @@ def personal_note(request, session_id):
     )
 
 
+@login_required(login_url='scheduling:login')
 def notification_inbox(request):
-    notifications = Notification.objects.select_related('recipient')
-    unread_ids = []
-    for notification in notifications:
-        if notification.read_at is None:
-            unread_ids.append(notification.id)
+    notifications = Notification.objects.select_related('recipient').order_by('-created_at', '-id')
+    profile = getattr(request.user, 'player_profile', None)
+
+    if profile is not None:
+        notifications = notifications.filter(recipient=profile)
+        role_label = profile.get_role_display()
+        home_url = 'scheduling:player_home' if profile.role == Player.Role.PLAYER else 'scheduling:coach_home'
+    else:
+        role_label = 'Admin' if request.user.is_staff else 'Member'
+        home_url = 'scheduling:admin_home' if request.user.is_staff else 'scheduling:landing'
+
+    notifications = list(notifications)
+    unread_ids = [notification.id for notification in notifications if notification.read_at is None]
 
     if unread_ids:
         Notification.objects.filter(id__in=unread_ids).update(read_at=timezone.now())
-        notifications = Notification.objects.select_related('recipient')
 
-    return render(request, 'scheduling/notification_inbox.html', {'notifications': notifications})
+    for notification in notifications:
+        notification.was_unread = notification.id in unread_ids
+
+    return render(
+        request,
+        'scheduling/notification_inbox.html',
+        {
+            'notifications': notifications,
+            'role_label': role_label,
+            'home_url': home_url,
+            'notification_count': len(notifications),
+            'unread_count': len(unread_ids),
+        },
+    )
 
 
+@login_required(login_url='scheduling:login')
 def delete_notification(request, notification_id):
-    notification = get_object_or_404(Notification, pk=notification_id)
+    notification = get_object_or_404(Notification.objects.select_related('recipient'), pk=notification_id)
+    profile = getattr(request.user, 'player_profile', None)
+
+    if not request.user.is_staff and (profile is None or notification.recipient_id != profile.id):
+        messages.error(request, 'You cannot delete this notification.')
+        return redirect('scheduling:notification_inbox')
 
     if request.method == 'POST':
         notification.delete()
@@ -324,7 +500,13 @@ def delete_notification(request, notification_id):
     return render(request, 'scheduling/delete_notification.html', {'notification': notification})
 
 
+@login_required(login_url='scheduling:login')
 def create_tryout_session(request):
+    coach = getattr(request.user, 'player_profile', None)
+    if coach is None or coach.role != Player.Role.COACH:
+        messages.info(request, 'This page is currently available only for coach accounts.')
+        return redirect('scheduling:dashboard')
+
     if request.method == 'POST':
         form = TryoutSessionForm(request.POST)
         if form.is_valid():
@@ -334,10 +516,12 @@ def create_tryout_session(request):
     else:
         form = TryoutSessionForm()
 
-    return render(request, 'scheduling/create_tryout_session.html', {'form': form})
+    return render(request, 'scheduling/create_tryout_session.html', {'form': form, 'coach': coach})
 
 
 def register_tryout_candidate(request):
+    open_tryouts = TryoutSession.objects.filter(registration_open=True).order_by('starts_at')
+
     if request.method == 'POST':
         form = TryoutCandidateForm(request.POST)
         if form.is_valid():
@@ -347,12 +531,33 @@ def register_tryout_candidate(request):
     else:
         form = TryoutCandidateForm()
 
-    return render(request, 'scheduling/register_tryout_candidate.html', {'form': form})
+    return render(
+        request,
+        'scheduling/register_tryout_candidate.html',
+        {
+            'form': form,
+            'open_tryouts': open_tryouts,
+        },
+    )
 
 
+@login_required(login_url='scheduling:login')
 def tryout_session_detail(request, tryout_session_id):
+    coach = getattr(request.user, 'player_profile', None)
+    if coach is None or coach.role != Player.Role.COACH:
+        messages.info(request, 'This page is currently available only for coach accounts.')
+        return redirect('scheduling:dashboard')
+
     tryout_session = get_object_or_404(TryoutSession.objects.prefetch_related('candidates'), pk=tryout_session_id)
-    return render(request, 'scheduling/tryout_session_detail.html', {'tryout_session': tryout_session})
+    return render(
+        request,
+        'scheduling/tryout_session_detail.html',
+        {
+            'coach': coach,
+            'tryout_session': tryout_session,
+            'candidate_count': tryout_session.candidates.count(),
+        },
+    )
 
 
 def tryout_candidate_detail(request, candidate_id):

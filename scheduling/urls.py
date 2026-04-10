@@ -5,7 +5,14 @@ from . import views
 app_name = 'scheduling'
 
 urlpatterns = [
-    path('', views.dashboard, name='dashboard'),
+    path('', views.landing_page, name='landing'),
+    path('dashboard/', views.dashboard, name='dashboard'),
+    path('auth/signup/', views.signup, name='signup'),
+    path('auth/login/', views.login_view, name='login'),
+    path('auth/logout/', views.logout_view, name='logout'),
+    path('player/home/', views.player_home, name='player_home'),
+    path('coach/home/', views.coach_home, name='coach_home'),
+    path('staff/home/', views.admin_home, name='admin_home'),
     path('sessions/new/', views.create_session, name='create_session'),
     path('sessions/next/', views.next_session, name='next_session'),
     path('sessions/<int:session_id>/', views.session_detail, name='session_detail'),
@@ -20,6 +27,7 @@ urlpatterns = [
     path('sessions/<int:session_id>/personal-note/', views.personal_note, name='personal_note'),
     path('notifications/', views.notification_inbox, name='notification_inbox'),
     path('notifications/<int:notification_id>/delete/', views.delete_notification, name='delete_notification'),
+    path('tryouts/', views.tryout_list, name='tryout_list'),
     path('tryouts/new/', views.create_tryout_session, name='create_tryout_session'),
     path('tryouts/register/', views.register_tryout_candidate, name='register_tryout_candidate'),
     path('tryouts/<int:tryout_session_id>/', views.tryout_session_detail, name='tryout_session_detail'),
