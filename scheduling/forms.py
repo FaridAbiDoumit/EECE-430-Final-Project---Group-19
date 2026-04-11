@@ -15,6 +15,8 @@ from .models import (
     TryoutCandidate,
     TryoutSession,
     TrainingSession,
+    Message,
+    SupportTicket,
 )
 
 
@@ -152,7 +154,32 @@ class TryoutCandidateForm(forms.ModelForm):
 class PlayerUpdateForm(forms.ModelForm):
     class Meta:
         model = Player
-        fields = ['status', 'is_active']
+        fields = ['status', 'is_active', 'medical_certification_expiry', 'contract_expiry']
+        widgets = {
+            'medical_certification_expiry': forms.DateInput(attrs={'type': 'date'}),
+            'contract_expiry': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+
+class MessageForm(forms.ModelForm):
+    class Meta:
+        model = Message
+        fields = ['subject', 'content']
+        widgets = {
+            'subject': forms.TextInput(attrs={'placeholder': 'Message subject', 'class': 'form-input'}),
+            'content': forms.Textarea(attrs={'placeholder': 'Type your message...', 'class': 'form-textarea', 'rows': 4}),
+        }
+
+
+class SupportTicketForm(forms.ModelForm):
+    class Meta:
+        model = SupportTicket
+        fields = ['subject', 'message', 'priority']
+        widgets = {
+            'subject': forms.TextInput(attrs={'placeholder': 'Support subject', 'class': 'form-input'}),
+            'message': forms.Textarea(attrs={'placeholder': 'Describe your issue...', 'class': 'form-textarea', 'rows': 4}),
+            'priority': forms.Select(attrs={'class': 'form-select'}),
+        }
 
 
 class SignUpForm(forms.Form):

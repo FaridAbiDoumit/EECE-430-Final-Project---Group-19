@@ -26,6 +26,8 @@ class Player(models.Model):
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.PLAYER)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ELIGIBLE)
     is_active = models.BooleanField(default=True)
+    medical_certification_expiry = models.DateField(null=True, blank=True)
+    contract_expiry = models.DateField(null=True, blank=True)
 
     class Meta:
         ordering = ['name']
@@ -236,3 +238,45 @@ class TryoutCandidate(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Message(models.Model):
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='messages')
+    subject = models.CharField(max_length=200)
+    content = models.TextField()
+    sender_is_admin = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+    def __str__(self):
+        return f'{self.player} - {self.subject}'
+
+
+class SupportTicket(models.Model):
+    class Status(models.TextChoices):
+        OPEN = 'open', 'Open'
+        IN_PROGRESS = 'in_progress', 'In Progress'
+        RESOLVED = 'resolved', 'Resolved'
+        CLOSED = 'closed', 'Closed'
+
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='support_tickets')
+    subject = models.CharField(max_length=200)
+    message = models.TextField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
+    priority = models.CharField(
+        max_length=20,
+        choices=[('low', 'Low'), ('medium', 'Medium'), ('high', 'High')],
+        default='medium'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+    def __str__(self):
+        return f'{self.player} - {self.subject}'

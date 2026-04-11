@@ -23,6 +23,8 @@ from .forms import (
     TrainingSessionForm,
     TryoutCandidateForm,
     TryoutSessionForm,
+    MessageForm,
+    SupportTicketForm,
 )
 from .models import (
     Notification,
@@ -37,6 +39,8 @@ from .models import (
     TryoutCandidate,
     TryoutSession,
     TrainingSession,
+    Message,
+    SupportTicket,
 )
 
 
@@ -120,6 +124,27 @@ def player_home(request):
         'availability_count': player.availability_slots.count(),
     }
     return render(request, 'scheduling/player_home.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def player_messages(request):
+    player = getattr(request.user, 'player_profile', None)
+    if player is None or player.role != Player.Role.PLAYER:
+        messages.info(request, 'This page is currently available only for player accounts.')
+        return redirect('scheduling:dashboard')
+    
+    # Get all messages for this player
+    player_msgs = Message.objects.filter(player=player).order_by('-created_at')
+    
+    # Mark as read
+    unread_messages = player_msgs.filter(is_read=False)
+    unread_messages.update(is_read=True)
+    
+    context = {
+        'player': player,
+        'messages': player_msgs,
+    }
+    return render(request, 'scheduling/player_messages.html', context)
 
 
 @login_required(login_url='scheduling:login')
@@ -937,7 +962,8 @@ def convert_tryout_candidate(request, candidate_id):
 
 def player_status_list(request):
     players = Player.objects.filter(role=Player.Role.PLAYER)
-    return render(request, 'scheduling/player_status_list.html', {'players': players})
+    coaches = Player.objects.filter(role=Player.Role.COACH)
+    return render(request, 'scheduling/player_status_list.html', {'players': players, 'coaches': coaches})
 
 
 def eligible_players(request):
@@ -976,6 +1002,20 @@ def deactivate_player(request, player_id):
     return render(request, 'scheduling/deactivate_player.html', {'player': player})
 
 
+@login_required(login_url='scheduling:login')
+def manage_player_detail(request, player_id):
+    if not request.user.is_staff:
+        messages.info(request, 'This page is currently available only for admin accounts.')
+        return redirect('scheduling:dashboard')
+    
+    player = get_object_or_404(Player, pk=player_id, role=Player.Role.PLAYER)
+    
+    context = {
+        'player': player,
+    }
+    return render(request, 'scheduling/manage_player_detail.html', context)
+
+
 def deactivate_coach(request, coach_id):
     coach = get_object_or_404(Player, pk=coach_id, role=Player.Role.COACH)
 
@@ -986,3 +1026,152 @@ def deactivate_coach(request, coach_id):
         return redirect('scheduling:player_status_list')
 
     return render(request, 'scheduling/deactivate_coach.html', {'coach': coach})
+
+
+@login_required(login_url='scheduling:login')
+def chat_with_player(request, player_id):
+    if not request.user.is_staff:
+        messages.info(request, 'This page is currently available only for admin accounts.')
+        return redirect('scheduling:dashboard')
+    
+    player = get_object_or_404(Player, pk=player_id, role=Player.Role.PLAYER)
+    
+    if request.method == 'POST':
+        form = MessageForm(request.POST)
+        if form.is_valid():
+            message = form.save(commit=False)
+            message.player = player
+            message.sender_is_admin = True
+            message.save()
+            messages.success(request, 'Message sent successfully.')
+            return redirect('scheduling:chat_with_player', player_id=player_id)
+    else:
+        form = MessageForm()
+    
+    # Get all messages for this player
+    player_messages = Message.objects.filter(player=player).order_by('-created_at')
+    
+    context = {
+        'player': player,
+        'form': form,
+        'messages': player_messages,
+    }
+    return render(request, 'scheduling/chat_with_player.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def player_support(request, player_id):
+    if not request.user.is_staff:
+        messages.info(request, 'This page is currently available only for admin accounts.')
+        return redirect('scheduling:dashboard')
+    
+    player = get_object_or_404(Player, pk=player_id, role=Player.Role.PLAYER)
+    
+    if request.method == 'POST':
+        form = SupportTicketForm(request.POST)
+        if form.is_valid():
+            ticket = form.save(commit=False)
+            ticket.player = player
+            ticket.save()
+            messages.success(request, 'Support ticket created successfully.')
+            return redirect('scheduling:player_support', player_id=player_id)
+    else:
+        form = SupportTicketForm()
+    
+    # Get all support tickets for this player
+    support_tickets = SupportTicket.objects.filter(player=player).order_by('-created_at')
+    
+    context = {
+        'player': player,
+        'form': form,
+        'support_tickets': support_tickets,
+    }
+    return render(request, 'scheduling/player_support.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def coach_list(request):
+    if not request.user.is_staff:
+        messages.info(request, 'This page is currently available only for admin accounts.')
+        return redirect('scheduling:dashboard')
+    
+    coaches = Player.objects.filter(role=Player.Role.COACH, is_active=True)
+    context = {
+        'coaches': coaches,
+    }
+    return render(request, 'scheduling/coach_list.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def manage_coach_detail(request, coach_id):
+    if not request.user.is_staff:
+        messages.info(request, 'This page is currently available only for admin accounts.')
+        return redirect('scheduling:dashboard')
+    
+    coach = get_object_or_404(Player, pk=coach_id, role=Player.Role.COACH)
+    
+    context = {
+        'coach': coach,
+    }
+    return render(request, 'scheduling/manage_coach_detail.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def chat_with_coach(request, coach_id):
+    if not request.user.is_staff:
+        messages.info(request, 'This page is currently available only for admin accounts.')
+        return redirect('scheduling:dashboard')
+    
+    coach = get_object_or_404(Player, pk=coach_id, role=Player.Role.COACH)
+    
+    if request.method == 'POST':
+        form = MessageForm(request.POST)
+        if form.is_valid():
+            message = form.save(commit=False)
+            message.player = coach
+            message.sender_is_admin = True
+            message.save()
+            messages.success(request, 'Message sent successfully.')
+            return redirect('scheduling:chat_with_coach', coach_id=coach_id)
+    else:
+        form = MessageForm()
+    
+    # Get all messages for this coach
+    coach_messages = Message.objects.filter(player=coach).order_by('-created_at')
+    
+    context = {
+        'coach': coach,
+        'form': form,
+        'messages': coach_messages,
+    }
+    return render(request, 'scheduling/chat_with_coach.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def coach_support(request, coach_id):
+    if not request.user.is_staff:
+        messages.info(request, 'This page is currently available only for admin accounts.')
+        return redirect('scheduling:dashboard')
+    
+    coach = get_object_or_404(Player, pk=coach_id, role=Player.Role.COACH)
+    
+    if request.method == 'POST':
+        form = SupportTicketForm(request.POST)
+        if form.is_valid():
+            ticket = form.save(commit=False)
+            ticket.player = coach
+            ticket.save()
+            messages.success(request, 'Support ticket created successfully.')
+            return redirect('scheduling:coach_support', coach_id=coach_id)
+    else:
+        form = SupportTicketForm()
+    
+    # Get all support tickets for this coach
+    support_tickets = SupportTicket.objects.filter(player=coach).order_by('-created_at')
+    
+    context = {
+        'coach': coach,
+        'form': form,
+        'support_tickets': support_tickets,
+    }
+    return render(request, 'scheduling/coach_support.html', context)

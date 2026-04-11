@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px; padding: 20px;">
+    <!-- Sidebar -->
+    <aside style="background: #f5f5f5; padding: 20px; border-radius: 8px; height: fit-content;">
+        <nav>
+            <div style="margin-bottom: 20px;">
+                <a href="{% url 'scheduling:admin_home' %}" style="display: flex; align-items: center; gap: 10px; padding: 10px; text-decoration: none; color: #333;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    Home
+                </a>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <a href="{% url 'scheduling:coach_list' %}" style="display: flex; align-items: center; gap: 10px; padding: 10px; text-decoration: none; color: #333;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="9" cy="7" r="3"></circle>
+                        <path d="M3 19c1.5-3 4.2-5.5 6-5.5s4.5 2.5 6 5.5"></path>
+                    </svg>
+                    Coaches
+                </a>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <a href="{% url 'scheduling:manage_coach_detail' coach.id %}" style="display: flex; align-items: center; gap: 10px; padding: 10px; text-decoration: none; color: #333;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0"></path>
+                    </svg>
+                    Back
+                </a>
+            </div>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main>
+        <!-- Header -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; padding: 20px; background: linear-gradient(90deg, #eceeed 0%, #b7c9b4 100%); border-radius: 8px;">
+            <div>
+                <h1 style="margin: 0; font-size: 28px; font-weight: 600;">Support for {{ coach.name }}</h1>
+                <p style="margin: 5px 0 0 0; color: #666;">Handle support requests and issues</p>
+            </div>
+            <div style="display: flex; gap: 15px; align-items: center;">
+                <span style="padding: 8px 12px; background: rgba(255,255,255,0.2); border-radius: 4px; font-size: 14px;">Admin</span>
+            </div>
+        </div>
+
+        <!-- Coach Info Card -->
+        <div style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #333;">Coach Information</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div>
+                    <p style="margin: 0; font-size: 12px; color: #999; text-transform: uppercase;">Coach Name</p>
+                    <p style="margin: 5px 0 0 0; font-size: 14px; font-weight: 500;">{{ coach.name }}</p>
+                </div>
+                <div>
+                    <p style="margin: 0; font-size: 12px; color: #999; text-transform: uppercase;">Email</p>
+                    <p style="margin: 5px 0 0 0; font-size: 14px; font-weight: 500;">{{ coach.email }}</p>
+                </div>
+                <div>
+                    <p style="margin: 0; font-size: 12px; color: #999; text-transform: uppercase;">Status</p>
+                    <p style="margin: 5px 0 0 0; font-size: 14px; font-weight: 500;">{{ coach.get_status_display }}</p>
+                </div>
+                <div>
+                    <p style="margin: 0; font-size: 12px; color: #999; text-transform: uppercase;">Active</p>
+                    <p style="margin: 5px 0 0 0; font-size: 14px; font-weight: 500;">{% if coach.is_active %}Yes{% else %}No{% endif %}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Support Tickets Section -->
+        <div style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #333;">Support Tickets</h3>
+            {% if support_tickets %}
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    {% for ticket in support_tickets %}
+                        <div style="border: 1px solid #e0e0e0; border-radius: 6px; padding: 15px; background: #f8f8f8;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                                <h4 style="margin: 0; font-size: 14px; font-weight: 500; color: #333;">{{ ticket.subject }}</h4>
+                                <div style="display: flex; gap: 8px;">
+                                    <span style="padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; 
+                                        {% if ticket.status == 'open' %}background: #ff6b6b; color: white;
+                                        {% elif ticket.status == 'in_progress' %}background: #ffa500; color: white;
+                                        {% elif ticket.status == 'resolved' %}background: #7ac97d; color: white;
+                                        {% else %}background: #ccc; color: #333;{% endif %}">
+                                        {{ ticket.get_status_display }}
+                                    </span>
+                                    <span style="padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 500;
+                                        {% if ticket.priority == 'high' %}background: #ff6b6b; color: white;
+                                        {% elif ticket.priority == 'medium' %}background: #ffa500; color: white;
+                                        {% else %}background: #4CAF50; color: white;{% endif %}">
+                                        {{ ticket.get_priority_display }}
+                                    </span>
+                                </div>
+                            </div>
+                            <p style="margin: 0 0 8px 0; font-size: 13px; color: #666;">{{ ticket.message }}</p>
+                            <small style="color: #999;">Created: {{ ticket.created_at|date:"M d, Y - H:i" }}</small>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p style="color: #999; text-align: center; padding: 20px; margin: 0;">No support tickets at the moment.</p>
+            {% endif %}
+        </div>
+
+        <!-- Create Support Ticket Form -->
+        <div style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #333;">Create Support Ticket</h3>
+            <form method="post" style="display: flex; flex-direction: column; gap: 15px;">
+                {% csrf_token %}
+                <div>
+                    <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500;">Subject</label>
+                    {{ form.subject }}
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500;">Priority</label>
+                    {{ form.priority }}
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500;">Message</label>
+                    {{ form.message }}
+                </div>
+                <button type="submit" style="background: #46674f; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; align-self: flex-start;">Create Ticket</button>
+            </form>
+        </div>
+
+        <!-- Back Button -->
+        <div>
+            <a href="{% url 'scheduling:manage_coach_detail' coach.id %}" style="display: inline-block; background: #46674f; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 500;">Back to Coach Profile</a>
+        </div>
+    </main>
+</div>
+
+<style>
+    input[type="text"], textarea, select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        font-family: inherit;
+        box-sizing: border-box;
+    }
+    textarea {
+        min-height: 100px;
+        resize: vertical;
+    }
+    select {
+        height: auto;
+    }
+    input[type="text"]:focus, textarea:focus, select:focus {
+        outline: none;
+        border-color: #46674f;
+        box-shadow: 0 0 0 2px rgba(70, 103, 79, 0.1);
+    }
+</style>
+{% endblock %}

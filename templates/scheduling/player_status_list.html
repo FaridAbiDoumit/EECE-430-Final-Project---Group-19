@@ -1,33 +1,63 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="panel">
-    <h1>Player Status</h1>
-    {% if players %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Role</th>
-                    <th>Status</th>
-                    <th>Active</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for player in players %}
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+    <!-- Players Section -->
+    <section class="panel">
+        <h1>Player Status</h1>
+        {% if players %}
+            <table>
+                <thead>
                     <tr>
-                        <td>{{ player.name }}</td>
-                        <td>{{ player.get_role_display }}</td>
-                        <td>{{ player.get_status_display }}</td>
-                        <td>{% if player.is_active %}Yes{% else %}No{% endif %}</td>
-                        <td><a href="{% url 'scheduling:update_player_status' player.id %}">Update</a></td>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Active</th>
+                        <th></th>
                     </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <p class="muted">No players yet.</p>
-    {% endif %}
-</section>
+                </thead>
+                <tbody>
+                    {% for player in players %}
+                        <tr>
+                            <td>{{ player.name }}</td>
+                            <td>{{ player.get_status_display }}</td>
+                            <td>{% if player.is_active %}Yes{% else %}No{% endif %}</td>
+                            <td><a href="{% url 'scheduling:manage_player_detail' player.id %}">Manage</a></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="muted">No players yet.</p>
+        {% endif %}
+    </section>
+
+    <!-- Coaches Section -->
+    <section class="panel">
+        <h1>Coach Status</h1>
+        {% if coaches %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Active</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for coach in coaches %}
+                        <tr>
+                            <td>{{ coach.name }}</td>
+                            <td>{{ coach.get_status_display }}</td>
+                            <td>{% if coach.is_active %}Yes{% else %}No{% endif %}</td>
+                            <td><a href="{% url 'scheduling:manage_coach_detail' coach.id %}">Manage</a></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="muted">No coaches yet.</p>
+        {% endif %}
+    </section>
+</div>
 {% endblock %}

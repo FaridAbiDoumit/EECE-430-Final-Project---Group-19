@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="max-width: 1000px; margin: 0 auto; padding: 20px;">
+    <!-- Header -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(90deg, #eceeed 0%, #b7c9b4 100%); border-radius: 8px;">
+        <div>
+            <h1 style="margin: 0; font-size: 28px; font-weight: 600;">My Messages</h1>
+            <p style="margin: 5px 0 0 0; color: #666;">Admin communications and updates</p>
+        </div>
+        <a href="{% url 'scheduling:player_home' %}" style="background: #46674f; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 500;">Back Home</a>
+    </div>
+
+    <!-- Messages List -->
+    {% if messages %}
+        <div style="display: flex; flex-direction: column; gap: 15px;">
+            {% for message in messages %}
+                <div style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                        <div>
+                            <h3 style="margin: 0; color: #333; font-size: 16px;">{{ message.subject }}</h3>
+                            <small style="color: #999; margin-top: 4px; display: block;">{{ message.created_at|date:"M d, Y - H:i" }}</small>
+                        </div>
+                        {% if not message.is_read %}
+                            <span style="background: #46674f; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 500;">NEW</span>
+                        {% endif %}
+                    </div>
+                    <div style="color: #555; line-height: 1.6; margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee;">
+                        {{ message.content }}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 60px 20px; text-align: center;">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="color: #ccc; margin-bottom: 20;">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <p style="color: #999; font-size: 16px; margin: 0;">No messages yet</p>
+            <p style="color: #ccc; font-size: 14px; margin-top: 8px;">When admins send you messages, they'll appear here.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h1>Manage Coaches</h1>
+    {% if coaches %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Active</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for coach in coaches %}
+                    <tr>
+                        <td>{{ coach.name }}</td>
+                        <td>{{ coach.get_role_display }}</td>
+                        <td>{{ coach.get_status_display }}</td>
+                        <td>{% if coach.is_active %}Yes{% else %}No{% endif %}</td>
+                        <td><a href="{% url 'scheduling:manage_coach_detail' coach.id %}">Manage</a></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">No coaches yet.</p>
+    {% endif %}
+</section>
+{% endblock %}
