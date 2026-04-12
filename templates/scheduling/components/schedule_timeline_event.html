@@ -1,33 +1,41 @@
 <article class="timeline-event" style="top: {{ timeline_session.top_px }}px; height: {{ timeline_session.height_px }}px; left: calc({{ timeline_session.left_pct }}% + 8px); width: calc({{ timeline_session.width_pct }}% - 16px);">
     <div class="timeline-event-top">
         <h4>{{ timeline_session.title }}</h4>
-        <div class="timeline-event-actions">
-            <form method="post">
-                {% csrf_token %}
-                <input type="hidden" name="calendar_action" value="rsvp">
-                <input type="hidden" name="session_id" value="{{ timeline_session.id }}">
-                <input type="hidden" name="rsvp_status" value="going">
-                <input type="hidden" name="year" value="{{ selected_date.year }}">
-                <input type="hidden" name="month" value="{{ selected_date.month }}">
-                <input type="hidden" name="day" value="{{ selected_date.day }}">
-                <button type="submit">Accept</button>
-            </form>
-            <form method="post">
-                {% csrf_token %}
-                <input type="hidden" name="calendar_action" value="rsvp">
-                <input type="hidden" name="session_id" value="{{ timeline_session.id }}">
-                <input type="hidden" name="rsvp_status" value="not_going">
-                <input type="hidden" name="year" value="{{ selected_date.year }}">
-                <input type="hidden" name="month" value="{{ selected_date.month }}">
-                <input type="hidden" name="day" value="{{ selected_date.day }}">
-                <button type="submit">Decline</button>
-            </form>
-        </div>
+        {% if not timeline_session.is_personal %}
+            <div class="timeline-event-actions">
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="calendar_action" value="rsvp">
+                    <input type="hidden" name="session_id" value="{{ timeline_session.id }}">
+                    <input type="hidden" name="rsvp_status" value="going">
+                    <input type="hidden" name="year" value="{{ selected_date.year }}">
+                    <input type="hidden" name="month" value="{{ selected_date.month }}">
+                    <input type="hidden" name="day" value="{{ selected_date.day }}">
+                    <button type="submit">Accept</button>
+                </form>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="calendar_action" value="rsvp">
+                    <input type="hidden" name="session_id" value="{{ timeline_session.id }}">
+                    <input type="hidden" name="rsvp_status" value="not_going">
+                    <input type="hidden" name="year" value="{{ selected_date.year }}">
+                    <input type="hidden" name="month" value="{{ selected_date.month }}">
+                    <input type="hidden" name="day" value="{{ selected_date.day }}">
+                    <button type="submit">Decline</button>
+                </form>
+            </div>
+        {% endif %}
     </div>
     <p class="timeline-event-row">{{ timeline_session.start_label }} - {{ timeline_session.end_label }}</p>
     <p class="timeline-event-row">{{ timeline_session.location }}</p>
-    <div class="timeline-event-links">
-        <a href="{% url 'scheduling:session_detail' timeline_session.id %}">Update Details</a>
-        <a href="{% url 'scheduling:session_detail' timeline_session.id %}">Participants</a>
-    </div>
+    {% if timeline_session.is_personal %}
+        <div class="timeline-event-links">
+            <span>Personal event</span>
+        </div>
+    {% else %}
+        <div class="timeline-event-links">
+            <a href="{% url 'scheduling:session_detail' timeline_session.id %}">Update Details</a>
+            <a href="{% url 'scheduling:session_detail' timeline_session.id %}">Participants</a>
+        </div>
+    {% endif %}
 </article>

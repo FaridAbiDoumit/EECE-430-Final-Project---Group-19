@@ -202,7 +202,7 @@
                     </svg>
                 </a>
 
-                <a class="hub-card" href="{% url 'scheduling:next_session' %}">
+                <a class="hub-card" href="{% url 'scheduling:sessions_calendar' %}">
                     <h2>My calendar and schedules</h2>
                     <p>{% if next_session %}Next: {{ next_session.title }}{% else %}No upcoming session{% endif %}</p>
                     <svg class="hub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -212,7 +212,7 @@
                     </svg>
                 </a>
 
-                <a class="hub-card" href="{% url 'scheduling:notification_inbox' %}">
+                <a class="hub-card" href="{% url 'scheduling:chatting_hub' %}">
                     <h2>Chatting</h2>
                     <p>Team updates and communication</p>
                     <svg class="hub-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -220,7 +220,7 @@
                     </svg>
                 </a>
 
-                <a class="hub-card" href="{% url 'scheduling:dashboard' %}">
+                <a class="hub-card" href="{% url 'scheduling:ai_analytics_hub' %}">
                     <h2>AI Analytics</h2>
                     <p>RSVPs submitted: {{ rsvp_count }}</p>
                     <svg class="hub-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

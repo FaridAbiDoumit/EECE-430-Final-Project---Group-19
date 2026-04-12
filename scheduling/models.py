@@ -116,6 +116,27 @@ class PlayerAvailability(models.Model):
         return f'{self.player} - {self.get_weekday_display()}'
 
 
+class PersonalCalendarEvent(models.Model):
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='personal_calendar_events')
+    title = models.CharField(max_length=120)
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField()
+    location = models.CharField(max_length=120)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['starts_at', 'id']
+
+    def __str__(self):
+        return f'{self.player} - {self.title}'
+
+    def clean(self):
+        super().clean()
+        if self.ends_at <= self.starts_at:
+            raise ValidationError({'ends_at': 'End time must be after start time.'})
+
+
 class SessionVotePoll(models.Model):
     title = models.CharField(max_length=120)
     description = models.TextField(blank=True)

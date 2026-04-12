@@ -410,7 +410,6 @@
                     <a href="{% url 'scheduling:polls_list' %}">View Polls</a>
                     {% if can_manage_availability_polls %}
                         <a href="{% url 'scheduling:create_vote_poll' %}">Create Training Time Poll</a>
-                        <a href="{% url 'scheduling:coach_availability_overview' %}">View Player Availability</a>
                     {% endif %}
                 </div>
             </header>
@@ -483,7 +482,7 @@
                             name="quick_title"
                             placeholder="Name of event"
                             value="{{ quick_add.title }}"
-                                {% if not can_add_sessions %}disabled{% endif %}
+                                {% if not can_add_events %}disabled{% endif %}
                             required>
                     </div>
                     <div class="add-event-field">
@@ -492,7 +491,7 @@
                             type="time"
                             name="quick_start_time"
                             value="{{ quick_add.start_time }}"
-                                {% if not can_add_sessions %}disabled{% endif %}
+                                {% if not can_add_events %}disabled{% endif %}
                             required>
                     </div>
                     <div class="add-event-field">
@@ -501,7 +500,7 @@
                             type="time"
                             name="quick_end_time"
                             value="{{ quick_add.end_time }}"
-                                {% if not can_add_sessions %}disabled{% endif %}
+                                {% if not can_add_events %}disabled{% endif %}
                             required>
                     </div>
                     <div class="add-event-field">
@@ -511,12 +510,14 @@
                             name="quick_location"
                             placeholder="Location"
                             value="{{ quick_add.location }}"
-                            {% if not can_add_sessions %}disabled{% endif %}
+                            {% if not can_add_events %}disabled{% endif %}
                             required>
                     </div>
-                    <button class="add-event-action" type="submit" {% if not can_add_sessions %}disabled{% endif %}>Press to add event to schedule</button>
-                    {% if not can_add_sessions %}
-                        <p class="add-event-note">Only Coach and Admin can add sessions.</p>
+                    <button class="add-event-action" type="submit" {% if not can_add_events %}disabled{% endif %}>Press to add event to schedule</button>
+                    {% if can_add_personal_events %}
+                        <p class="add-event-note">Events you add are private and visible only to you.</p>
+                    {% elif not can_add_events %}
+                        <p class="add-event-note">This account cannot add events.</p>
                     {% endif %}
                 </form>
             </section>

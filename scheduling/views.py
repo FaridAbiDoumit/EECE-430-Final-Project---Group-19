@@ -47,6 +47,7 @@ from .models import (
     Match,
     PlayerMatchStat,
     TeamGoal,
+    PersonalCalendarEvent,
 )
 
 
@@ -236,6 +237,39 @@ def dashboard(request):
     )
 
 
+def _role_label_for(user):
+    profile = getattr(user, 'player_profile', None)
+    if profile is not None:
+        return profile.get_role_display()
+    if user.is_staff:
+        return 'Admin'
+    return 'Member'
+
+
+@login_required(login_url='scheduling:login')
+def chatting_hub(request):
+    return render(
+        request,
+        'scheduling/chatting_hub.html',
+        {
+            'home_url': reverse(_post_login_route_for(request.user)),
+            'role_label': _role_label_for(request.user),
+        },
+    )
+
+
+@login_required(login_url='scheduling:login')
+def ai_analytics_hub(request):
+    return render(
+        request,
+        'scheduling/ai_analytics_hub.html',
+        {
+            'home_url': reverse(_post_login_route_for(request.user)),
+            'role_label': _role_label_for(request.user),
+        },
+    )
+
+
 def create_session(request):
     if request.method == 'POST':
         form = TrainingSessionForm(request.POST)
@@ -326,6 +360,8 @@ def sessions_calendar(request):
     can_add_sessions = request.user.is_staff or (
         profile is not None and profile.role == Player.Role.COACH
     )
+    can_add_personal_events = profile is not None and profile.role == Player.Role.PLAYER
+    can_add_events = can_add_sessions or can_add_personal_events
 
     today = timezone.localdate()
     default_year = today.year
@@ -388,8 +424,8 @@ def sessions_calendar(request):
             return redirect(selected_query)
 
         if action == 'quick_add':
-            if not can_add_sessions:
-                messages.error(request, 'Only coach and admin accounts can add sessions.')
+            if not can_add_events:
+                messages.error(request, 'This account cannot add events.')
             else:
                 title = quick_add['title']
                 location = quick_add['location']
@@ -410,15 +446,26 @@ def sessions_calendar(request):
                         else:
                             starts_at_local = timezone.make_aware(datetime.combine(selected_date, start_clock), local_tz)
                             ends_at_local = timezone.make_aware(datetime.combine(selected_date, end_clock), local_tz)
-                            TrainingSession.objects.create(
-                                title=title,
-                                starts_at=starts_at_local,
-                                ends_at=ends_at_local,
-                                location=location,
-                                session_type=TrainingSession.SessionType.PRACTICE,
-                                notes='Calendar quick-add.',
-                            )
-                            messages.success(request, 'Session added to the schedule.')
+                            if can_add_sessions:
+                                TrainingSession.objects.create(
+                                    title=title,
+                                    starts_at=starts_at_local,
+                                    ends_at=ends_at_local,
+                                    location=location,
+                                    session_type=TrainingSession.SessionType.PRACTICE,
+                                    notes='Calendar quick-add.',
+                                )
+                                messages.success(request, 'Session added to the team schedule.')
+                            elif can_add_personal_events:
+                                PersonalCalendarEvent.objects.create(
+                                    player=profile,
+                                    title=title,
+                                    starts_at=starts_at_local,
+                                    ends_at=ends_at_local,
+                                    location=location,
+                                    notes='Personal calendar event.',
+                                )
+                                messages.success(request, 'Event added to your personal calendar.')
                             return redirect(selected_query)
 
     month_start_dt = timezone.make_aware(datetime.combine(month_start, time.min), local_tz)
@@ -431,12 +478,47 @@ def sessions_calendar(request):
             cancelled=False,
         ).order_by('starts_at')
     )
+    month_personal_events = []
+    if can_add_personal_events:
+        month_personal_events = list(
+            PersonalCalendarEvent.objects.filter(
+                player=profile,
+                starts_at__gte=month_start_dt,
+                starts_at__lt=next_month_dt,
+            ).order_by('starts_at')
+        )
 
     sessions_by_day = {}
     for training_session in month_sessions:
         local_starts = timezone.localtime(training_session.starts_at, local_tz)
         day_key = local_starts.date()
-        sessions_by_day.setdefault(day_key, []).append(training_session)
+        sessions_by_day.setdefault(day_key, []).append(
+            {
+                'id': training_session.id,
+                'title': training_session.title,
+                'location': training_session.location,
+                'starts_at': training_session.starts_at,
+                'ends_at': training_session.ends_at,
+                'is_personal': False,
+            }
+        )
+
+    for personal_event in month_personal_events:
+        local_starts = timezone.localtime(personal_event.starts_at, local_tz)
+        day_key = local_starts.date()
+        sessions_by_day.setdefault(day_key, []).append(
+            {
+                'id': personal_event.id,
+                'title': personal_event.title,
+                'location': personal_event.location,
+                'starts_at': personal_event.starts_at,
+                'ends_at': personal_event.ends_at,
+                'is_personal': True,
+            }
+        )
+
+    for day_events in sessions_by_day.values():
+        day_events.sort(key=lambda item: item['starts_at'])
 
     calendar_weeks = []
     cal = calendar.Calendar(firstweekday=6)
@@ -464,9 +546,9 @@ def sessions_calendar(request):
     timeline_canvas_height = int((timeline_total_minutes / 60) * timeline_pixels_per_hour)
 
     raw_timeline_events = []
-    for training_session in selected_day_sessions:
-        local_start = timezone.localtime(training_session.starts_at, local_tz)
-        local_end = timezone.localtime(training_session.ends_at, local_tz)
+    for timeline_event in selected_day_sessions:
+        local_start = timezone.localtime(timeline_event['starts_at'], local_tz)
+        local_end = timezone.localtime(timeline_event['ends_at'], local_tz)
         start_minutes = int((local_start.hour - timeline_start_hour) * 60 + local_start.minute)
         end_minutes = int((local_end.hour - timeline_start_hour) * 60 + local_end.minute)
         clipped_start = max(0, start_minutes)
@@ -476,9 +558,10 @@ def sessions_calendar(request):
 
         raw_timeline_events.append(
             {
-                'id': training_session.id,
-                'title': training_session.title,
-                'location': training_session.location,
+                'id': timeline_event['id'],
+                'title': timeline_event['title'],
+                'location': timeline_event['location'],
+                'is_personal': timeline_event['is_personal'],
                 'start_label': local_start.strftime('%I:%M %p').lstrip('0').lower(),
                 'end_label': local_end.strftime('%I:%M %p').lstrip('0').lower(),
                 'start_minutes': clipped_start,
@@ -565,6 +648,8 @@ def sessions_calendar(request):
         'month_next': next_month_nav,
         'quick_add': quick_add,
         'can_add_sessions': can_add_sessions,
+        'can_add_events': can_add_events,
+        'can_add_personal_events': can_add_personal_events,
         'active_nav': 'schedule',
     }
     return render(request, 'scheduling/sessions_calendar.html', context)

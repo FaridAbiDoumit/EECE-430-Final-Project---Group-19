@@ -145,7 +145,6 @@
                     <a href="{% url 'scheduling:next_session' %}">Next Session</a>
                     {% with profile=request.user.player_profile %}
                     {% if request.user.is_staff or profile.role == 'coach' %}
-                    <a href="{% url 'scheduling:submit_availability' %}">Player Availability</a>
                     <a href="{% url 'scheduling:coach_availability_overview' %}">Coach Availability</a>
                     <a href="{% url 'scheduling:create_vote_poll' %}">Create Poll</a>
                     {% endif %}
