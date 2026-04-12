@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Stats Dashboard | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --forest: #3f5e4a;
+            --paper: #d9d9d9;
+            --ink: #111111;
+            --accent: #0df2dc;
+            --card-bg: #ececec;
+            --shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--forest);
+            color: var(--ink);
+            font-family: 'Josefin Sans', sans-serif;
+        }
+        a { color: inherit; text-decoration: none; }
+        .stats-shell {
+            max-width: 1260px;
+            margin: 0 auto;
+            padding: 28px 20px 50px;
+            display: grid;
+            gap: 24px;
+        }
+        .stats-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .stats-title {
+            margin: 0;
+            color: #fff;
+            font-size: clamp(2rem, 3vw, 3rem);
+            font-weight: 600;
+        }
+        .stats-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .stats-btn {
+            border: 1px solid #1f1f1f;
+            background: var(--paper);
+            border-radius: 10px;
+            padding: 10px 16px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .stats-btn:hover {
+            background: #111;
+            color: #fff;
+        }
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+        }
+        .kpi-card {
+            background: var(--paper);
+            border-radius: 14px;
+            padding: 22px 18px;
+            text-align: center;
+            box-shadow: var(--shadow);
+        }
+        .kpi-value {
+            font-size: 2.4rem;
+            font-weight: 600;
+            line-height: 1;
+        }
+        .kpi-label {
+            margin-top: 6px;
+            font-size: 0.95rem;
+            color: #444;
+        }
+        .kpi-win  .kpi-value { color: #2e7d32; }
+        .kpi-loss .kpi-value { color: #c62828; }
+        .kpi-draw .kpi-value { color: #f57f17; }
+        .kpi-pct  .kpi-value { color: #1565c0; }
+        .panel {
+            background: var(--paper);
+            border-radius: 14px;
+            padding: 22px;
+            box-shadow: var(--shadow);
+        }
+        .panel h2 {
+            margin: 0 0 14px;
+            font-size: 1.4rem;
+            font-weight: 600;
+        }
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .rank-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: grid;
+            gap: 8px;
+        }
+        .rank-item {
+            display: flex;
+            justify-content: space-between;
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 10px 14px;
+        }
+        .rank-pos {
+            font-weight: 600;
+            min-width: 28px;
+        }
+        .rank-name { flex: 1; }
+        .rank-val  { font-weight: 600; }
+        .goals-section {
+            display: grid;
+            gap: 8px;
+        }
+        .goal-item {
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 10px 14px;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-height: 340px;
+        }
+        @media (max-width: 800px) {
+            .two-col { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <main class="stats-shell">
+        <header class="stats-header">
+            <h1 class="stats-title">Team Stats Dashboard</h1>
+            <div class="stats-actions">
+                <a class="stats-btn" href="{% url 'scheduling:record_match' %}">Record Match</a>
+                <a class="stats-btn" href="{% url 'scheduling:add_team_goal' %}">Add Team Goal</a>
+                <a class="stats-btn" href="{% url 'scheduling:coach_home' %}">Home</a>
+            </div>
+        </header>
+
+        {% if messages %}
+            <ul style="list-style:none;padding:0;margin:0;">
+                {% for message in messages %}
+                    <li style="background:#fff;border-radius:8px;padding:10px 14px;margin-bottom:6px;">{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        <!-- KPI cards -->
+        <section class="kpi-row" aria-label="Key stats">
+            <div class="kpi-card kpi-win">
+                <div class="kpi-value">{{ total_wins }}</div>
+                <div class="kpi-label">Total Wins</div>
+            </div>
+            <div class="kpi-card kpi-loss">
+                <div class="kpi-value">{{ total_losses }}</div>
+                <div class="kpi-label">Total Losses</div>
+            </div>
+            <div class="kpi-card kpi-draw">
+                <div class="kpi-value">{{ total_draws }}</div>
+                <div class="kpi-label">Draws</div>
+            </div>
+            <div class="kpi-card kpi-pct">
+                <div class="kpi-value">{{ recovery_pct }}%</div>
+                <div class="kpi-label">Team Recovery</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value">{{ match_count }}</div>
+                <div class="kpi-label">Matches Played</div>
+            </div>
+        </section>
+
+        <!-- Top scorers & defenders -->
+        <section class="two-col">
+            <div class="panel">
+                <h2>Top Scorers</h2>
+                {% if top_scorers %}
+                    <ol class="rank-list">
+                        {% for s in top_scorers %}
+                            <li class="rank-item">
+                                <span class="rank-pos">{{ forloop.counter }}.</span>
+                                <span class="rank-name">{{ s.player__name }}</span>
+                                <span class="rank-val">{{ s.total_goals }} goal{{ s.total_goals|pluralize }}</span>
+                            </li>
+                        {% endfor %}
+                    </ol>
+                {% else %}
+                    <p style="color:#666;">No scoring data yet. Record a match to get started.</p>
+                {% endif %}
+            </div>
+
+            <div class="panel">
+                <h2>Top Defenders (Interceptions)</h2>
+                {% if top_defenders %}
+                    <ol class="rank-list">
+                        {% for d in top_defenders %}
+                            <li class="rank-item">
+                                <span class="rank-pos">{{ forloop.counter }}.</span>
+                                <span class="rank-name">{{ d.player__name }}</span>
+                                <span class="rank-val">{{ d.total_interceptions }}</span>
+                            </li>
+                        {% endfor %}
+                    </ol>
+                {% else %}
+                    <p style="color:#666;">No interception data yet.</p>
+                {% endif %}
+            </div>
+        </section>
+
+        <!-- Goals per game chart -->
+        <section class="panel">
+            <h2>Goals Scored Per Game</h2>
+            {% if match_count > 0 %}
+                <div class="chart-container">
+                    <canvas id="goalsChart"></canvas>
+                </div>
+            {% else %}
+                <p style="color:#666;">No match data available yet.</p>
+            {% endif %}
+        </section>
+
+        <!-- Player stats links -->
+        <section class="panel">
+            <h2>Player Stats</h2>
+            {% if players %}
+                <div style="display:flex;flex-wrap:wrap;gap:10px;">
+                    {% for p in players %}
+                        <a href="{% url 'scheduling:player_stats_detail' p.id %}"
+                           style="display:inline-block;background:#111;color:#fff;padding:8px 16px;border-radius:8px;font-size:0.92rem;transition:background .2s;"
+                           onmouseover="this.style.background='#333'" onmouseout="this.style.background='#111'">
+                            {{ p.name }}
+                        </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p style="color:#666;">No players registered yet.</p>
+            {% endif %}
+        </section>
+
+        <!-- Coach goals -->
+        <section class="panel">
+            <h2>Team Goals (set by Coach)</h2>
+            {% if team_goals %}
+                <div class="goals-section">
+                    {% for goal in team_goals %}
+                        <div class="goal-item">{{ goal.description }}</div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p style="color:#666;">No team goals set yet. <a href="{% url 'scheduling:add_team_goal' %}" style="text-decoration:underline;">Add one</a>.</p>
+            {% endif %}
+        </section>
+    </main>
+
+    {% if match_count > 0 %}
+    <script>
+        const ctx = document.getElementById('goalsChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: {{ chart_labels|safe }},
+                datasets: [{
+                    label: 'Goals Scored',
+                    data: {{ chart_data|safe }},
+                    backgroundColor: 'rgba(46, 125, 50, 0.7)',
+                    borderColor: '#2e7d32',
+                    borderWidth: 1,
+                    borderRadius: 6,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 1 },
+                        title: { display: true, text: 'Goals' },
+                    },
+                    x: {
+                        title: { display: true, text: 'Opponent' },
+                    },
+                },
+            },
+        });
+    </script>
+    {% endif %}
+</body>
+</html>

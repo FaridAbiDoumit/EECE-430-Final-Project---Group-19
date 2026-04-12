@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Player Stats | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #3f5e4a;
+            --paper: #d9d9d9;
+            --ink: #111111;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--forest);
+            color: var(--ink);
+            font-family: 'Josefin Sans', sans-serif;
+        }
+        a { color: inherit; }
+        .shell {
+            max-width: 700px;
+            margin: 50px auto;
+            display: grid;
+            gap: 20px;
+            padding: 0 16px;
+        }
+        .panel {
+            background: var(--paper);
+            border-radius: 14px;
+            padding: 28px 24px;
+        }
+        .panel h1, .panel h2 {
+            margin: 0 0 14px;
+        }
+        .match-info {
+            font-size: 1.05rem;
+            margin-bottom: 10px;
+        }
+        label {
+            display: block;
+            margin-top: 12px;
+            font-weight: 500;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #999;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 1rem;
+            margin-top: 4px;
+        }
+        button {
+            margin-top: 18px;
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            background: #111;
+            color: #fff;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        button:hover { background: #333; }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            background: #ececec;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 6px;
+        }
+        .back-link {
+            display: inline-block;
+            margin-top: 14px;
+            font-size: 0.95rem;
+        }
+        .errorlist {
+            list-style: none; padding: 0; margin: 6px 0 0;
+            color: #c00; font-size: 0.9rem;
+        }
+        .actions { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+        .actions a {
+            padding: 10px 16px;
+            background: #111;
+            color: #fff;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 0.95rem;
+        }
+        .actions a:hover { background: #333; }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <section class="panel">
+            <h1>Add Player Stats</h1>
+            <div class="match-info">
+                <strong>{{ match.opponent }}</strong> — {{ match.date|date:"M j, Y" }}<br>
+                Score: {{ match.goals_for }} – {{ match.goals_against }}
+            </div>
+
+            {% if messages %}
+                <ul style="list-style:none;padding:0;margin:0 0 10px;">
+                    {% for message in messages %}
+                        <li style="background:#fff;border-radius:8px;padding:8px 12px;margin-bottom:4px;">{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            <form method="post">
+                {% csrf_token %}
+                {% for field in form %}
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                {% endfor %}
+                <button type="submit">Save Player Stat</button>
+            </form>
+
+            <div class="actions">
+                <a href="{% url 'scheduling:team_stats' %}">Finish → Dashboard</a>
+                <a href="{% url 'scheduling:record_match' %}">Record Another Match</a>
+            </div>
+        </section>
+
+        {% if existing_stats %}
+        <section class="panel">
+            <h2>Stats Recorded for This Match</h2>
+            {% for s in existing_stats %}
+                <div class="stat-row">
+                    <span>{{ s.player.name }}</span>
+                    <span>{{ s.goals }}G · {{ s.interceptions }}Int · {{ s.points }}Pts · {{ s.blocks }}Blk · {{ s.assists }}Ast · {{ s.aces }}Ace · {{ s.returns }}Ret{% if s.most_recent_injury %} · Injury: {{ s.most_recent_injury }}{% endif %}</span>
+                </div>
+            {% endfor %}
+        </section>
+        {% endif %}
+    </div>
+</body>
+</html>

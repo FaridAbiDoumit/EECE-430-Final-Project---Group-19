@@ -17,6 +17,9 @@ from .models import (
     TrainingSession,
     Message,
     SupportTicket,
+    Match,
+    PlayerMatchStat,
+    TeamGoal,
 )
 
 
@@ -87,12 +90,10 @@ class SessionVotePollForm(forms.ModelForm):
 
 
 class SessionVoteForm(forms.Form):
-    player = forms.ModelChoiceField(queryset=Player.objects.none())
     option = forms.ModelChoiceField(queryset=SessionVoteOption.objects.none(), widget=forms.RadioSelect)
 
     def __init__(self, *args, poll=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['player'].queryset = Player.objects.filter(role=Player.Role.PLAYER)
         if poll is not None:
             self.fields['option'].queryset = poll.options.all()
 
@@ -180,6 +181,32 @@ class SupportTicketForm(forms.ModelForm):
             'message': forms.Textarea(attrs={'placeholder': 'Describe your issue...', 'class': 'form-textarea', 'rows': 4}),
             'priority': forms.Select(attrs={'class': 'form-select'}),
         }
+
+
+class MatchForm(forms.ModelForm):
+    class Meta:
+        model = Match
+        fields = ['opponent', 'date', 'goals_for', 'goals_against', 'notes']
+        widgets = {
+            'date': forms.DateInput(attrs={'type': 'date'}),
+            'notes': forms.Textarea(attrs={'rows': 3}),
+        }
+
+
+class PlayerMatchStatForm(forms.ModelForm):
+    class Meta:
+        model = PlayerMatchStat
+        fields = ['player', 'goals', 'interceptions', 'points', 'blocks', 'assists', 'aces', 'returns', 'most_recent_injury']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['player'].queryset = Player.objects.filter(role=Player.Role.PLAYER)
+
+
+class TeamGoalForm(forms.ModelForm):
+    class Meta:
+        model = TeamGoal
+        fields = ['description']
 
 
 class SignUpForm(forms.Form):

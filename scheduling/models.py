@@ -280,3 +280,64 @@ class SupportTicket(models.Model):
 
     def __str__(self):
         return f'{self.player} - {self.subject}'
+
+
+class Match(models.Model):
+    class Result(models.TextChoices):
+        WIN = 'win', 'Win'
+        LOSS = 'loss', 'Loss'
+        DRAW = 'draw', 'Draw'
+
+    opponent = models.CharField(max_length=120)
+    date = models.DateField()
+    goals_for = models.PositiveIntegerField(default=0)
+    goals_against = models.PositiveIntegerField(default=0)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date', '-id']
+
+    def __str__(self):
+        return f'{self.opponent} ({self.date})'
+
+    @property
+    def result(self):
+        if self.goals_for > self.goals_against:
+            return self.Result.WIN
+        elif self.goals_for < self.goals_against:
+            return self.Result.LOSS
+        return self.Result.DRAW
+
+
+class PlayerMatchStat(models.Model):
+    match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='player_stats')
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='match_stats')
+    goals = models.PositiveIntegerField(default=0)
+    interceptions = models.PositiveIntegerField(default=0)
+    points = models.PositiveIntegerField(default=0)
+    blocks = models.PositiveIntegerField(default=0)
+    assists = models.PositiveIntegerField(default=0)
+    aces = models.PositiveIntegerField(default=0)
+    returns = models.PositiveIntegerField(default=0)
+    most_recent_injury = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['match', 'player'], name='unique_match_player_stat')
+        ]
+        ordering = ['player__name']
+
+    def __str__(self):
+        return f'{self.player} – {self.match}'
+
+
+class TeamGoal(models.Model):
+    description = models.CharField(max_length=200)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.description

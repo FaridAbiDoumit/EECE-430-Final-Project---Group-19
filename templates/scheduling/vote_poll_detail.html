@@ -333,6 +333,12 @@
             <!-- Right: Cast Vote Form -->
             <section class="poll-panel">
                 <h3 style="margin-top: 0;">Cast Your Vote</h3>
+
+                {% if not can_vote %}
+                    <div class="votes-empty">
+                        Voting is available only for player accounts.
+                    </div>
+                {% else %}
                 
                 {% if form.non_field_errors %}
                     <ul class="errorlist">
@@ -344,16 +350,6 @@
 
                 <form method="post" class="vote-form">
                     {% csrf_token %}
-                    
-                    {% if form.player.errors %}
-                        <div style="background: #ffe5e5; border: 1px solid #ffcccc; border-radius: 8px; padding: 12px; color: #c00;">
-                            {{ form.player.errors }}
-                        </div>
-                    {% endif %}
-                    <div class="form-group">
-                        <label for="id_player">{{ form.player.label }}</label>
-                        {{ form.player }}
-                    </div>
 
                     {% if form.option.errors %}
                         <div style="background: #ffe5e5; border: 1px solid #ffcccc; border-radius: 8px; padding: 12px; color: #c00;">
@@ -367,6 +363,7 @@
 
                     <button type="submit" class="vote-button">Save Vote</button>
                 </form>
+                {% endif %}
             </section>
         </div>
     </main>

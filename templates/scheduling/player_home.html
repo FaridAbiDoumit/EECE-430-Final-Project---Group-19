@@ -190,7 +190,7 @@
 
         <main class="player-content">
             <section class="card-grid" aria-label="Player quick actions">
-                <a class="hub-card" href="{% url 'scheduling:player_status_list' %}">
+                <a class="hub-card" href="{% url 'scheduling:player_stats_detail' player.id %}">
                     <h2>My personal stats</h2>
                     <p>Status: {{ player.get_status_display }}</p>
                     <svg class="hub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

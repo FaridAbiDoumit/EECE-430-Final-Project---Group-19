@@ -50,4 +50,9 @@ urlpatterns = [
     path('players/<int:player_id>/deactivate/', views.deactivate_player, name='deactivate_player'),
     path('coaches/<int:coach_id>/deactivate/', views.deactivate_coach, name='deactivate_coach'),
     path('coach/rsvps/', views.coach_rsvp_overview, name='coach_rsvp_overview'),
+    path('team-stats/', views.team_stats_dashboard, name='team_stats'),
+    path('team-stats/record-match/', views.record_match, name='record_match'),
+    path('team-stats/match/<int:match_id>/player-stats/', views.record_player_stats, name='record_player_stats'),
+    path('team-stats/add-goal/', views.add_team_goal, name='add_team_goal'),
+    path('team-stats/player/<int:player_id>/', views.player_stats_detail, name='player_stats_detail'),
 ]

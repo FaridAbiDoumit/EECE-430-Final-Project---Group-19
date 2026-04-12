@@ -155,7 +155,9 @@
         <header class="polls-header">
             <h1 class="polls-title">Training Time Polls</h1>
             <div class="polls-actions">
-                <a class="polls-button" href="{% url 'scheduling:create_vote_poll' %}">Create Poll</a>
+                {% if can_create_poll %}
+                    <a class="polls-button" href="{% url 'scheduling:create_vote_poll' %}">Create Poll</a>
+                {% endif %}
                 <a class="polls-button" href="{% url 'scheduling:sessions_calendar' %}">Calendar</a>
                 <a class="polls-button" href="{% url 'scheduling:player_home' %}">Home</a>
             </div>
@@ -195,7 +197,7 @@
                     {% endfor %}
                 </div>
             {% else %}
-                <p class="empty">No polls yet. <a href="{% url 'scheduling:create_vote_poll' %}">Create one</a>.</p>
+                <p class="empty">No polls yet.{% if can_create_poll %} <a href="{% url 'scheduling:create_vote_poll' %}">Create one</a>.{% endif %}</p>
             {% endif %}
         </section>
     </main>

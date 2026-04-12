@@ -5,7 +5,7 @@ from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
 from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -25,6 +25,9 @@ from .forms import (
     TryoutSessionForm,
     MessageForm,
     SupportTicketForm,
+    MatchForm,
+    PlayerMatchStatForm,
+    TeamGoalForm,
 )
 from .models import (
     Notification,
@@ -41,6 +44,9 @@ from .models import (
     TrainingSession,
     Message,
     SupportTicket,
+    Match,
+    PlayerMatchStat,
+    TeamGoal,
 )
 
 
@@ -539,9 +545,14 @@ def sessions_calendar(request):
     prev_month = date(year - 1, 12, 1) if month == 1 else date(year, month - 1, 1)
     next_month_nav = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
 
+    can_manage_availability_polls = request.user.is_staff or (
+        profile is not None and profile.role == Player.Role.COACH
+    )
+
     context = {
         'home_url': _post_login_route_for(request.user),
         'role_label': profile.get_role_display() if profile is not None else ('Admin' if request.user.is_staff else 'Member'),
+        'can_manage_availability_polls': can_manage_availability_polls,
         'calendar_title': month_start.strftime('%B %Y'),
         'selected_date': selected_date,
         'calendar_weeks': calendar_weeks,
@@ -683,6 +694,11 @@ def coach_availability_overview(request):
 
 
 def create_vote_poll(request):
+    profile = getattr(request.user, 'player_profile', None)
+    is_coach = profile is not None and profile.role == Player.Role.COACH
+    if not request.user.is_staff and not is_coach:
+        return redirect('scheduling:polls_list')
+
     if request.method == 'POST':
         form = SessionVotePollForm(request.POST)
         if form.is_valid():
@@ -718,13 +734,19 @@ def vote_poll_detail(request, poll_id):
         SessionVotePoll.objects.annotate(vote_count=Count('votes')).prefetch_related('options__votes'),
         pk=poll_id,
     )
+    profile = getattr(request.user, 'player_profile', None)
+    can_vote = profile is not None and profile.role == Player.Role.PLAYER
 
     if request.method == 'POST':
+        if not can_vote:
+            messages.error(request, 'Only player accounts can vote in polls.')
+            return redirect('scheduling:vote_poll_detail', poll_id=poll.id)
+
         form = SessionVoteForm(request.POST, poll=poll)
         if form.is_valid():
             SessionVote.objects.update_or_create(
                 poll=poll,
-                player=form.cleaned_data['player'],
+                player=profile,
                 defaults={'option': form.cleaned_data['option']},
             )
             messages.success(request, 'Vote saved.')
@@ -742,13 +764,18 @@ def vote_poll_detail(request, poll_id):
             'form': form,
             'options': options,
             'votes': votes,
+            'can_vote': can_vote,
         },
     )
 
 
 def polls_list(request):
     polls = SessionVotePoll.objects.annotate(vote_count=Count('votes')).order_by('-created_at')
-    return render(request, 'scheduling/polls_list.html', {'polls': polls})
+    profile = getattr(request.user, 'player_profile', None)
+    can_create_poll = request.user.is_staff or (
+        profile is not None and profile.role == Player.Role.COACH
+    )
+    return render(request, 'scheduling/polls_list.html', {'polls': polls, 'can_create_poll': can_create_poll})
 
 
 def edit_session_plan(request, session_id):
@@ -1175,3 +1202,207 @@ def coach_support(request, coach_id):
         'support_tickets': support_tickets,
     }
     return render(request, 'scheduling/coach_support.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def team_stats_dashboard(request):
+    profile = getattr(request.user, 'player_profile', None)
+    is_coach = profile is not None and profile.role == Player.Role.COACH
+    if not request.user.is_staff and not is_coach:
+        return redirect('scheduling:player_home')
+
+    matches = Match.objects.all()
+    total_wins = sum(1 for m in matches if m.result == Match.Result.WIN)
+    total_losses = sum(1 for m in matches if m.result == Match.Result.LOSS)
+    total_draws = sum(1 for m in matches if m.result == Match.Result.DRAW)
+
+    total_players = Player.objects.filter(role=Player.Role.PLAYER).count()
+    recovering_players = Player.objects.filter(role=Player.Role.PLAYER, status=Player.Status.RECOVERING).count()
+    injured_players = Player.objects.filter(role=Player.Role.PLAYER, status=Player.Status.INJURED).count()
+    non_eligible = recovering_players + injured_players
+    recovery_pct = round(((total_players - non_eligible) / total_players) * 100) if total_players else 0
+
+    top_scorers = (
+        PlayerMatchStat.objects
+        .values('player__id', 'player__name')
+        .annotate(total_goals=Sum('goals'))
+        .filter(total_goals__gt=0)
+        .order_by('-total_goals')[:5]
+    )
+    top_defenders = (
+        PlayerMatchStat.objects
+        .values('player__id', 'player__name')
+        .annotate(total_interceptions=Sum('interceptions'))
+        .filter(total_interceptions__gt=0)
+        .order_by('-total_interceptions')[:5]
+    )
+
+    goals_per_game = list(
+        Match.objects.order_by('date').values_list('opponent', 'goals_for')
+    )
+
+    team_goals = TeamGoal.objects.all()
+
+    players = Player.objects.filter(role=Player.Role.PLAYER, is_active=True)
+
+    import json
+    chart_labels = json.dumps([g[0] for g in goals_per_game])
+    chart_data = json.dumps([g[1] for g in goals_per_game])
+
+    context = {
+        'total_wins': total_wins,
+        'total_losses': total_losses,
+        'total_draws': total_draws,
+        'recovery_pct': recovery_pct,
+        'top_scorers': top_scorers,
+        'top_defenders': top_defenders,
+        'team_goals': team_goals,
+        'chart_labels': chart_labels,
+        'chart_data': chart_data,
+        'match_count': matches.count(),
+        'players': players,
+    }
+    return render(request, 'scheduling/team_stats.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def player_stats_detail(request, player_id):
+    profile = getattr(request.user, 'player_profile', None)
+    is_coach = profile is not None and profile.role == Player.Role.COACH
+    is_player = profile is not None and profile.role == Player.Role.PLAYER
+
+    if request.user.is_staff or is_coach:
+        player = get_object_or_404(Player, pk=player_id)
+    elif is_player and profile.id == player_id:
+        player = profile
+    else:
+        messages.error(request, 'You can only view your own stats page.')
+        return redirect('scheduling:player_home' if is_player else 'scheduling:dashboard')
+
+    stats = PlayerMatchStat.objects.filter(player=player).select_related('match').order_by('-match__date')
+
+    totals = stats.aggregate(
+        total_goals=Sum('goals'),
+        total_interceptions=Sum('interceptions'),
+        total_points=Sum('points'),
+        total_blocks=Sum('blocks'),
+        total_assists=Sum('assists'),
+        total_aces=Sum('aces'),
+        total_returns=Sum('returns'),
+    )
+    # Replace None with 0
+    for k in totals:
+        if totals[k] is None:
+            totals[k] = 0
+
+    latest_injury = ''
+    for s in stats:
+        if s.most_recent_injury:
+            latest_injury = s.most_recent_injury
+            break
+
+    stats_by_game = list(
+        PlayerMatchStat.objects
+        .filter(player=player)
+        .select_related('match')
+        .order_by('match__date', 'match__id')
+    )
+
+    import json
+    game_labels = json.dumps([f'Game {idx}' for idx, _ in enumerate(stats_by_game, start=1)])
+    aces_series = json.dumps([s.aces for s in stats_by_game])
+    returns_series = json.dumps([s.returns for s in stats_by_game])
+    blocks_series = json.dumps([s.blocks for s in stats_by_game])
+    interceptions_series = json.dumps([s.interceptions for s in stats_by_game])
+    points_series = json.dumps([s.points for s in stats_by_game])
+
+    histogram_labels = json.dumps(['Aces', 'Returns', 'Blocks', 'Interceptions', 'Points'])
+    histogram_data = json.dumps([
+        totals['total_aces'],
+        totals['total_returns'],
+        totals['total_blocks'],
+        totals['total_interceptions'],
+        totals['total_points'],
+    ])
+
+    context = {
+        'player': player,
+        'stats': stats,
+        'totals': totals,
+        'latest_injury': latest_injury,
+        'matches_played': stats.count(),
+        'can_view_team_dashboard': request.user.is_staff or is_coach,
+        'game_labels': game_labels,
+        'aces_series': aces_series,
+        'returns_series': returns_series,
+        'blocks_series': blocks_series,
+        'interceptions_series': interceptions_series,
+        'points_series': points_series,
+        'histogram_labels': histogram_labels,
+        'histogram_data': histogram_data,
+    }
+    return render(request, 'scheduling/player_stats_detail.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def record_match(request):
+    profile = getattr(request.user, 'player_profile', None)
+    is_coach = profile is not None and profile.role == Player.Role.COACH
+    if not request.user.is_staff and not is_coach:
+        return redirect('scheduling:player_home')
+
+    if request.method == 'POST':
+        form = MatchForm(request.POST)
+        if form.is_valid():
+            match = form.save()
+            messages.success(request, 'Match recorded.')
+            return redirect('scheduling:record_player_stats', match_id=match.id)
+    else:
+        form = MatchForm()
+    return render(request, 'scheduling/record_match.html', {'form': form})
+
+
+@login_required(login_url='scheduling:login')
+def record_player_stats(request, match_id):
+    profile = getattr(request.user, 'player_profile', None)
+    is_coach = profile is not None and profile.role == Player.Role.COACH
+    if not request.user.is_staff and not is_coach:
+        return redirect('scheduling:player_home')
+
+    match = get_object_or_404(Match, pk=match_id)
+    existing_stats = list(match.player_stats.select_related('player'))
+
+    if request.method == 'POST':
+        form = PlayerMatchStatForm(request.POST)
+        if form.is_valid():
+            stat = form.save(commit=False)
+            stat.match = match
+            stat.save()
+            messages.success(request, f'Stats for {stat.player.name} saved.')
+            return redirect('scheduling:record_player_stats', match_id=match.id)
+    else:
+        form = PlayerMatchStatForm()
+
+    return render(request, 'scheduling/record_player_stats.html', {
+        'form': form,
+        'match': match,
+        'existing_stats': existing_stats,
+    })
+
+
+@login_required(login_url='scheduling:login')
+def add_team_goal(request):
+    profile = getattr(request.user, 'player_profile', None)
+    is_coach = profile is not None and profile.role == Player.Role.COACH
+    if not request.user.is_staff and not is_coach:
+        return redirect('scheduling:player_home')
+
+    if request.method == 'POST':
+        form = TeamGoalForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Team goal added.')
+            return redirect('scheduling:team_stats')
+    else:
+        form = TeamGoalForm()
+    return render(request, 'scheduling/add_team_goal.html', {'form': form})

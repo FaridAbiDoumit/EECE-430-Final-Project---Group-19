@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ player.name }} Stats | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --forest: #3f5e4a;
+            --paper: #d9d9d9;
+            --ink: #111111;
+            --card-bg: #ececec;
+            --shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--forest);
+            color: var(--ink);
+            font-family: 'Josefin Sans', sans-serif;
+        }
+        a { color: inherit; text-decoration: none; }
+        .shell {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 28px 20px 50px;
+            display: grid;
+            gap: 24px;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .header h1 {
+            margin: 0;
+            color: #fff;
+            font-size: clamp(1.6rem, 2.5vw, 2.4rem);
+            font-weight: 600;
+        }
+        .back-btn {
+            border: 1px solid #1f1f1f;
+            background: var(--paper);
+            border-radius: 10px;
+            padding: 10px 16px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .back-btn:hover { background: #111; color: #fff; }
+        .panel {
+            background: var(--paper);
+            border-radius: 14px;
+            padding: 22px;
+            box-shadow: var(--shadow);
+        }
+        .panel h2 {
+            margin: 0 0 14px;
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+        }
+        .kpi-card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 16px 12px;
+            text-align: center;
+        }
+        .kpi-value {
+            font-size: 1.8rem;
+            font-weight: 600;
+            line-height: 1;
+        }
+        .kpi-label {
+            margin-top: 4px;
+            font-size: 0.85rem;
+            color: #555;
+        }
+        .injury-banner {
+            background: #fff3e0;
+            border-left: 4px solid #ef6c00;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 0.95rem;
+        }
+        .injury-banner strong { color: #bf360c; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.92rem;
+        }
+        th, td {
+            padding: 10px 8px;
+            text-align: center;
+        }
+        th {
+            background: #111;
+            color: #fff;
+            font-weight: 500;
+        }
+        th:first-child, td:first-child { text-align: left; }
+        tr:nth-child(even) { background: var(--card-bg); }
+        tr:nth-child(odd)  { background: #fff; }
+        .no-data { color: #666; }
+        .chart-shell {
+            display: grid;
+            gap: 16px;
+        }
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+        .chart-card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 12px;
+        }
+        .chart-card h3 {
+            margin: 0 0 8px;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        .chart-box {
+            position: relative;
+            width: 100%;
+            height: 220px;
+        }
+        @media (max-width: 900px) {
+            .chart-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <main class="shell">
+        <header class="header">
+            <h1>{{ player.name }} — Player Stats</h1>
+            {% if can_view_team_dashboard %}
+            <a class="back-btn" href="{% url 'scheduling:team_stats' %}">Back to Team Stats</a>
+            {% else %}
+            <a class="back-btn" href="{% url 'scheduling:player_home' %}">Back to Home</a>
+            {% endif %}
+        </header>
+
+        <!-- Career totals -->
+        <section class="panel">
+            <h2>Career Totals ({{ matches_played }} match{{ matches_played|pluralize:"es" }})</h2>
+            <div class="kpi-row">
+                <div class="kpi-card">
+                    <div class="kpi-value">{{ totals.total_goals }}</div>
+                    <div class="kpi-label">Goals</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value">{{ totals.total_points }}</div>
+                    <div class="kpi-label">Points</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value">{{ totals.total_assists }}</div>
+                    <div class="kpi-label">Assists</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value">{{ totals.total_blocks }}</div>
+                    <div class="kpi-label">Blocks</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value">{{ totals.total_aces }}</div>
+                    <div class="kpi-label">Aces</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value">{{ totals.total_interceptions }}</div>
+                    <div class="kpi-label">Interceptions</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value">{{ totals.total_returns }}</div>
+                    <div class="kpi-label">Returns</div>
+                </div>
+            </div>
+        </section>
+
+        {% if latest_injury %}
+        <section class="injury-banner">
+            <strong>Most Recent Injury:</strong> {{ latest_injury }}
+        </section>
+        {% endif %}
+
+        <section class="panel">
+            <h2>Performance Charts</h2>
+            {% if matches_played > 0 %}
+            <div class="chart-shell">
+                <div class="chart-card">
+                    <h3>Histogram of Key Metrics</h3>
+                    <div class="chart-box">
+                        <canvas id="histogramChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-grid">
+                    <div class="chart-card">
+                        <h3>Aces vs Games</h3>
+                        <div class="chart-box"><canvas id="acesTrendChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Returns vs Games</h3>
+                        <div class="chart-box"><canvas id="returnsTrendChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Blocks vs Games</h3>
+                        <div class="chart-box"><canvas id="blocksTrendChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Interceptions vs Games</h3>
+                        <div class="chart-box"><canvas id="interceptionsTrendChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Points vs Games</h3>
+                        <div class="chart-box"><canvas id="pointsTrendChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <p class="no-data">No games recorded yet, so chart data is unavailable.</p>
+            {% endif %}
+        </section>
+
+        <!-- Per-match breakdown -->
+        <section class="panel">
+            <h2>Match-by-Match Breakdown</h2>
+            {% if stats %}
+            <div style="overflow-x:auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Opponent</th>
+                            <th>Date</th>
+                            <th>Goals</th>
+                            <th>Pts</th>
+                            <th>Ast</th>
+                            <th>Blk</th>
+                            <th>Aces</th>
+                            <th>Int</th>
+                            <th>Ret</th>
+                            <th>Injury</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in stats %}
+                        <tr>
+                            <td>{{ s.match.opponent }}</td>
+                            <td>{{ s.match.date|date:"M j, Y" }}</td>
+                            <td>{{ s.goals }}</td>
+                            <td>{{ s.points }}</td>
+                            <td>{{ s.assists }}</td>
+                            <td>{{ s.blocks }}</td>
+                            <td>{{ s.aces }}</td>
+                            <td>{{ s.interceptions }}</td>
+                            <td>{{ s.returns }}</td>
+                            <td>{{ s.most_recent_injury|default:"—" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+                <p class="no-data">No match stats recorded for this player yet.</p>
+            {% endif %}
+        </section>
+    </main>
+
+    {% if matches_played > 0 %}
+    <script>
+        const gameLabels = {{ game_labels|safe }};
+
+        const sharedLineOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { stepSize: 1 },
+                    title: { display: true, text: 'Count' },
+                },
+                x: {
+                    title: { display: true, text: 'Games Played' },
+                },
+            },
+        };
+
+        new Chart(document.getElementById('histogramChart').getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: {{ histogram_labels|safe }},
+                datasets: [{
+                    label: 'Total',
+                    data: {{ histogram_data|safe }},
+                    backgroundColor: [
+                        'rgba(21, 101, 192, 0.75)',
+                        'rgba(46, 125, 50, 0.75)',
+                        'rgba(245, 127, 23, 0.75)',
+                        'rgba(123, 31, 162, 0.75)',
+                        'rgba(198, 40, 40, 0.75)'
+                    ],
+                    borderWidth: 1,
+                    borderRadius: 6,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 1 },
+                        title: { display: true, text: 'Total Count' },
+                    },
+                },
+            },
+        });
+
+        function renderTrendChart(canvasId, series, label, color) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: gameLabels,
+                    datasets: [{
+                        label: label,
+                        data: series,
+                        borderColor: color,
+                        backgroundColor: color,
+                        tension: 0.25,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        fill: false,
+                    }],
+                },
+                options: sharedLineOptions,
+            });
+        }
+
+        renderTrendChart('acesTrendChart', {{ aces_series|safe }}, 'Aces', '#1565c0');
+        renderTrendChart('returnsTrendChart', {{ returns_series|safe }}, 'Returns', '#2e7d32');
+        renderTrendChart('blocksTrendChart', {{ blocks_series|safe }}, 'Blocks', '#f57f17');
+        renderTrendChart('interceptionsTrendChart', {{ interceptions_series|safe }}, 'Interceptions', '#7b1fa2');
+        renderTrendChart('pointsTrendChart', {{ points_series|safe }}, 'Points', '#c62828');
+    </script>
+    {% endif %}
+</body>
+</html>

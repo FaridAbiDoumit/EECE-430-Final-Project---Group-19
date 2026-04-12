@@ -143,9 +143,13 @@
                     <a href="{% url 'scheduling:dashboard' %}">Dashboard</a>
                     <a href="{% url 'scheduling:create_session' %}">Create Session</a>
                     <a href="{% url 'scheduling:next_session' %}">Next Session</a>
+                    {% with profile=request.user.player_profile %}
+                    {% if request.user.is_staff or profile.role == 'coach' %}
                     <a href="{% url 'scheduling:submit_availability' %}">Player Availability</a>
                     <a href="{% url 'scheduling:coach_availability_overview' %}">Coach Availability</a>
                     <a href="{% url 'scheduling:create_vote_poll' %}">Create Poll</a>
+                    {% endif %}
+                    {% endwith %}
                     <a href="{% url 'scheduling:notification_inbox' %}">Notifications</a>
                     <a href="{% url 'scheduling:create_tryout_session' %}">Create Tryout</a>
                     <a href="{% url 'scheduling:register_tryout_candidate' %}">Tryout Signup</a>

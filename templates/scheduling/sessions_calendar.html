@@ -407,9 +407,11 @@
             <header class="sched-titlebar">
                 <h1>Calendar</h1>
                 <div class="sched-quick-actions">
-                    <a href="{% url 'scheduling:create_vote_poll' %}">Create Training Time Poll</a>
                     <a href="{% url 'scheduling:polls_list' %}">View Polls</a>
-                    <a href="{% url 'scheduling:coach_availability_overview' %}">View Player Availability</a>
+                    {% if can_manage_availability_polls %}
+                        <a href="{% url 'scheduling:create_vote_poll' %}">Create Training Time Poll</a>
+                        <a href="{% url 'scheduling:coach_availability_overview' %}">View Player Availability</a>
+                    {% endif %}
                 </div>
             </header>
 
