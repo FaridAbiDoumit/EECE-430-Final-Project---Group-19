@@ -1,18 +1,263 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit {{ player.get_role_display|title }} | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #46674f;
+            --paper: #dedede;
+            --header-left: #eceeed;
+            --header-right: #b7c9b4;
+            --ink: #111111;
+            --accent: #0df2dc;
+            --chip-border: #81918a;
+            --shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+            --muted: #4b5563;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Josefin Sans', sans-serif;
+            color: var(--ink);
+            background: var(--forest);
+        }
+        a { color: inherit; text-decoration: none; }
+        .page-shell { min-height: 100vh; display: flex; flex-direction: column; }
+        .page-header {
+            background: linear-gradient(90deg, var(--header-left) 0%, var(--header-right) 100%);
+            padding: 42px 34px 36px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+        }
+        .page-title {
+            margin: 0;
+            font-size: clamp(2rem, 2vw + 1.4rem, 3.1rem);
+            font-weight: 600;
+            position: relative;
+            display: inline-block;
+            padding-bottom: 14px;
+        }
+        .page-title::after {
+            content: '';
+            position: absolute;
+            left: 0; bottom: 0;
+            width: min(100%, 240px);
+            height: 3px;
+            background: var(--accent);
+            box-shadow: 0 0 8px rgba(255,255,255,0.25);
+        }
+        .page-subtitle {
+            margin: 8px 0 0;
+            font-size: 1rem;
+            color: var(--muted);
+        }
+        .header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .header-chip, .header-link {
+            padding: 8px 12px;
+            border: 1px solid var(--chip-border);
+            border-radius: 8px;
+            font-size: 0.98rem;
+        }
+        .header-chip { background: rgba(255,255,255,0.15); }
+        .header-link { background: #ffffff; }
+        .page-content {
+            flex: 1;
+            padding: 36px 34px 56px;
+            max-width: 640px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        .form-card {
+            background: var(--paper);
+            border-radius: 18px;
+            padding: 28px 28px 24px;
+            box-shadow: var(--shadow);
+            margin-bottom: 16px;
+        }
+        .field-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 20px;
+        }
+        .field-group:last-child { margin-bottom: 0; }
+        .field-label {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--muted);
+        }
+        .field-group select,
+        .field-group input[type="date"],
+        .field-group input[type="text"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #b5c9b8;
+            border-radius: 10px;
+            background: #f8faf8;
+            font-family: inherit;
+            font-size: 0.98rem;
+            color: var(--ink);
+        }
+        .field-group select:focus,
+        .field-group input:focus {
+            outline: none;
+            border-color: var(--forest);
+            box-shadow: 0 0 0 2px rgba(70,103,79,0.15);
+        }
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .checkbox-row input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--forest);
+            cursor: pointer;
+        }
+        .checkbox-row label {
+            font-size: 0.98rem;
+            cursor: pointer;
+        }
+        .field-help {
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+        .btn-save {
+            width: 100%;
+            padding: 14px;
+            background: var(--forest);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.15s;
+            margin-top: 4px;
+        }
+        .btn-save:hover { opacity: 0.88; }
+        .danger-card {
+            background: var(--paper);
+            border-radius: 18px;
+            padding: 20px 28px;
+            box-shadow: var(--shadow);
+        }
+        .btn-danger {
+            display: block;
+            background: #fde8e8;
+            color: #7a1a1a;
+            border: 1px solid #e5aaaa;
+            padding: 13px 20px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 0.98rem;
+            font-weight: 500;
+            transition: opacity 0.15s;
+        }
+        .btn-danger:hover { opacity: 0.85; }
+        .error-list {
+            list-style: none;
+            padding: 0;
+            margin: 4px 0 0;
+        }
+        .error-list li {
+            font-size: 0.83rem;
+            color: #8a3030;
+        }
+        @media (max-width: 600px) {
+            .page-header { flex-direction: column; align-items: stretch; }
+            .page-content { padding: 24px 18px 40px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-shell">
+        <header class="page-header">
+            <div>
+                <h1 class="page-title">Edit Profile</h1>
+                <p class="page-subtitle">{{ player.name }} &mdash; {{ player.get_role_display|title }}</p>
+            </div>
+            <div class="header-actions">
+                <span class="header-chip">Admin</span>
+                {% if player.role == "coach" %}
+                    <a class="header-link" href="{% url 'scheduling:manage_coach_detail' player.id %}">Back to Coach</a>
+                {% else %}
+                    <a class="header-link" href="{% url 'scheduling:manage_player_detail' player.id %}">Back to Player</a>
+                {% endif %}
+                <a class="header-link" href="{% url 'scheduling:player_status_list' %}">User Status</a>
+            </div>
+        </header>
 
-{% block content %}
-<section class="panel">
-    <h1>Update {{ player.name }}</h1>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit">Save</button>
-    </form>
-    {% if player.role == "player" and player.is_active %}
-        <p style="margin-top: 16px;"><a href="{% url 'scheduling:deactivate_player' player.id %}">Deactivate Player</a></p>
-    {% endif %}
-    {% if player.role == "coach" and player.is_active %}
-        <p style="margin-top: 16px;"><a href="{% url 'scheduling:deactivate_coach' player.id %}">Deactivate Coach</a></p>
-    {% endif %}
-</section>
-{% endblock %}
+        <main class="page-content">
+            <div class="form-card">
+                <form method="post">
+                    {% csrf_token %}
+
+                    <!-- Status -->
+                    <div class="field-group">
+                        <label class="field-label" for="{{ form.status.id_for_label }}">Status</label>
+                        {{ form.status }}
+                        {% if form.status.errors %}
+                            <ul class="error-list">{% for e in form.status.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                        {% endif %}
+                    </div>
+
+                    <!-- Active -->
+                    <div class="field-group">
+                        <div class="checkbox-row">
+                            {{ form.is_active }}
+                            <label for="{{ form.is_active.id_for_label }}">Active account</label>
+                        </div>
+                        {% if form.is_active.errors %}
+                            <ul class="error-list">{% for e in form.is_active.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                        {% endif %}
+                    </div>
+
+                    <!-- Medical cert (players only) -->
+                    {% if player.role == "player" %}
+                    <div class="field-group">
+                        <label class="field-label" for="{{ form.medical_certification_expiry.id_for_label }}">Medical Certification Expiry</label>
+                        {{ form.medical_certification_expiry }}
+                        {% if form.medical_certification_expiry.errors %}
+                            <ul class="error-list">{% for e in form.medical_certification_expiry.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Contract expiry -->
+                    <div class="field-group">
+                        <label class="field-label" for="{{ form.contract_expiry.id_for_label }}">Contract Expiry</label>
+                        {{ form.contract_expiry }}
+                        {% if form.contract_expiry.errors %}
+                            <ul class="error-list">{% for e in form.contract_expiry.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                        {% endif %}
+                    </div>
+
+                    <button class="btn-save" type="submit">Save Changes</button>
+                </form>
+            </div>
+
+            {% if player.is_active %}
+                <div class="danger-card">
+                    {% if player.role == "coach" %}
+                        <a class="btn-danger" href="{% url 'scheduling:deactivate_coach' player.id %}">Deactivate Coach Profile</a>
+                    {% else %}
+                        <a class="btn-danger" href="{% url 'scheduling:deactivate_player' player.id %}">Deactivate Player Profile</a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </main>
+    </div>
+</body>
+</html>
