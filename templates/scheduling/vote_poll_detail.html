@@ -231,6 +231,29 @@
             background: var(--ink);
             color: var(--paper);
         }
+        .action-button-form {
+            margin: 0;
+        }
+        .left-panel-actions {
+            margin-top: 14px;
+            display: flex;
+            justify-content: flex-end;
+        }
+        .left-panel-actions .action-button-form {
+            display: grid;
+            gap: 8px;
+            justify-items: end;
+        }
+        .event-name-input {
+            width: min(320px, 100%);
+            padding: 10px 12px;
+            border: 1px solid var(--ink);
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            background: #ffffff;
+            color: var(--ink);
+        }
         @media (max-width: 900px) {
             .poll-content {
                 grid-template-columns: 1fr;
@@ -326,6 +349,17 @@
                 {% else %}
                     <div class="votes-empty">
                         No votes submitted yet.
+                    </div>
+                {% endif %}
+
+                {% if can_schedule_from_poll %}
+                    <div class="left-panel-actions">
+                        <form method="post" class="action-button-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="poll_action" value="create_session">
+                            <input class="event-name-input" type="text" name="event_title" value="{{ default_event_title }}" placeholder="Event name" required>
+                            <button class="action-button" type="submit">Create Session From Top Vote</button>
+                        </form>
                     </div>
                 {% endif %}
             </section>

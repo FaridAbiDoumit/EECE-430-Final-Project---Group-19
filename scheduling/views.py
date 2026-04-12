@@ -958,8 +958,74 @@ def vote_poll_detail(request, poll_id):
     )
     profile = getattr(request.user, 'player_profile', None)
     can_vote = profile is not None and profile.role == Player.Role.PLAYER
+    can_schedule_from_poll = request.user.is_staff or (
+        profile is not None and profile.role == Player.Role.COACH
+    )
 
     if request.method == 'POST':
+        action = request.POST.get('poll_action', 'vote')
+
+        if action == 'create_session':
+            if not can_schedule_from_poll:
+                messages.error(request, 'Only coach accounts can schedule from poll results.')
+                return redirect('scheduling:vote_poll_detail', poll_id=poll.id)
+
+            event_title = request.POST.get('event_title', '').strip()
+            if not event_title:
+                messages.error(request, 'Please provide an event name before creating the session.')
+                return redirect('scheduling:vote_poll_detail', poll_id=poll.id)
+
+            winning_option = (
+                poll.options.annotate(vote_count=Count('votes'))
+                .order_by('-vote_count', 'starts_at', 'id')
+                .first()
+            )
+
+            if winning_option is None:
+                messages.error(request, 'This poll has no options to schedule.')
+                return redirect('scheduling:vote_poll_detail', poll_id=poll.id)
+
+            existing_session = TrainingSession.objects.filter(
+                title=event_title,
+                starts_at=winning_option.starts_at,
+                location=winning_option.location,
+                cancelled=False,
+            ).first()
+
+            if existing_session is not None:
+                messages.info(request, 'A training session has already been created from this winning option.')
+                return redirect('scheduling:session_detail', session_id=existing_session.id)
+
+            session = TrainingSession.objects.create(
+                title=event_title,
+                starts_at=winning_option.starts_at,
+                ends_at=winning_option.starts_at + timedelta(hours=2),
+                location=winning_option.location,
+                session_type=TrainingSession.SessionType.PRACTICE,
+                notes=f'Created automatically from poll "{poll.title}".',
+            )
+
+            notification_title, notification_message = _new_session_notification_payload(session)
+            recipients = Player.objects.filter(is_active=True)
+            if profile is not None:
+                recipients = recipients.exclude(pk=profile.pk)
+            Notification.objects.bulk_create(
+                [
+                    Notification(
+                        recipient=recipient,
+                        title=notification_title,
+                        message=notification_message,
+                        notification_type=Notification.Type.TRAINING_CREATED,
+                    )
+                    for recipient in recipients
+                ]
+            )
+
+            poll.delete()
+
+            messages.success(request, 'Training session created from the winning poll option.')
+            return redirect('scheduling:session_detail', session_id=session.id)
+
         if not can_vote:
             messages.error(request, 'Only player accounts can vote in polls.')
             return redirect('scheduling:vote_poll_detail', poll_id=poll.id)
@@ -987,6 +1053,8 @@ def vote_poll_detail(request, poll_id):
             'options': options,
             'votes': votes,
             'can_vote': can_vote,
+            'can_schedule_from_poll': can_schedule_from_poll,
+            'default_event_title': poll.title,
         },
     )
 
