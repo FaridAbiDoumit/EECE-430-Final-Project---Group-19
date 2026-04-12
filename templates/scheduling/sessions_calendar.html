@@ -513,6 +513,15 @@
                             {% if not can_add_events %}disabled{% endif %}
                             required>
                     </div>
+                    {% if can_add_sessions %}
+                        <div class="add-event-field">
+                            <select class="add-event-input" name="quick_session_type" {% if not can_add_events %}disabled{% endif %}>
+                                <option value="practice" {% if quick_add.session_type == 'practice' %}selected{% endif %}>Practice</option>
+                                <option value="friendly" {% if quick_add.session_type == 'friendly' %}selected{% endif %}>Friendly</option>
+                                <option value="match" {% if quick_add.session_type == 'match' %}selected{% endif %}>Match</option>
+                            </select>
+                        </div>
+                    {% endif %}
                     <button class="add-event-action" type="submit" {% if not can_add_events %}disabled{% endif %}>Press to add event to schedule</button>
                     {% if can_add_personal_events %}
                         <p class="add-event-note">Events you add are private and visible only to you.</p>

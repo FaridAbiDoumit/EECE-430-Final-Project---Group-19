@@ -211,6 +211,9 @@ class PersonalSessionNote(models.Model):
 class Notification(models.Model):
     class Type(models.TextChoices):
         SESSION_UPDATED = 'session_updated', 'Session Updated'
+        TRAINING_CREATED = 'training_created', 'Training Session Created'
+        TRYOUT_CREATED = 'tryout_created', 'Tryout Created'
+        STATS_ADDED = 'stats_added', 'Stats Added'
         GENERAL = 'general', 'General'
 
     recipient = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='notifications')

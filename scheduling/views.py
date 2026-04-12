@@ -63,6 +63,25 @@ def _post_login_route_for(user):
     return 'scheduling:dashboard'
 
 
+def _new_session_notification_payload(session):
+    if session.session_type == TrainingSession.SessionType.MATCH:
+        title = 'New Match'
+        kind = 'match'
+    elif session.session_type == TrainingSession.SessionType.FRIENDLY:
+        title = 'New Friendly'
+        kind = 'friendly'
+    else:
+        title = 'New Practice Session'
+        kind = 'practice session'
+
+    message = (
+        f'A new {kind} "{session.title}" has been scheduled'
+        f' for {session.starts_at.strftime("%b %d, %Y at %H:%M")}'
+        f' at {session.location}.'
+    )
+    return title, message
+
+
 def landing_page(request):
     if request.user.is_authenticated:
         return redirect(_post_login_route_for(request.user))
@@ -351,6 +370,20 @@ def create_session(request):
         form = TrainingSessionForm(request.POST)
         if form.is_valid():
             session = form.save()
+            notification_title, notification_message = _new_session_notification_payload(session)
+            creator = getattr(request.user, 'player_profile', None) if request.user.is_authenticated else None
+            qs = Player.objects.filter(is_active=True)
+            if creator:
+                qs = qs.exclude(pk=creator.pk)
+            Notification.objects.bulk_create([
+                Notification(
+                    recipient=p,
+                    title=notification_title,
+                    message=notification_message,
+                    notification_type=Notification.Type.TRAINING_CREATED,
+                )
+                for p in qs
+            ])
             messages.success(request, 'Training session created.')
             return redirect('scheduling:session_detail', session_id=session.id)
     else:
@@ -366,7 +399,10 @@ def edit_session(request, session_id):
         form = TrainingSessionForm(request.POST, instance=session)
         if form.is_valid():
             session = form.save()
-            player_recipients = list(Player.objects.filter(role=Player.Role.PLAYER))
+            editor = getattr(request.user, 'player_profile', None) if request.user.is_authenticated else None
+            qs = Player.objects.filter(is_active=True)
+            if editor:
+                qs = qs.exclude(pk=editor.pk)
             Notification.objects.bulk_create(
                 [
                     Notification(
@@ -375,7 +411,7 @@ def edit_session(request, session_id):
                         message=f'{session.title} was updated for {session.starts_at} at {session.location}.',
                         notification_type=Notification.Type.SESSION_UPDATED,
                     )
-                    for player in player_recipients
+                    for player in qs
                 ]
             )
             messages.success(request, 'Training session updated.')
@@ -476,6 +512,11 @@ def sessions_calendar(request):
         'start_time': request.POST.get('quick_start_time', '') if action == 'quick_add' else '',
         'end_time': request.POST.get('quick_end_time', '') if action == 'quick_add' else '',
         'location': request.POST.get('quick_location', '').strip() if action == 'quick_add' else '',
+        'session_type': (
+            request.POST.get('quick_session_type', TrainingSession.SessionType.PRACTICE)
+            if action == 'quick_add'
+            else TrainingSession.SessionType.PRACTICE
+        ),
     }
 
     if request.method == 'POST':
@@ -507,9 +548,16 @@ def sessions_calendar(request):
                 location = quick_add['location']
                 start_time_raw = quick_add['start_time']
                 end_time_raw = quick_add['end_time']
+                session_type = quick_add['session_type']
 
                 if not title or not location or not start_time_raw or not end_time_raw:
                     messages.error(request, 'Please fill in session name, start time, end time, and location.')
+                elif can_add_sessions and session_type not in {
+                    TrainingSession.SessionType.PRACTICE,
+                    TrainingSession.SessionType.FRIENDLY,
+                    TrainingSession.SessionType.MATCH,
+                }:
+                    messages.error(request, 'Please choose a valid session type.')
                 else:
                     try:
                         start_clock = time.fromisoformat(start_time_raw)
@@ -523,14 +571,27 @@ def sessions_calendar(request):
                             starts_at_local = timezone.make_aware(datetime.combine(selected_date, start_clock), local_tz)
                             ends_at_local = timezone.make_aware(datetime.combine(selected_date, end_clock), local_tz)
                             if can_add_sessions:
-                                TrainingSession.objects.create(
+                                session = TrainingSession.objects.create(
                                     title=title,
                                     starts_at=starts_at_local,
                                     ends_at=ends_at_local,
                                     location=location,
-                                    session_type=TrainingSession.SessionType.PRACTICE,
+                                    session_type=session_type,
                                     notes='Calendar quick-add.',
                                 )
+                                notification_title, notification_message = _new_session_notification_payload(session)
+                                qs = Player.objects.filter(is_active=True)
+                                if profile:
+                                    qs = qs.exclude(pk=profile.pk)
+                                Notification.objects.bulk_create([
+                                    Notification(
+                                        recipient=p,
+                                        title=notification_title,
+                                        message=notification_message,
+                                        notification_type=Notification.Type.TRAINING_CREATED,
+                                    )
+                                    for p in qs
+                                ])
                                 messages.success(request, 'Session added to the team schedule.')
                             elif can_add_personal_events:
                                 PersonalCalendarEvent.objects.create(
@@ -1078,6 +1139,20 @@ def create_tryout_session(request):
         form = TryoutSessionForm(request.POST)
         if form.is_valid():
             tryout_session = form.save()
+            recipients = list(Player.objects.filter(is_active=True).exclude(pk=coach.pk))
+            Notification.objects.bulk_create([
+                Notification(
+                    recipient=p,
+                    title='New Tryout Session',
+                    message=(
+                        f'A new tryout "{tryout_session.title}" has been scheduled'
+                        f' for {tryout_session.starts_at.strftime("%b %d, %Y at %H:%M")}'
+                        f' at {tryout_session.location}.'
+                    ),
+                    notification_type=Notification.Type.TRYOUT_CREATED,
+                )
+                for p in recipients
+            ])
             messages.success(request, 'Tryout session created.')
             return redirect('scheduling:tryout_session_detail', tryout_session_id=tryout_session.id)
     else:
@@ -1538,6 +1613,22 @@ def record_match(request):
         form = MatchForm(request.POST)
         if form.is_valid():
             match = form.save()
+            qs = Player.objects.filter(is_active=True)
+            if profile:
+                qs = qs.exclude(pk=profile.pk)
+            Notification.objects.bulk_create([
+                Notification(
+                    recipient=p,
+                    title='New Match Result Recorded',
+                    message=(
+                        f'A match result has been recorded:'
+                        f' vs {match.opponent} on {match.date.strftime("%b %d, %Y")},'
+                        f' {match.goals_for}–{match.goals_against}.'
+                    ),
+                    notification_type=Notification.Type.STATS_ADDED,
+                )
+                for p in qs
+            ])
             messages.success(request, 'Match recorded.')
             return redirect('scheduling:record_player_stats', match_id=match.id)
     else:
@@ -1583,7 +1674,19 @@ def add_team_goal(request):
     if request.method == 'POST':
         form = TeamGoalForm(request.POST)
         if form.is_valid():
-            form.save()
+            goal = form.save()
+            qs = Player.objects.filter(is_active=True)
+            if profile:
+                qs = qs.exclude(pk=profile.pk)
+            Notification.objects.bulk_create([
+                Notification(
+                    recipient=p,
+                    title='New Team Goal Added',
+                    message=f'A new team goal has been set: "{goal.description}".',
+                    notification_type=Notification.Type.STATS_ADDED,
+                )
+                for p in qs
+            ])
             messages.success(request, 'Team goal added.')
             return redirect('scheduling:team_stats')
     else:
