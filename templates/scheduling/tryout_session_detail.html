@@ -214,7 +214,7 @@
                                 <tr>
                                     <td>{{ candidate.name }}</td>
                                     <td>{{ candidate.email }}</td>
-                                    <td><span class="status-pill">{{ candidate.get_status_display }}</span></td>
+                                    <td><span class="status-pill">{% if candidate.status == 'converted' %}Accepted{% else %}{{ candidate.get_status_display }}{% endif %}</span></td>
                                     <td><a class="details-link" href="{% url 'scheduling:tryout_candidate_detail' candidate.id %}">More Details</a></td>
                                 </tr>
                             {% endfor %}

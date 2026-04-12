@@ -1,12 +1,209 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if candidate.status == 'converted' %}Reject Candidate{% else %}Accept Candidate{% endif %} | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #46674f;
+            --paper: #dedede;
+            --header-left: #eceeed;
+            --header-right: #b7c9b4;
+            --ink: #111111;
+            --accent: #0df2dc;
+            --chip-border: #81918a;
+            --shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+            --muted: #4b5563;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Josefin Sans', sans-serif;
+            color: var(--ink);
+            background: var(--forest);
+        }
+        a { color: inherit; text-decoration: none; }
+        .convert-shell {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .convert-header {
+            background: linear-gradient(90deg, var(--header-left) 0%, var(--header-right) 100%);
+            padding: 42px 34px 36px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .convert-title {
+            margin: 0;
+            font-size: clamp(2rem, 2vw + 1.4rem, 3rem);
+            font-weight: 600;
+            position: relative;
+            display: inline-block;
+            padding-bottom: 14px;
+        }
+        .convert-title::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: min(100%, 240px);
+            height: 3px;
+            background: var(--accent);
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.25);
+        }
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .header-chip,
+        .header-link {
+            padding: 8px 12px;
+            border: 1px solid var(--chip-border);
+            border-radius: 8px;
+            font-size: 0.98rem;
+        }
+        .header-chip {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        .header-link {
+            background: #ffffff;
+        }
+        .convert-content {
+            flex: 1;
+            max-width: 880px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 38px 24px 56px;
+        }
+        .confirm-card {
+            background: var(--paper);
+            border-radius: 18px;
+            padding: 24px;
+            box-shadow: var(--shadow);
+            display: grid;
+            gap: 14px;
+        }
+        .confirm-card h2 {
+            margin: 0;
+            font-size: 1.7rem;
+        }
+        .confirm-card p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 1.02rem;
+        }
+        .candidate-meta {
+            display: grid;
+            gap: 10px;
+            grid-template-columns: repeat(2, minmax(180px, 1fr));
+            margin-top: 6px;
+        }
+        .meta-item {
+            background: #f4f4f4;
+            border: 1px solid #c7c7c7;
+            border-radius: 10px;
+            padding: 10px 12px;
+            display: grid;
+            gap: 4px;
+        }
+        .meta-item strong {
+            font-size: 0.88rem;
+            color: #374151;
+        }
+        .action-row {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+        }
+        .button {
+            border: 1px solid #8ea698;
+            border-radius: 9px;
+            padding: 10px 14px;
+            background: #ffffff;
+            font: inherit;
+            cursor: pointer;
+        }
+        .button.accept {
+            border-color: #5c7f67;
+            background: #dff5e2;
+            font-weight: 600;
+        }
+        .button.reject {
+            border-color: #a73734;
+            background: #f6d7d6;
+            color: #742121;
+            font-weight: 600;
+        }
+        @media (max-width: 700px) {
+            .convert-header {
+                flex-direction: column;
+                align-items: stretch;
+                padding: 28px 18px 24px;
+            }
+            .convert-content {
+                padding: 24px 18px 40px;
+            }
+            .candidate-meta {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="convert-shell">
+        <header class="convert-header">
+            <div>
+                <h1 class="convert-title">{% if candidate.status == 'converted' %}Reject Candidate{% else %}Accept Candidate{% endif %}</h1>
+            </div>
+            <div class="header-actions">
+                <span class="header-chip">Coach</span>
+                <a class="header-link" href="{% url 'scheduling:tryout_candidate_detail' candidate.id %}">Back to Profile</a>
+            </div>
+        </header>
 
-{% block content %}
-<section class="panel">
-    <h1>Convert Candidate</h1>
-    <p>Convert <strong>{{ candidate.name }}</strong> into a player profile?</p>
-    <form method="post">
-        {% csrf_token %}
-        <button type="submit">Convert</button>
-    </form>
-</section>
-{% endblock %}
+        <main class="convert-content">
+            <section class="confirm-card">
+                {% if candidate.status == 'converted' %}
+                    <h2>Reject {{ candidate.name }} from accepted players?</h2>
+                    <p>This action will move the candidate back to submitted status.</p>
+                {% else %}
+                    <h2>Accept {{ candidate.name }} as a player?</h2>
+                    <p>This action will create a player profile (if one does not already exist) and mark this candidate as accepted.</p>
+                {% endif %}
+
+                <div class="candidate-meta">
+                    <article class="meta-item">
+                        <strong>Email</strong>
+                        <span>{{ candidate.email }}</span>
+                    </article>
+                    <article class="meta-item">
+                        <strong>Tryout Session</strong>
+                        <span>{{ candidate.tryout_session.title }}</span>
+                    </article>
+                </div>
+
+                <div class="action-row">
+                    <a class="button" href="{% url 'scheduling:tryout_candidate_detail' candidate.id %}">Cancel</a>
+                    <form method="post" style="margin: 0;">
+                        {% csrf_token %}
+                        <button class="button {% if candidate.status == 'converted' %}reject{% else %}accept{% endif %}" type="submit">{% if candidate.status == 'converted' %}Reject Player{% else %}Accept Player{% endif %}</button>
+                    </form>
+                </div>
+            </section>
+        </main>
+    </div>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delete Tryout | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #46674f;
+            --paper: #dedede;
+            --header-left: #eceeed;
+            --header-right: #b7c9b4;
+            --ink: #111111;
+            --accent: #0df2dc;
+            --chip-border: #81918a;
+            --shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+            --muted: #4b5563;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Josefin Sans', sans-serif;
+            color: var(--ink);
+            background: var(--forest);
+        }
+        a { color: inherit; text-decoration: none; }
+        .shell {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .page-header {
+            background: linear-gradient(90deg, var(--header-left) 0%, var(--header-right) 100%);
+            padding: 42px 34px 36px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+        }
+        .page-title {
+            margin: 0;
+            font-size: clamp(2rem, 2vw + 1.4rem, 3.1rem);
+            font-weight: 600;
+            position: relative;
+            display: inline-block;
+            padding-bottom: 14px;
+        }
+        .page-title::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: min(100%, 200px);
+            height: 3px;
+            background: var(--accent);
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.25);
+        }
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .header-chip,
+        .header-link {
+            padding: 8px 12px;
+            border: 1px solid var(--chip-border);
+            border-radius: 8px;
+            font-size: 0.98rem;
+        }
+        .header-chip { background: rgba(255, 255, 255, 0.15); }
+        .header-link { background: #ffffff; }
+        .page-content {
+            flex: 1;
+            padding: 56px 34px;
+            max-width: 600px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        .confirm-card {
+            background: var(--paper);
+            border-radius: 18px;
+            padding: 36px 32px;
+            box-shadow: var(--shadow);
+        }
+        .confirm-card h2 {
+            margin-top: 0;
+            font-size: 1.5rem;
+        }
+        .confirm-card p {
+            color: var(--muted);
+            margin-bottom: 28px;
+        }
+        .confirm-card strong {
+            color: var(--ink);
+        }
+        .actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .btn-cancel {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 1px solid var(--chip-border);
+            background: #ffffff;
+            font-family: 'Josefin Sans', sans-serif;
+            font-size: 1rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-delete {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            background: #b91c1c;
+            color: #ffffff;
+            font-family: 'Josefin Sans', sans-serif;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        .btn-delete:hover { background: #991b1b; }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <header class="page-header">
+            <div>
+                <h1 class="page-title">Delete Tryout</h1>
+            </div>
+            <div class="header-actions">
+                <span class="header-chip">Coach</span>
+                <a class="header-link" href="{% url 'scheduling:tryout_session_detail' tryout_session.id %}">Back to Details</a>
+            </div>
+        </header>
+
+        <main class="page-content">
+            <div class="confirm-card">
+                <h2>Confirm Deletion</h2>
+                <p>
+                    Are you sure you want to delete <strong>{{ tryout_session.title }}</strong>?
+                    This will also remove all candidate registrations for this tryout. This action cannot be undone.
+                </p>
+                <div class="actions">
+                    <a class="btn-cancel" href="{% url 'scheduling:tryout_session_detail' tryout_session.id %}">Cancel</a>
+                    <form method="post" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-delete">Yes, Delete Tryout</button>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

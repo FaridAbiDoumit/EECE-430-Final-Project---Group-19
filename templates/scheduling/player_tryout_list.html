@@ -3,21 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Current Tryouts | Volley Project</title>
+    <title>Tryouts | Volley Project</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --forest: #46674f;
-            --paper: #dedede;
+            --forest: #3f5e4a;
+            --paper: #d9d9d9;
             --header-left: #eceeed;
             --header-right: #b7c9b4;
             --ink: #111111;
             --accent: #0df2dc;
             --chip-border: #81918a;
             --shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
-            --muted: #4b5563;
         }
         * { box-sizing: border-box; }
         body {
@@ -40,6 +39,7 @@
             align-items: flex-start;
             justify-content: space-between;
             gap: 16px;
+            flex-wrap: wrap;
         }
         .tryout-title {
             margin: 0;
@@ -54,7 +54,7 @@
             position: absolute;
             left: 0;
             bottom: 0;
-            width: min(100%, 235px);
+            width: min(100%, 190px);
             height: 3px;
             background: var(--accent);
             box-shadow: 0 0 8px rgba(255, 255, 255, 0.25);
@@ -66,16 +66,14 @@
             flex-wrap: wrap;
         }
         .header-chip,
-        .header-link,
-        .create-button {
+        .header-link {
             padding: 8px 12px;
             border: 1px solid var(--chip-border);
             border-radius: 8px;
-            background: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.18);
             font-size: 0.98rem;
         }
-        .header-link,
-        .create-button {
+        .header-link {
             background: #ffffff;
         }
         .tryout-content {
@@ -84,11 +82,32 @@
             max-width: 1180px;
             width: 100%;
             margin: 0 auto;
+            display: grid;
+            gap: 16px;
+        }
+        .summary-card,
+        .table-card,
+        .empty-state {
+            background: var(--paper);
+            border-radius: 16px;
+            padding: 18px;
+            box-shadow: var(--shadow);
+        }
+        .summary-card {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .summary-card p {
+            margin: 0;
+            font-size: 0.98rem;
         }
         .message-list {
             list-style: none;
             padding: 0;
-            margin: 0 0 18px;
+            margin: 0;
             display: grid;
             gap: 10px;
         }
@@ -99,10 +118,6 @@
             border-radius: 10px;
         }
         .table-card {
-            background: var(--paper);
-            border-radius: 18px;
-            padding: 18px;
-            box-shadow: var(--shadow);
             overflow-x: auto;
         }
         table {
@@ -116,6 +131,7 @@
         }
         th {
             font-size: 1rem;
+            font-weight: 600;
         }
         td {
             font-size: 0.98rem;
@@ -128,36 +144,51 @@
             background: #f8f8f8;
             font-size: 0.88rem;
         }
+        .status-pill.open {
+            background: #dff5e2;
+            border-color: #7ea888;
+        }
         .details-link {
             display: inline-block;
             padding: 8px 12px;
             border-radius: 8px;
             background: #ffffff;
             border: 1px solid #8ea698;
+            font: inherit;
+            cursor: pointer;
         }
-        .delete-link {
-            display: inline-block;
-            padding: 8px 12px;
-            border-radius: 8px;
-            background: #fde8e8;
-            border: 1px solid #e5aaaa;
-            color: #7a1a1a;
-            margin-left: 6px;
+        .details-link:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .details-link.cancel {
+            background: #d9534f;
+            border-color: #a73734;
+            color: #ffffff;
+        }
+        .details-link.accepted {
+            background: #dff5e2;
+            border-color: #7ea888;
+            color: #1f4d2e;
+            cursor: default;
+            pointer-events: none;
+        }
+        .details-link.submitted {
+            background: #f8f8f8;
+            border-color: #8ea698;
+            color: #374151;
+            cursor: default;
+            pointer-events: none;
         }
         .empty-state {
-            background: var(--paper);
-            border-radius: 18px;
-            padding: 28px 22px;
-            box-shadow: var(--shadow);
             text-align: center;
         }
-        @media (max-width: 700px) {
+        .empty-state h2 {
+            margin-top: 0;
+        }
+        @media (max-width: 760px) {
             .tryout-header {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .header-actions {
-                justify-content: flex-start;
+                padding: 28px 18px 24px;
             }
             .tryout-content {
                 padding: 24px 18px 40px;
@@ -169,12 +200,12 @@
     <div class="tryout-shell">
         <header class="tryout-header">
             <div>
-                <h1 class="tryout-title">Current Tryouts</h1>
+                <h1 class="tryout-title">Tryouts</h1>
             </div>
             <div class="header-actions">
-                <span class="header-chip">Coach</span>
-                <a class="header-link" href="{% url 'scheduling:coach_home' %}">Back to welcome page</a>
-                <a class="create-button" href="{% url 'scheduling:create_tryout_session' %}">Create Tryout</a>
+                <span class="header-chip">Player</span>
+                <a class="header-link" href="{% url 'scheduling:player_home' %}">Back to welcome page</a>
+                <a class="header-link" href="{% url 'scheduling:sessions_calendar' %}">Calendar</a>
             </div>
         </header>
 
@@ -187,8 +218,13 @@
                 </ul>
             {% endif %}
 
+            <section class="summary-card" aria-label="Tryout summary">
+                <p><strong>Open tryouts:</strong> {{ open_tryout_count }}</p>
+                <p><strong>Total listed:</strong> {{ tryouts|length }}</p>
+            </section>
+
             {% if tryouts %}
-                <section class="table-card">
+                <section class="table-card" aria-label="Tryout sessions list">
                     <table>
                         <thead>
                             <tr>
@@ -206,13 +242,30 @@
                                     <td>{{ tryout.starts_at|date:"M d, Y • H:i" }}</td>
                                     <td>{{ tryout.location }}</td>
                                     <td>
-                                        <span class="status-pill">
+                                        <span class="status-pill {% if tryout.registration_open %}open{% endif %}">
                                             {% if tryout.registration_open %}Registration Open{% else %}Closed{% endif %}
                                         </span>
                                     </td>
                                     <td>
-                                        <a class="details-link" href="{% url 'scheduling:tryout_session_detail' tryout.id %}">More Details</a>
-                                        <a class="delete-link" href="{% url 'scheduling:delete_tryout_session' tryout.id %}">Delete</a>
+                                        {% if registered_tryout_id == tryout.id %}
+                                            {% if registered_tryout_status == 'converted' %}
+                                                <span class="details-link accepted">Accepted</span>
+                                            {% else %}
+                                                <span class="details-link submitted">Submitted</span>
+                                            {% endif %}
+                                        {% elif tryout.registration_open %}
+                                            {% if registered_tryout_id %}
+                                                <button type="button" class="details-link" disabled>Register</button>
+                                            {% else %}
+                                                <form method="post" action="{% url 'scheduling:player_tryout_registration_toggle' tryout.id %}">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="action" value="register">
+                                                    <button type="submit" class="details-link">Register</button>
+                                                </form>
+                                            {% endif %}
+                                        {% else %}
+                                            <button type="button" class="details-link" disabled>Closed</button>
+                                        {% endif %}
                                     </td>
                                 </tr>
                             {% endfor %}
@@ -222,8 +275,7 @@
             {% else %}
                 <section class="empty-state">
                     <h2>No tryouts yet</h2>
-                    <p>Create the first tryout session to get started.</p>
-                    <p><a class="create-button" href="{% url 'scheduling:create_tryout_session' %}">Create Tryout</a></p>
+                    <p>Check back later for upcoming sessions.</p>
                 </section>
             {% endif %}
         </main>

@@ -197,6 +197,82 @@ def tryout_list(request):
 
 
 @login_required(login_url='scheduling:login')
+def player_tryout_list(request):
+    player = getattr(request.user, 'player_profile', None)
+    if player is None or player.role != Player.Role.PLAYER:
+        messages.info(request, 'This page is currently available only for player accounts.')
+        return redirect('scheduling:dashboard')
+
+    tryouts = TryoutSession.objects.order_by('starts_at')
+    player_candidate = TryoutCandidate.objects.filter(email__iexact=player.email).first()
+    registered_tryout_id = player_candidate.tryout_session_id if player_candidate is not None else None
+    registered_tryout_status = player_candidate.status if player_candidate is not None else None
+    open_tryout_count = tryouts.filter(registration_open=True).count()
+    return render(
+        request,
+        'scheduling/player_tryout_list.html',
+        {
+            'player': player,
+            'tryouts': tryouts,
+            'open_tryout_count': open_tryout_count,
+            'registered_tryout_id': registered_tryout_id,
+            'registered_tryout_status': registered_tryout_status,
+        },
+    )
+
+
+@login_required(login_url='scheduling:login')
+def player_tryout_registration_toggle(request, tryout_session_id):
+    if request.method != 'POST':
+        return redirect('scheduling:player_tryout_list')
+
+    player = getattr(request.user, 'player_profile', None)
+    if player is None or player.role != Player.Role.PLAYER:
+        messages.info(request, 'This page is currently available only for player accounts.')
+        return redirect('scheduling:dashboard')
+
+    tryout = get_object_or_404(TryoutSession, pk=tryout_session_id)
+    action = request.POST.get('action')
+    existing_for_player = TryoutCandidate.objects.filter(email__iexact=player.email).first()
+
+    if action == 'cancel':
+        if existing_for_player is None or existing_for_player.tryout_session_id != tryout.id:
+            messages.info(request, 'You are not registered for this tryout.')
+            return redirect('scheduling:player_tryout_list')
+        existing_for_player.delete()
+        messages.success(request, 'Your tryout registration has been cancelled.')
+        return redirect('scheduling:player_tryout_list')
+
+    if action == 'register':
+        if not tryout.registration_open:
+            messages.error(request, 'Registration is closed for this tryout.')
+            return redirect('scheduling:player_tryout_list')
+
+        if existing_for_player is not None and existing_for_player.tryout_session_id == tryout.id:
+            messages.info(request, 'You are already registered for this tryout.')
+            return redirect('scheduling:player_tryout_list')
+
+        if existing_for_player is not None and existing_for_player.tryout_session_id != tryout.id:
+            messages.error(
+                request,
+                'You are already registered for another tryout. Cancel it first before registering again.',
+            )
+            return redirect('scheduling:player_tryout_list')
+
+        TryoutCandidate.objects.create(
+            tryout_session=tryout,
+            name=player.name,
+            email=player.email,
+            notes='Registered from player tryouts page.',
+        )
+        messages.success(request, 'Tryout registration submitted.')
+        return redirect('scheduling:player_tryout_list')
+
+    messages.error(request, 'Invalid registration action.')
+    return redirect('scheduling:player_tryout_list')
+
+
+@login_required(login_url='scheduling:login')
 def admin_home(request):
     if not request.user.is_staff:
         messages.info(request, 'This page is currently available only for admin accounts.')
@@ -1018,6 +1094,9 @@ def register_tryout_candidate(request):
         if form.is_valid():
             candidate = form.save()
             messages.success(request, 'Tryout registration submitted.')
+            profile = getattr(request.user, 'player_profile', None) if request.user.is_authenticated else None
+            if profile is not None and profile.role == Player.Role.PLAYER:
+                return redirect('scheduling:player_tryout_list')
             return redirect('scheduling:tryout_candidate_detail', candidate_id=candidate.id)
     else:
         form = TryoutCandidateForm()
@@ -1051,6 +1130,20 @@ def tryout_session_detail(request, tryout_session_id):
     )
 
 
+def delete_tryout_session(request, tryout_session_id):
+    coach = getattr(request.user, 'player_profile', None)
+    if coach is None or coach.role != Player.Role.COACH:
+        messages.info(request, 'This page is currently available only for coach accounts.')
+        return redirect('scheduling:dashboard')
+
+    tryout_session = get_object_or_404(TryoutSession, pk=tryout_session_id)
+    if request.method == 'POST':
+        tryout_session.delete()
+        messages.success(request, 'Tryout session deleted.')
+        return redirect('scheduling:tryout_list')
+    return render(request, 'scheduling/delete_tryout_session.html', {'tryout_session': tryout_session})
+
+
 def tryout_candidate_detail(request, candidate_id):
     candidate = get_object_or_404(TryoutCandidate.objects.select_related('tryout_session'), pk=candidate_id)
     return render(request, 'scheduling/tryout_candidate_detail.html', {'candidate': candidate})
@@ -1059,14 +1152,19 @@ def tryout_candidate_detail(request, candidate_id):
 def convert_tryout_candidate(request, candidate_id):
     candidate = get_object_or_404(TryoutCandidate.objects.select_related('tryout_session'), pk=candidate_id)
 
-    if request.method == 'POST' and candidate.status != TryoutCandidate.Status.CONVERTED:
-        Player.objects.get_or_create(
-            email=candidate.email,
-            defaults={'name': candidate.name, 'role': Player.Role.PLAYER},
-        )
-        candidate.status = TryoutCandidate.Status.CONVERTED
-        candidate.save(update_fields=['status'])
-        messages.success(request, 'Candidate converted to player.')
+    if request.method == 'POST':
+        if candidate.status != TryoutCandidate.Status.CONVERTED:
+            Player.objects.get_or_create(
+                email=candidate.email,
+                defaults={'name': candidate.name, 'role': Player.Role.PLAYER},
+            )
+            candidate.status = TryoutCandidate.Status.CONVERTED
+            candidate.save(update_fields=['status'])
+            messages.success(request, 'Candidate accepted as player.')
+        else:
+            candidate.status = TryoutCandidate.Status.SUBMITTED
+            candidate.save(update_fields=['status'])
+            messages.success(request, 'Candidate moved back to submitted status.')
         return redirect('scheduling:tryout_candidate_detail', candidate_id=candidate.id)
 
     return render(request, 'scheduling/convert_tryout_candidate.html', {'candidate': candidate})
