@@ -5,7 +5,7 @@
         {% else %}
             <h4><a href="{% url 'scheduling:session_detail' timeline_session.id %}" style="text-decoration: none; color: inherit;">{{ timeline_session.title }}</a></h4>
         {% endif %}
-        {% if not timeline_session.is_personal %}
+        {% if not timeline_session.is_personal and can_rsvp %}
             <div class="timeline-event-actions">
                 <form method="post">
                     {% csrf_token %}
@@ -32,6 +32,18 @@
     </div>
     <p class="timeline-event-row">{{ timeline_session.start_label }} - {{ timeline_session.end_label }}</p>
     <p class="timeline-event-row">{{ timeline_session.location }}</p>
+    {% if not timeline_session.is_personal and can_rsvp %}
+        <p class="timeline-event-row">
+            Your RSVP:
+            {% if timeline_session.viewer_rsvp_status == 'going' %}
+                Accepted
+            {% elif timeline_session.viewer_rsvp_status == 'not_going' %}
+                Declined
+            {% else %}
+                Pending
+            {% endif %}
+        </p>
+    {% endif %}
     {% if timeline_session.is_personal %}
         <div class="timeline-event-links">
             <span>Personal event</span>

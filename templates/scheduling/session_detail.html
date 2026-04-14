@@ -233,10 +233,10 @@
             </div>
             <div class="session-actions">
                 <a class="button" href="{{ calendar_back_url }}">Back to Calendar</a>
-                <a class="button" href="{% url 'scheduling:edit_session' session.id %}">Edit Session</a>
-                <a class="button" href="{% url 'scheduling:edit_session_plan' session.id %}">Session Plan</a>
-                {% if not session.cancelled %}
-                    <a class="button" href="{% url 'scheduling:cancel_session' session.id %}">Cancel Session</a>
+                {% if can_manage_session %}
+                    <a class="button" href="{% url 'scheduling:edit_session' session.id %}">Edit Session</a>
+                    <a class="button" href="{% url 'scheduling:edit_session_plan' session.id %}">Session Plan</a>
+                    <a class="button" href="{% url 'scheduling:cancel_session' session.id %}">Delete Session</a>
                 {% endif %}
             </div>
         </div>

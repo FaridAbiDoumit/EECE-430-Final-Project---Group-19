@@ -800,3 +800,80 @@ class SchedulingViewsTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(session.rsvps.count(), 1)
         self.assertEqual(session.rsvps.get().status, SessionRSVP.Status.NOT_GOING)
+
+    def test_player_rsvp_creates_notification_for_coach(self):
+        player_user = User.objects.create_user(
+            username='player-rsvp@example.com',
+            email='player-rsvp@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(
+            user=player_user,
+            name='RSVP Player',
+            email='player-rsvp@example.com',
+            role=Player.Role.PLAYER,
+        )
+        coach = Player.objects.create(
+            name='RSVP Coach',
+            email='coach-rsvp@example.com',
+            role=Player.Role.COACH,
+        )
+        start_time = timezone.now() + timedelta(days=1)
+        session = TrainingSession.objects.create(
+            title='Team Practice',
+            starts_at=start_time,
+            ends_at=start_time + timedelta(hours=2),
+            location='Court A',
+        )
+
+        self.client.force_login(player_user)
+        response = self.client.post(
+            reverse('scheduling:sessions_calendar'),
+            data={
+                'calendar_action': 'rsvp',
+                'session_id': session.id,
+                'rsvp_status': SessionRSVP.Status.GOING,
+                'year': start_time.year,
+                'month': start_time.month,
+                'day': start_time.day,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            SessionRSVP.objects.filter(
+                session=session,
+                player=player,
+                status=SessionRSVP.Status.GOING,
+            ).exists()
+        )
+        coach_notification = Notification.objects.filter(recipient=coach).first()
+        self.assertIsNotNone(coach_notification)
+        self.assertIn('RSVP Player accepted', coach_notification.message)
+
+    def test_player_home_shows_next_session_rsvp_status(self):
+        player_user = User.objects.create_user(
+            username='home-rsvp@example.com',
+            email='home-rsvp@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(
+            user=player_user,
+            name='Home RSVP Player',
+            email='home-rsvp@example.com',
+            role=Player.Role.PLAYER,
+        )
+        start_time = timezone.now() + timedelta(days=2)
+        session = TrainingSession.objects.create(
+            title='Morning Session',
+            starts_at=start_time,
+            ends_at=start_time + timedelta(hours=2),
+            location='Main Gym',
+        )
+        SessionRSVP.objects.create(session=session, player=player, status=SessionRSVP.Status.GOING)
+
+        self.client.force_login(player_user)
+        response = self.client.get(reverse('scheduling:player_home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'You accepted')

@@ -82,6 +82,30 @@ def _new_session_notification_payload(session):
     return title, message
 
 
+def _notify_coaches_of_player_rsvp(player, session, rsvp_status):
+    status_label = 'accepted' if rsvp_status == SessionRSVP.Status.GOING else 'declined'
+    local_starts = timezone.localtime(session.starts_at)
+    starts_label = local_starts.strftime('%b %d, %Y at %H:%M')
+    recipients = list(Player.objects.filter(role=Player.Role.COACH, is_active=True).exclude(pk=player.pk))
+    if not recipients:
+        return
+
+    Notification.objects.bulk_create(
+        [
+            Notification(
+                recipient=coach,
+                title=f'RSVP update: {player.name}',
+                message=(
+                    f'{player.name} {status_label} "{session.title}" '
+                    f'({starts_label} at {session.location}).'
+                ),
+                notification_type=Notification.Type.GENERAL,
+            )
+            for coach in recipients
+        ]
+    )
+
+
 def landing_page(request):
     if request.user.is_authenticated:
         return redirect(_post_login_route_for(request.user))
@@ -141,10 +165,19 @@ def player_home(request):
         .order_by('starts_at')
         .first()
     )
+    next_session_rsvp = None
+    if next_session is not None:
+        next_session_rsvp = (
+            SessionRSVP.objects.filter(session=next_session, player=player)
+            .values_list('status', flat=True)
+            .first()
+        )
+
     context = {
         'player': player,
         'welcome_name': player.name,
         'next_session': next_session,
+        'next_session_rsvp': next_session_rsvp,
         'unread_notifications': player.notifications.filter(read_at__isnull=True).count(),
         'rsvp_count': player.session_rsvps.count(),
         'availability_count': player.availability_slots.count(),
@@ -422,14 +455,44 @@ def edit_session(request, session_id):
     return render(request, 'scheduling/edit_session.html', {'form': form, 'session': session})
 
 
+@login_required(login_url='scheduling:login')
 def cancel_session(request, session_id):
     session = get_object_or_404(TrainingSession, pk=session_id)
+    actor_profile = getattr(request.user, 'player_profile', None) if request.user.is_authenticated else None
+    can_delete = request.user.is_staff or (
+        actor_profile is not None and actor_profile.role == Player.Role.COACH
+    )
+
+    if not can_delete:
+        messages.error(request, 'Only coach or admin accounts can delete sessions.')
+        return redirect('scheduling:session_detail', session_id=session.id)
 
     if request.method == 'POST':
-        session.cancelled = True
-        session.save(update_fields=['cancelled'])
-        messages.success(request, 'Training session cancelled.')
-        return redirect('scheduling:session_detail', session_id=session.id)
+        deleted_by = actor_profile.name if actor_profile is not None else (request.user.get_username() or 'Admin')
+        starts_label = timezone.localtime(session.starts_at).strftime('%b %d, %Y at %H:%M')
+        title = session.title
+        location = session.location
+
+        recipients = list(Player.objects.filter(role=Player.Role.PLAYER, is_active=True))
+        if recipients:
+            Notification.objects.bulk_create(
+                [
+                    Notification(
+                        recipient=recipient,
+                        title='Training Session Deleted',
+                        message=(
+                            f'The training session "{title}" scheduled for {starts_label} at {location} '
+                            f'was deleted by {deleted_by}.'
+                        ),
+                        notification_type=Notification.Type.SESSION_UPDATED,
+                    )
+                    for recipient in recipients
+                ]
+            )
+
+        session.delete()
+        messages.success(request, 'Training session deleted and notifications sent.')
+        return redirect('scheduling:sessions_calendar')
 
     return render(request, 'scheduling/cancel_session.html', {'session': session})
 
@@ -469,6 +532,7 @@ def next_session(request):
 @login_required(login_url='scheduling:login')
 def sessions_calendar(request):
     profile = getattr(request.user, 'player_profile', None)
+    can_rsvp = profile is not None and profile.role == Player.Role.PLAYER
     can_add_sessions = request.user.is_staff or (
         profile is not None and profile.role == Player.Role.COACH
     )
@@ -523,8 +587,8 @@ def sessions_calendar(request):
         if action == 'rsvp':
             session_id = request.POST.get('session_id')
             rsvp_status = request.POST.get('rsvp_status')
-            if profile is None:
-                messages.error(request, 'This account cannot RSVP because it is not linked to a player profile.')
+            if not can_rsvp:
+                messages.error(request, 'Only player accounts can accept or decline sessions.')
             elif rsvp_status not in {SessionRSVP.Status.GOING, SessionRSVP.Status.NOT_GOING}:
                 messages.error(request, 'Invalid RSVP action.')
             else:
@@ -532,11 +596,18 @@ def sessions_calendar(request):
                 if target_session is None:
                     messages.error(request, 'Session is no longer available for RSVP.')
                 else:
+                    existing_rsvp = SessionRSVP.objects.filter(session=target_session, player=profile).first()
+                    previous_status = existing_rsvp.status if existing_rsvp is not None else None
+
                     SessionRSVP.objects.update_or_create(
                         session=target_session,
                         player=profile,
                         defaults={'status': rsvp_status},
                     )
+
+                    if previous_status != rsvp_status:
+                        _notify_coaches_of_player_rsvp(profile, target_session, rsvp_status)
+
                     messages.success(request, 'RSVP updated.')
             return redirect(selected_query)
 
@@ -744,6 +815,20 @@ def sessions_calendar(request):
             event['width_pct'] = width_pct
             timeline_events.append(event)
 
+    player_rsvp_by_session_id = {}
+    if can_rsvp and profile is not None:
+        month_session_ids = [event['id'] for event in raw_timeline_events if not event['is_personal']]
+        if month_session_ids:
+            player_rsvp_by_session_id = {
+                rsvp.session_id: rsvp.status
+                for rsvp in SessionRSVP.objects.filter(player=profile, session_id__in=month_session_ids)
+            }
+
+    for event in timeline_events:
+        if event['is_personal']:
+            continue
+        event['viewer_rsvp_status'] = player_rsvp_by_session_id.get(event['id'])
+
     timeline_markers = []
     for hour in range(timeline_start_hour, timeline_end_hour + 1):
         display_hour = hour % 12 or 12
@@ -773,6 +858,7 @@ def sessions_calendar(request):
         'home_url': _post_login_route_for(request.user),
         'role_label': profile.get_role_display() if profile is not None else ('Admin' if request.user.is_staff else 'Member'),
         'can_manage_availability_polls': can_manage_availability_polls,
+        'can_rsvp': can_rsvp,
         'calendar_title': month_start.strftime('%B %Y'),
         'selected_date': selected_date,
         'calendar_weeks': calendar_weeks,
@@ -852,6 +938,9 @@ def session_detail(request, session_id):
         )
 
     user_profile = getattr(request.user, 'player_profile', None)
+    can_manage_session = request.user.is_staff or (
+        user_profile is not None and user_profile.role == Player.Role.COACH
+    )
     personal_note_preview = None
     if user_profile is not None:
         personal_note_preview = session.personal_notes.filter(player=user_profile).first()
@@ -874,6 +963,7 @@ def session_detail(request, session_id):
             'available_rows': available_rows[:5],
             'personal_note_preview': personal_note_preview,
             'user_profile': user_profile,
+            'can_manage_session': can_manage_session,
             'can_edit_personal_note': user_profile is not None and user_profile.role == Player.Role.PLAYER,
             'calendar_back_url': calendar_back_url,
             'session_plan': session_plan,

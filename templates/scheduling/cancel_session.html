@@ -2,12 +2,13 @@
 
 {% block content %}
 <section class="panel">
-    <h1>Cancel Training Session</h1>
-    <p>Are you sure you want to cancel <strong>{{ session.title }}</strong>?</p>
+    <h1>Delete Training Session</h1>
+    <p>Are you sure you want to delete <strong>{{ session.title }}</strong>?</p>
     <p>{{ session.starts_at }} | {{ session.location }}</p>
     <form method="post">
         {% csrf_token %}
-        <button type="submit">Confirm Cancellation</button>
+        <button type="submit">Confirm Delete</button>
+        <a href="{% url 'scheduling:session_detail' session.id %}">Go Back</a>
     </form>
 </section>
 {% endblock %}
