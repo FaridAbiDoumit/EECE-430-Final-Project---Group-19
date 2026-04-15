@@ -244,7 +244,8 @@ class SchedulingViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Welcome, Coach View!')
         self.assertContains(response, 'Tryouts')
-        self.assertContains(response, 'Dashboard')
+        self.assertContains(response, 'Team Stats Dashboard')
+        self.assertNotContains(response, '<h2>Dashboard</h2>', html=False)
 
     def test_non_coach_is_redirected_away_from_coach_home(self):
         user = User.objects.create_user(
@@ -292,7 +293,8 @@ class SchedulingViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Welcome, Admin View!')
         self.assertContains(response, 'User management')
-        self.assertContains(response, 'System dashboard')
+        self.assertContains(response, 'Team Stats Dashboard')
+        self.assertNotContains(response, 'System dashboard')
 
     def test_team_stats_home_link_targets_admin_home_for_staff_user(self):
         user = User.objects.create_user(
