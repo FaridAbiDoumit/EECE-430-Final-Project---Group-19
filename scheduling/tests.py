@@ -73,6 +73,29 @@ class SchedulingViewsTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(self.client.session.get('_auth_user_id'), str(user.id))
 
+    def test_inactive_player_cannot_log_in(self):
+        user = User.objects.create_user(
+            username='inactive-login@example.com',
+            email='inactive-login@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=user,
+            name='Inactive Login',
+            email='inactive-login@example.com',
+            role=Player.Role.PLAYER,
+            is_active=False,
+        )
+
+        response = self.client.post(
+            reverse('scheduling:login'),
+            data={'username': 'inactive-login@example.com', 'password': 'strong-pass-123'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(self.client.session.get('_auth_user_id'))
+        self.assertContains(response, 'deactivated')
+
     def test_signup_rejects_duplicate_email(self):
         User.objects.create_user(
             username='duplicate@example.com',
@@ -260,6 +283,76 @@ class SchedulingViewsTests(TestCase):
         self.assertContains(response, 'User management')
         self.assertContains(response, 'System dashboard')
 
+    def test_team_stats_home_link_targets_admin_home_for_staff_user(self):
+        user = User.objects.create_user(
+            username='adminstats@example.com',
+            email='adminstats@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:team_stats'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'href="{reverse("scheduling:admin_home")}"')
+
+    def test_admin_home_hides_scheduling_ai_and_tryout_buttons(self):
+        user = User.objects.create_user(
+            username='restrictedadmin@example.com',
+            email='restrictedadmin@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:admin_home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Scheduling')
+        self.assertNotContains(response, 'AI Analytics')
+        self.assertNotContains(response, 'Tryouts')
+
+    def test_admin_cannot_access_schedule_ai_or_tryout_pages(self):
+        user = User.objects.create_user(
+            username='hubadmin@example.com',
+            email='hubadmin@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+
+        self.client.force_login(user)
+        for route_name in [
+            'scheduling:create_session',
+            'scheduling:sessions_calendar',
+            'scheduling:ai_analytics_hub',
+            'scheduling:create_tryout_session',
+            'scheduling:tryout_list',
+        ]:
+            response = self.client.get(reverse(route_name))
+            self.assertRedirects(response, reverse('scheduling:admin_home'))
+
+    def test_manage_coach_detail_shows_only_primary_actions(self):
+        admin = User.objects.create_user(
+            username='coachadmin@example.com',
+            email='coachadmin@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+        coach = Player.objects.create(
+            name='Coach Clean',
+            email='coachclean@example.com',
+            role=Player.Role.COACH,
+        )
+
+        self.client.force_login(admin)
+        response = self.client.get(reverse('scheduling:manage_coach_detail', args=[coach.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Edit Details')
+        self.assertNotContains(response, 'Chat With Coach')
+        self.assertNotContains(response, 'Support')
+
     def test_non_admin_is_redirected_away_from_admin_home(self):
         user = User.objects.create_user(
             username='regular@example.com',
@@ -273,26 +366,125 @@ class SchedulingViewsTests(TestCase):
         self.assertRedirects(response, reverse('scheduling:dashboard'))
 
     def test_deactivate_player_sets_player_inactive(self):
-        player = Player.objects.create(name='Player One', email='player1@example.com')
+        admin = User.objects.create_user(
+            username='deactivateadmin@example.com',
+            email='deactivateadmin@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+        linked_user = User.objects.create_user(
+            username='player1@example.com',
+            email='player1@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(
+            user=linked_user,
+            name='Player One',
+            email='player1@example.com',
+        )
 
+        self.client.force_login(admin)
         response = self.client.post(reverse('scheduling:deactivate_player', args=[player.id]))
 
         self.assertEqual(response.status_code, 302)
         player.refresh_from_db()
+        linked_user.refresh_from_db()
+        self.assertFalse(player.is_active)
+        self.assertFalse(linked_user.is_active)
+
+    def test_admin_can_reactivate_deactivated_player(self):
+        admin = User.objects.create_user(
+            username='reactivateadmin@example.com',
+            email='reactivateadmin@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+        linked_user = User.objects.create_user(
+            username='inactiveplayer@example.com',
+            email='inactiveplayer@example.com',
+            password='strong-pass-123',
+            is_active=False,
+        )
+        player = Player.objects.create(
+            user=linked_user,
+            name='Inactive Player',
+            email='inactiveplayer@example.com',
+            is_active=False,
+        )
+
+        self.client.force_login(admin)
+        response = self.client.post(reverse('scheduling:activate_player', args=[player.id]))
+
+        self.assertEqual(response.status_code, 302)
+        player.refresh_from_db()
+        linked_user.refresh_from_db()
+        self.assertTrue(player.is_active)
+        self.assertTrue(linked_user.is_active)
+
+    def test_edit_player_screen_removes_active_checkbox(self):
+        admin = User.objects.create_user(
+            username='editplayeradmin@example.com',
+            email='editplayeradmin@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+        player = Player.objects.create(name='Edit Player', email='editplayer@example.com')
+
+        self.client.force_login(admin)
+        response = self.client.get(reverse('scheduling:update_player_status', args=[player.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Active account')
+        self.assertContains(response, 'Deactivate Player Profile')
+
+    def test_inactive_player_is_logged_out_on_next_request(self):
+        user = User.objects.create_user(
+            username='inactive-session@example.com',
+            email='inactive-session@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(
+            user=user,
+            name='Inactive Session',
+            email='inactive-session@example.com',
+            role=Player.Role.PLAYER,
+            is_active=False,
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:player_home'))
+
+        self.assertRedirects(response, reverse('scheduling:login'))
+        self.assertIsNone(self.client.session.get('_auth_user_id'))
         self.assertFalse(player.is_active)
 
     def test_deactivate_coach_sets_coach_inactive(self):
+        admin = User.objects.create_user(
+            username='deactivatecoachadmin@example.com',
+            email='deactivatecoachadmin@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+        coach_user = User.objects.create_user(
+            username='coach1@example.com',
+            email='coach1@example.com',
+            password='strong-pass-123',
+        )
         coach = Player.objects.create(
+            user=coach_user,
             name='Coach One',
             email='coach1@example.com',
             role=Player.Role.COACH,
         )
 
+        self.client.force_login(admin)
         response = self.client.post(reverse('scheduling:deactivate_coach', args=[coach.id]))
 
         self.assertEqual(response.status_code, 302)
         coach.refresh_from_db()
+        coach_user.refresh_from_db()
         self.assertFalse(coach.is_active)
+        self.assertFalse(coach_user.is_active)
 
     def test_eligible_players_only_shows_active_eligible_players(self):
         eligible = Player.objects.create(name='Eligible Player', email='eligible@example.com')
@@ -532,19 +724,29 @@ class SchedulingViewsTests(TestCase):
         self.assertTrue(Player.objects.filter(email='candidate1@example.com').exists())
 
     def test_edit_session_creates_notifications_for_players(self):
+        admin = User.objects.create_user(
+            username='editadmin@example.com',
+            email='editadmin@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
         Player.objects.create(name='Player One', email='player1@example.com')
         Player.objects.create(name='Player Two', email='player2@example.com')
+        start_time = timezone.now() + timedelta(days=1)
         session = TrainingSession.objects.create(
             title='Practice',
-            starts_at=timezone.now() + timedelta(days=1),
+            starts_at=start_time,
+            ends_at=start_time + timedelta(hours=2),
             location='Main Gym',
         )
 
+        self.client.force_login(admin)
         response = self.client.post(
             reverse('scheduling:edit_session', args=[session.id]),
             data={
                 'title': 'Updated Practice',
                 'starts_at': (timezone.now() + timedelta(days=2)).strftime('%Y-%m-%dT%H:%M'),
+                'ends_at': (timezone.now() + timedelta(days=2, hours=2)).strftime('%Y-%m-%dT%H:%M'),
                 'location': 'Court B',
                 'session_type': TrainingSession.SessionType.MATCH,
                 'notes': 'Bring match jerseys',
@@ -622,12 +824,21 @@ class SchedulingViewsTests(TestCase):
         self.assertFalse(Notification.objects.filter(id=notification.id).exists())
 
     def test_edit_session_plan_creates_plan(self):
+        admin = User.objects.create_user(
+            username='planadmin@example.com',
+            email='planadmin@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+        start_time = timezone.now() + timedelta(days=1)
         session = TrainingSession.objects.create(
             title='Practice',
-            starts_at=timezone.now() + timedelta(days=1),
+            starts_at=start_time,
+            ends_at=start_time + timedelta(hours=2),
             location='Main Gym',
         )
 
+        self.client.force_login(admin)
         response = self.client.post(
             reverse('scheduling:edit_session_plan', args=[session.id]),
             data={'title': 'Warmup Plan', 'drills': 'Stretching\nServing\nScrimmage'},
@@ -637,14 +848,27 @@ class SchedulingViewsTests(TestCase):
         self.assertTrue(SessionPlan.objects.filter(session=session, title='Warmup Plan').exists())
 
     def test_personal_note_updates_existing_note(self):
-        player = Player.objects.create(name='Player One', email='player1@example.com')
+        user = User.objects.create_user(
+            username='noteplayer@example.com',
+            email='noteplayer@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(
+            user=user,
+            name='Player One',
+            email='noteplayer@example.com',
+            role=Player.Role.PLAYER,
+        )
+        start_time = timezone.now() + timedelta(days=1)
         session = TrainingSession.objects.create(
             title='Practice',
-            starts_at=timezone.now() + timedelta(days=1),
+            starts_at=start_time,
+            ends_at=start_time + timedelta(hours=2),
             location='Main Gym',
         )
         PersonalSessionNote.objects.create(session=session, player=player, content='Bring water')
 
+        self.client.force_login(user)
         response = self.client.post(
             reverse('scheduling:personal_note', args=[session.id]),
             data={'player': player.id, 'content': 'Bring water and knee pads'},
@@ -655,6 +879,19 @@ class SchedulingViewsTests(TestCase):
         self.assertEqual(session.personal_notes.get().content, 'Bring water and knee pads')
 
     def test_create_vote_poll_creates_two_options(self):
+        coach_user = User.objects.create_user(
+            username='pollcoach@example.com',
+            email='pollcoach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=coach_user,
+            name='Poll Coach',
+            email='pollcoach@example.com',
+            role=Player.Role.COACH,
+        )
+
+        self.client.force_login(coach_user)
         response = self.client.post(
             reverse('scheduling:create_vote_poll'),
             data={
@@ -673,7 +910,17 @@ class SchedulingViewsTests(TestCase):
         self.assertEqual(poll.options.count(), 2)
 
     def test_vote_poll_updates_existing_player_vote(self):
-        player = Player.objects.create(name='Player One', email='player1@example.com')
+        user = User.objects.create_user(
+            username='pollplayer@example.com',
+            email='pollplayer@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(
+            user=user,
+            name='Player One',
+            email='pollplayer@example.com',
+            role=Player.Role.PLAYER,
+        )
         poll = SessionVotePoll.objects.create(
             title='Wednesday Practice Vote',
             closes_at=timezone.now() + timedelta(days=2),
@@ -682,6 +929,7 @@ class SchedulingViewsTests(TestCase):
         option_2 = poll.options.create(starts_at=timezone.now() + timedelta(days=4), location='Court B')
         SessionVote.objects.create(poll=poll, option=option_1, player=player)
 
+        self.client.force_login(user)
         response = self.client.post(
             reverse('scheduling:vote_poll_detail', args=[poll.id]),
             data={'player': player.id, 'option': option_2.id},
@@ -729,17 +977,27 @@ class SchedulingViewsTests(TestCase):
         self.assertEqual(PlayerAvailability.objects.count(), 0)
 
     def test_edit_session_updates_existing_session(self):
+        admin = User.objects.create_user(
+            username='updateadmin@example.com',
+            email='updateadmin@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+        start_time = timezone.now() + timedelta(days=1)
         session = TrainingSession.objects.create(
             title='Practice',
-            starts_at=timezone.now() + timedelta(days=1),
+            starts_at=start_time,
+            ends_at=start_time + timedelta(hours=2),
             location='Main Gym',
         )
 
+        self.client.force_login(admin)
         response = self.client.post(
             reverse('scheduling:edit_session', args=[session.id]),
             data={
                 'title': 'Updated Practice',
                 'starts_at': (timezone.now() + timedelta(days=2)).strftime('%Y-%m-%dT%H:%M'),
+                'ends_at': (timezone.now() + timedelta(days=2, hours=2)).strftime('%Y-%m-%dT%H:%M'),
                 'location': 'Court B',
                 'session_type': TrainingSession.SessionType.MATCH,
                 'notes': 'Bring match jerseys',
@@ -754,44 +1012,75 @@ class SchedulingViewsTests(TestCase):
         self.assertEqual(session.notes, 'Bring match jerseys')
 
     def test_cancel_session_marks_session_as_cancelled(self):
+        admin = User.objects.create_user(
+            username='canceladmin@example.com',
+            email='canceladmin@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+        start_time = timezone.now() + timedelta(days=1)
         session = TrainingSession.objects.create(
             title='Practice',
-            starts_at=timezone.now() + timedelta(days=1),
+            starts_at=start_time,
+            ends_at=start_time + timedelta(hours=2),
             location='Main Gym',
         )
 
+        self.client.force_login(admin)
         response = self.client.post(reverse('scheduling:cancel_session', args=[session.id]))
 
         self.assertEqual(response.status_code, 302)
-        session.refresh_from_db()
-        self.assertTrue(session.cancelled)
+        self.assertFalse(TrainingSession.objects.filter(id=session.id).exists())
 
     def test_next_session_shows_earliest_upcoming_session(self):
+        user = User.objects.create_user(
+            username='nextsession@example.com',
+            email='nextsession@example.com',
+            password='strong-pass-123',
+        )
+        later_start = timezone.now() + timedelta(days=2)
+        early_start = timezone.now() + timedelta(hours=3)
         TrainingSession.objects.create(
             title='Later Session',
-            starts_at=timezone.now() + timedelta(days=2),
+            starts_at=later_start,
+            ends_at=later_start + timedelta(hours=2),
             location='Court B',
         )
         earliest = TrainingSession.objects.create(
             title='Earlier Session',
-            starts_at=timezone.now() + timedelta(hours=3),
+            starts_at=early_start,
+            ends_at=early_start + timedelta(hours=2),
             location='Court A',
         )
 
+        self.client.force_login(user)
         response = self.client.get(reverse('scheduling:next_session'))
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['session'], earliest)
 
     def test_session_detail_updates_existing_rsvp(self):
-        player = Player.objects.create(name='Player One', email='player1@example.com')
+        user = User.objects.create_user(
+            username='detailplayer@example.com',
+            email='detailplayer@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(
+            user=user,
+            name='Player One',
+            email='detailplayer@example.com',
+            role=Player.Role.PLAYER,
+        )
+        start_time = timezone.now() + timedelta(days=1)
         session = TrainingSession.objects.create(
             title='Practice',
-            starts_at=timezone.now() + timedelta(days=1),
+            starts_at=start_time,
+            ends_at=start_time + timedelta(hours=2),
             location='Main Gym',
         )
         SessionRSVP.objects.create(session=session, player=player, status=SessionRSVP.Status.GOING)
 
+        self.client.force_login(user)
         response = self.client.post(
             reverse('scheduling:session_detail', args=[session.id]),
             data={'player': player.id, 'status': SessionRSVP.Status.NOT_GOING},
@@ -800,6 +1089,103 @@ class SchedulingViewsTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(session.rsvps.count(), 1)
         self.assertEqual(session.rsvps.get().status, SessionRSVP.Status.NOT_GOING)
+
+    def test_player_session_detail_shows_only_player_actions(self):
+        player_user = User.objects.create_user(
+            username='sessionplayer@example.com',
+            email='sessionplayer@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=player_user,
+            name='Session Player',
+            email='sessionplayer@example.com',
+            role=Player.Role.PLAYER,
+        )
+        Player.objects.create(
+            name='Session Coach',
+            email='sessioncoach@example.com',
+            role=Player.Role.COACH,
+        )
+        start_time = timezone.now() + timedelta(days=1)
+        session = TrainingSession.objects.create(
+            title='Player Practice',
+            starts_at=start_time,
+            ends_at=start_time + timedelta(hours=2),
+            location='Main Gym',
+            notes='Bring water and be on time.',
+        )
+
+        self.client.force_login(player_user)
+        response = self.client.get(reverse('scheduling:session_detail', args=[session.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'My RSVP')
+        self.assertContains(response, 'Personal Notes')
+        self.assertNotContains(response, 'Edit Session')
+        self.assertNotContains(response, 'Available Players')
+
+    def test_player_cannot_edit_session_but_coach_can(self):
+        player_user = User.objects.create_user(
+            username='cannotedit@example.com',
+            email='cannotedit@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=player_user,
+            name='Cannot Edit',
+            email='cannotedit@example.com',
+            role=Player.Role.PLAYER,
+        )
+        coach_user = User.objects.create_user(
+            username='caneditcoach@example.com',
+            email='caneditcoach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=coach_user,
+            name='Can Edit Coach',
+            email='caneditcoach@example.com',
+            role=Player.Role.COACH,
+        )
+        start_time = timezone.now() + timedelta(days=1)
+        session = TrainingSession.objects.create(
+            title='Coach Editable Practice',
+            starts_at=start_time,
+            ends_at=start_time + timedelta(hours=2),
+            location='Court A',
+        )
+
+        self.client.force_login(player_user)
+        player_response = self.client.get(reverse('scheduling:edit_session', args=[session.id]))
+        self.assertRedirects(player_response, reverse('scheduling:dashboard'))
+
+        self.client.force_login(coach_user)
+        coach_response = self.client.get(reverse('scheduling:edit_session', args=[session.id]))
+        self.assertEqual(coach_response.status_code, 200)
+        self.assertContains(coach_response, 'Edit Training Session')
+
+    def test_admin_can_manage_training_session_from_detail_page(self):
+        admin = User.objects.create_user(
+            username='sessionadmin@example.com',
+            email='sessionadmin@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+        start_time = timezone.now() + timedelta(days=1)
+        session = TrainingSession.objects.create(
+            title='Admin Session Control',
+            starts_at=start_time,
+            ends_at=start_time + timedelta(hours=2),
+            location='Court B',
+        )
+
+        self.client.force_login(admin)
+        response = self.client.get(reverse('scheduling:session_detail', args=[session.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Edit Session')
+        self.assertContains(response, 'Session Plan')
 
     def test_player_rsvp_creates_notification_for_coach(self):
         player_user = User.objects.create_user(

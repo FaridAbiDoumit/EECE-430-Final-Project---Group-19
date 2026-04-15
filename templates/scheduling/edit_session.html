@@ -1,12 +1,88 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="panel">
-    <h1>Edit Training Session</h1>
-    <form method="post">
+<style>
+    body {
+        background: #3f5e4a;
+    }
+    .session-edit-card {
+        background: #d9d9d9;
+        border-radius: 16px;
+        padding: 24px;
+        display: grid;
+        gap: 16px;
+        box-shadow: none;
+        border: 0;
+    }
+    .session-edit-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .session-edit-head h1 {
+        margin: 0;
+        font-size: 2rem;
+    }
+    .session-back-link {
+        display: inline-block;
+        padding: 10px 14px;
+        border-radius: 999px;
+        border: 1px solid #1f1f1f;
+        background: #ffffff;
+        text-decoration: none;
+        color: #111111;
+        font-weight: 600;
+    }
+    .session-edit-form {
+        display: grid;
+        gap: 14px;
+    }
+    .session-field {
+        display: grid;
+        gap: 6px;
+    }
+    .session-field label {
+        font-weight: 600;
+    }
+    .session-errors {
+        margin: 0;
+        color: #8a3030;
+        font-size: 0.9rem;
+    }
+    .session-form-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+</style>
+
+<section class="session-edit-card">
+    <div class="session-edit-head">
+        <div>
+            <h1>Edit Training Session</h1>
+            <p>Update the session details for {{ session.title }}.</p>
+        </div>
+        <a class="session-back-link" href="{% url 'scheduling:session_detail' session.id %}">Back to Session</a>
+    </div>
+
+    <form method="post" class="session-edit-form">
         {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit">Save Changes</button>
+        {% for field in form %}
+            <div class="session-field">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% for error in field.errors %}
+                    <p class="session-errors">{{ error }}</p>
+                {% endfor %}
+            </div>
+        {% endfor %}
+        <div class="session-form-actions">
+            <button type="submit">Save Changes</button>
+            <a class="session-back-link" href="{% url 'scheduling:session_detail' session.id %}">Cancel</a>
+        </div>
     </form>
 </section>
 {% endblock %}

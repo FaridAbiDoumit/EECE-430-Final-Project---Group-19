@@ -5,6 +5,7 @@ from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.contrib.sessions.models import Session
 from django.db.models import Count, Q, Sum
 from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -61,6 +62,40 @@ def _post_login_route_for(user):
     if user.is_staff:
         return 'scheduling:admin_home'
     return 'scheduling:dashboard'
+
+
+def _can_manage_training_sessions(user):
+    profile = getattr(user, 'player_profile', None)
+    return user.is_authenticated and (
+        user.is_staff or (profile is not None and profile.role == Player.Role.COACH)
+    )
+
+
+def _logout_user_sessions(user):
+    if user is None:
+        return
+
+    user_id = str(user.pk)
+    for session in Session.objects.all():
+        try:
+            session_data = session.get_decoded()
+        except Exception:
+            continue
+        if session_data.get('_auth_user_id') == user_id:
+            session.delete()
+
+
+def _sync_linked_user_access(player):
+    linked_user = getattr(player, 'user', None)
+    if linked_user is None:
+        return
+
+    if linked_user.is_active != player.is_active:
+        linked_user.is_active = player.is_active
+        linked_user.save(update_fields=['is_active'])
+
+    if not player.is_active:
+        _logout_user_sessions(linked_user)
 
 
 def _new_session_notification_payload(session):
@@ -137,9 +172,13 @@ def login_view(request):
         form = EmailAuthenticationForm(request, data=request.POST)
         if form.is_valid():
             user = form.get_user()
-            auth_login(request, user)
-            messages.success(request, 'Signed in successfully.')
-            return redirect(_post_login_route_for(user))
+            profile = getattr(user, 'player_profile', None)
+            if profile is not None and not profile.is_active:
+                form.add_error(None, 'This account has been deactivated. Please contact an admin.')
+            else:
+                auth_login(request, user)
+                messages.success(request, 'Signed in successfully.')
+                return redirect(_post_login_route_for(user))
     else:
         form = EmailAuthenticationForm(request)
 
@@ -232,6 +271,10 @@ def coach_home(request):
 
 @login_required(login_url='scheduling:login')
 def tryout_list(request):
+    if request.user.is_staff:
+        messages.info(request, 'Tryouts are not available for admin accounts.')
+        return redirect('scheduling:admin_home')
+
     coach = getattr(request.user, 'player_profile', None)
     if coach is None or coach.role != Player.Role.COACH:
         messages.info(request, 'This page is currently available only for coach accounts.')
@@ -388,6 +431,10 @@ def chatting_hub(request):
 
 @login_required(login_url='scheduling:login')
 def ai_analytics_hub(request):
+    if request.user.is_staff:
+        messages.info(request, 'AI analytics is not available for admin accounts.')
+        return redirect('scheduling:admin_home')
+
     return render(
         request,
         'scheduling/ai_analytics_hub.html',
@@ -398,16 +445,23 @@ def ai_analytics_hub(request):
     )
 
 
+@login_required(login_url='scheduling:login')
 def create_session(request):
+    if request.user.is_staff:
+        messages.info(request, 'Scheduling is not available for admin accounts.')
+        return redirect('scheduling:admin_home')
+
+    coach = getattr(request.user, 'player_profile', None)
+    if coach is None or coach.role != Player.Role.COACH:
+        messages.info(request, 'This page is currently available only for coach accounts.')
+        return redirect('scheduling:dashboard')
+
     if request.method == 'POST':
         form = TrainingSessionForm(request.POST)
         if form.is_valid():
             session = form.save()
             notification_title, notification_message = _new_session_notification_payload(session)
-            creator = getattr(request.user, 'player_profile', None) if request.user.is_authenticated else None
-            qs = Player.objects.filter(is_active=True)
-            if creator:
-                qs = qs.exclude(pk=creator.pk)
+            qs = Player.objects.filter(is_active=True).exclude(pk=coach.pk)
             Notification.objects.bulk_create([
                 Notification(
                     recipient=p,
@@ -425,14 +479,19 @@ def create_session(request):
     return render(request, 'scheduling/create_session.html', {'form': form})
 
 
+@login_required(login_url='scheduling:login')
 def edit_session(request, session_id):
     session = get_object_or_404(TrainingSession, pk=session_id)
+
+    if not _can_manage_training_sessions(request.user):
+        messages.error(request, 'Only coach or admin accounts can edit session details.')
+        return redirect('scheduling:dashboard')
 
     if request.method == 'POST':
         form = TrainingSessionForm(request.POST, instance=session)
         if form.is_valid():
             session = form.save()
-            editor = getattr(request.user, 'player_profile', None) if request.user.is_authenticated else None
+            editor = getattr(request.user, 'player_profile', None)
             qs = Player.objects.filter(is_active=True)
             if editor:
                 qs = qs.exclude(pk=editor.pk)
@@ -531,6 +590,10 @@ def next_session(request):
 
 @login_required(login_url='scheduling:login')
 def sessions_calendar(request):
+    if request.user.is_staff:
+        messages.info(request, 'Scheduling is not available for admin accounts.')
+        return redirect('scheduling:admin_home')
+
     profile = getattr(request.user, 'player_profile', None)
     can_rsvp = profile is not None and profile.role == Player.Role.PLAYER
     can_add_sessions = request.user.is_staff or (
@@ -878,6 +941,7 @@ def sessions_calendar(request):
     return render(request, 'scheduling/sessions_calendar.html', context)
 
 
+@login_required(login_url='scheduling:login')
 def session_detail(request, session_id):
     session = get_object_or_404(
         TrainingSession.objects.annotate(
@@ -887,24 +951,39 @@ def session_detail(request, session_id):
         pk=session_id,
     )
 
+    user_profile = getattr(request.user, 'player_profile', None)
+    is_player = user_profile is not None and user_profile.role == Player.Role.PLAYER
+    is_coach = user_profile is not None and user_profile.role == Player.Role.COACH
+    is_admin = request.user.is_staff
+    can_manage_session = _can_manage_training_sessions(request.user)
+
+    current_rsvp = session.rsvps.filter(player=user_profile).first() if is_player else None
+
     if request.method == 'POST':
+        if not is_player:
+            messages.error(request, 'Only player accounts can update an RSVP.')
+            return redirect('scheduling:session_detail', session_id=session.id)
+
         form = SessionRSVPForm(request.POST)
         if form.is_valid():
+            status = form.cleaned_data['status']
             SessionRSVP.objects.update_or_create(
                 session=session,
-                player=form.cleaned_data['player'],
-                defaults={'status': form.cleaned_data['status']},
+                player=user_profile,
+                defaults={'status': status},
             )
+            _notify_coaches_of_player_rsvp(user_profile, session, status)
             messages.success(request, 'RSVP saved.')
             return redirect('scheduling:session_detail', session_id=session.id)
-    else:
-        form = SessionRSVPForm()
 
-    rsvps = list(session.rsvps.select_related('player'))
+        messages.error(request, 'Please choose whether you are going or not going.')
+    else:
+        initial = {'player': user_profile.id, 'status': current_rsvp.status} if current_rsvp else None
+        form = SessionRSVPForm(initial=initial) if is_player else None
+
+    rsvps = list(session.rsvps.select_related('player').order_by('player__name'))
     rsvp_by_player_id = {rsvp.player_id: rsvp for rsvp in rsvps}
-    active_players = list(
-        Player.objects.filter(role=Player.Role.PLAYER, is_active=True).order_by('name')
-    )
+    active_players = list(Player.objects.filter(role=Player.Role.PLAYER, is_active=True).order_by('name'))
 
     participant_rows = []
     for player in active_players:
@@ -932,26 +1011,25 @@ def session_detail(request, session_id):
         available_rows.append(
             {
                 'player': player,
-                'status_text': 'Available' if is_available else 'On Break',
+                'status_text': 'Available' if is_available else player.get_status_display(),
                 'status_class': 'is-available' if is_available else 'is-on-break',
             }
         )
 
-    user_profile = getattr(request.user, 'player_profile', None)
-    can_manage_session = request.user.is_staff or (
-        user_profile is not None and user_profile.role == Player.Role.COACH
-    )
     personal_note_preview = None
     if user_profile is not None:
         personal_note_preview = session.personal_notes.filter(player=user_profile).first()
 
     local_starts = timezone.localtime(session.starts_at)
+    local_ends = timezone.localtime(session.ends_at)
     calendar_back_url = (
         f"{reverse('scheduling:sessions_calendar')}"
         f"?year={local_starts.year}&month={local_starts.month}&day={local_starts.day}"
     )
 
     session_plan = getattr(session, 'plan', None)
+    current_rsvp = session.rsvps.filter(player=user_profile).first() if is_player else None
+
     return render(
         request,
         'scheduling/session_detail.html',
@@ -959,14 +1037,22 @@ def session_detail(request, session_id):
             'session': session,
             'form': form,
             'rsvps': rsvps,
-            'participant_rows': participant_rows[:5],
-            'available_rows': available_rows[:5],
+            'participant_rows': participant_rows,
+            'available_rows': available_rows,
             'personal_note_preview': personal_note_preview,
             'user_profile': user_profile,
             'can_manage_session': can_manage_session,
-            'can_edit_personal_note': user_profile is not None and user_profile.role == Player.Role.PLAYER,
+            'can_edit_personal_note': is_player,
             'calendar_back_url': calendar_back_url,
             'session_plan': session_plan,
+            'is_player': is_player,
+            'is_coach': is_coach,
+            'is_admin': is_admin,
+            'role_label': 'Admin' if is_admin else ('Coach' if is_coach else 'Player'),
+            'current_rsvp': current_rsvp,
+            'local_starts': local_starts,
+            'local_ends': local_ends,
+            'home_url': _post_login_route_for(request.user),
         },
     )
 
@@ -1006,9 +1092,13 @@ def coach_availability_overview(request):
 
 
 def create_vote_poll(request):
+    if request.user.is_authenticated and request.user.is_staff:
+        messages.info(request, 'Scheduling is not available for admin accounts.')
+        return redirect('scheduling:admin_home')
+
     profile = getattr(request.user, 'player_profile', None)
     is_coach = profile is not None and profile.role == Player.Role.COACH
-    if not request.user.is_staff and not is_coach:
+    if not is_coach:
         return redirect('scheduling:polls_list')
 
     if request.method == 'POST':
@@ -1150,16 +1240,23 @@ def vote_poll_detail(request, poll_id):
 
 
 def polls_list(request):
+    if request.user.is_authenticated and request.user.is_staff:
+        messages.info(request, 'Scheduling is not available for admin accounts.')
+        return redirect('scheduling:admin_home')
+
     polls = SessionVotePoll.objects.annotate(vote_count=Count('votes')).order_by('-created_at')
     profile = getattr(request.user, 'player_profile', None)
-    can_create_poll = request.user.is_staff or (
-        profile is not None and profile.role == Player.Role.COACH
-    )
+    can_create_poll = profile is not None and profile.role == Player.Role.COACH
     return render(request, 'scheduling/polls_list.html', {'polls': polls, 'can_create_poll': can_create_poll})
 
 
+@login_required(login_url='scheduling:login')
 def edit_session_plan(request, session_id):
     session = get_object_or_404(TrainingSession, pk=session_id)
+    if not _can_manage_training_sessions(request.user):
+        messages.error(request, 'Only coach or admin accounts can edit the session plan.')
+        return redirect('scheduling:dashboard')
+
     try:
         plan = session.plan
     except SessionPlan.DoesNotExist:
@@ -1288,6 +1385,10 @@ def delete_notification(request, notification_id):
 
 @login_required(login_url='scheduling:login')
 def create_tryout_session(request):
+    if request.user.is_staff:
+        messages.info(request, 'Tryouts are not available for admin accounts.')
+        return redirect('scheduling:admin_home')
+
     coach = getattr(request.user, 'player_profile', None)
     if coach is None or coach.role != Player.Role.COACH:
         messages.info(request, 'This page is currently available only for coach accounts.')
@@ -1346,6 +1447,10 @@ def register_tryout_candidate(request):
 
 @login_required(login_url='scheduling:login')
 def tryout_session_detail(request, tryout_session_id):
+    if request.user.is_staff:
+        messages.info(request, 'Tryouts are not available for admin accounts.')
+        return redirect('scheduling:admin_home')
+
     coach = getattr(request.user, 'player_profile', None)
     if coach is None or coach.role != Player.Role.COACH:
         messages.info(request, 'This page is currently available only for coach accounts.')
@@ -1364,6 +1469,10 @@ def tryout_session_detail(request, tryout_session_id):
 
 
 def delete_tryout_session(request, tryout_session_id):
+    if request.user.is_authenticated and request.user.is_staff:
+        messages.info(request, 'Tryouts are not available for admin accounts.')
+        return redirect('scheduling:admin_home')
+
     coach = getattr(request.user, 'player_profile', None)
     if coach is None or coach.role != Player.Role.COACH:
         messages.info(request, 'This page is currently available only for coach accounts.')
@@ -1403,7 +1512,12 @@ def convert_tryout_candidate(request, candidate_id):
     return render(request, 'scheduling/convert_tryout_candidate.html', {'candidate': candidate})
 
 
+@login_required(login_url='scheduling:login')
 def player_status_list(request):
+    if not request.user.is_staff:
+        messages.info(request, 'This page is currently available only for admin accounts.')
+        return redirect('scheduling:dashboard')
+
     players = Player.objects.filter(role=Player.Role.PLAYER)
     coaches = Player.objects.filter(role=Player.Role.COACH)
     return render(request, 'scheduling/player_status_list.html', {'players': players, 'coaches': coaches})
@@ -1418,13 +1532,19 @@ def eligible_players(request):
     return render(request, 'scheduling/eligible_players.html', {'players': players})
 
 
+@login_required(login_url='scheduling:login')
 def update_player_status(request, player_id):
+    if not request.user.is_staff:
+        messages.info(request, 'This page is currently available only for admin accounts.')
+        return redirect('scheduling:dashboard')
+
     player = get_object_or_404(Player, pk=player_id)
 
     if request.method == 'POST':
         form = PlayerUpdateForm(request.POST, instance=player)
         if form.is_valid():
-            form.save()
+            player = form.save()
+            _sync_linked_user_access(player)
             messages.success(request, 'Player updated.')
             return redirect('scheduling:player_status_list')
     else:
@@ -1433,12 +1553,36 @@ def update_player_status(request, player_id):
     return render(request, 'scheduling/update_player_status.html', {'form': form, 'player': player})
 
 
+@login_required(login_url='scheduling:login')
+def activate_player(request, player_id):
+    if not request.user.is_staff:
+        messages.info(request, 'This page is currently available only for admin accounts.')
+        return redirect('scheduling:dashboard')
+
+    player = get_object_or_404(Player, pk=player_id, role=Player.Role.PLAYER)
+
+    if request.method == 'POST':
+        player.is_active = True
+        player.save(update_fields=['is_active'])
+        _sync_linked_user_access(player)
+        messages.success(request, 'Player activated.')
+        return redirect('scheduling:manage_player_detail', player_id=player.id)
+
+    return redirect('scheduling:manage_player_detail', player_id=player.id)
+
+
+@login_required(login_url='scheduling:login')
 def deactivate_player(request, player_id):
+    if not request.user.is_staff:
+        messages.info(request, 'This page is currently available only for admin accounts.')
+        return redirect('scheduling:dashboard')
+
     player = get_object_or_404(Player, pk=player_id, role=Player.Role.PLAYER)
 
     if request.method == 'POST':
         player.is_active = False
         player.save(update_fields=['is_active'])
+        _sync_linked_user_access(player)
         messages.success(request, 'Player deactivated.')
         return redirect('scheduling:player_status_list')
 
@@ -1459,12 +1603,18 @@ def manage_player_detail(request, player_id):
     return render(request, 'scheduling/manage_player_detail.html', context)
 
 
+@login_required(login_url='scheduling:login')
 def deactivate_coach(request, coach_id):
+    if not request.user.is_staff:
+        messages.info(request, 'This page is currently available only for admin accounts.')
+        return redirect('scheduling:dashboard')
+
     coach = get_object_or_404(Player, pk=coach_id, role=Player.Role.COACH)
 
     if request.method == 'POST':
         coach.is_active = False
         coach.save(update_fields=['is_active'])
+        _sync_linked_user_access(coach)
         messages.success(request, 'Coach deactivated.')
         return redirect('scheduling:player_status_list')
 
@@ -1677,6 +1827,7 @@ def team_stats_dashboard(request):
         'chart_data': chart_data,
         'match_count': matches.count(),
         'players': players,
+        'home_url': _post_login_route_for(request.user),
     }
     return render(request, 'scheduling/team_stats.html', context)
 

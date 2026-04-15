@@ -236,7 +236,10 @@
                 {% if player.is_active %}
                     <a class="btn-danger" href="{% url 'scheduling:deactivate_player' player.id %}">Deactivate Player Profile</a>
                 {% else %}
-                    <button class="btn-disabled" disabled>Player is Inactive</button>
+                    <form method="post" action="{% url 'scheduling:activate_player' player.id %}">
+                        {% csrf_token %}
+                        <button class="btn-primary" type="submit" style="width:100%; border:none; cursor:pointer;">Activate Player Profile</button>
+                    </form>
                 {% endif %}
                 <a class="btn-muted" href="{% url 'scheduling:chat_with_player' player.id %}">Chat With Player</a>
                 <a class="btn-muted" href="{% url 'scheduling:player_support' player.id %}">Support</a>

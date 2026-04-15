@@ -131,6 +131,16 @@
             flex-direction: column;
             gap: 12px;
         }
+        .actions-title {
+            margin: 0 0 4px;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        .actions-note {
+            margin: 0 0 8px;
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
         .btn-primary {
             display: block;
             background: var(--forest);
@@ -168,19 +178,6 @@
             cursor: not-allowed;
             border: none;
             width: 100%;
-        }
-        .btn-muted {
-            display: block;
-            background: #e8e8e8;
-            color: #999;
-            border: 1px solid #ccc;
-            padding: 14px 20px;
-            border-radius: 10px;
-            text-align: center;
-            font-size: 1rem;
-            font-weight: 500;
-            pointer-events: none;
-            opacity: 0.7;
         }
         @media (max-width: 600px) {
             .page-header { flex-direction: column; align-items: stretch; }
@@ -228,14 +225,14 @@
 
             <!-- Actions -->
             <div class="actions-card">
-                <a class="btn-primary" href="{% url 'scheduling:update_player_status' coach.id %}">Edit Profile</a>
+                <h3 class="actions-title">Quick actions</h3>
+                <p class="actions-note">Only the main coach management actions are shown here.</p>
+                <a class="btn-primary" href="{% url 'scheduling:update_player_status' coach.id %}">Edit Details</a>
                 {% if coach.is_active %}
-                    <a class="btn-danger" href="{% url 'scheduling:deactivate_coach' coach.id %}">Deactivate Coach Profile</a>
+                    <a class="btn-danger" href="{% url 'scheduling:deactivate_coach' coach.id %}">Deactivate Coach</a>
                 {% else %}
                     <button class="btn-disabled" disabled>Coach is Inactive</button>
                 {% endif %}
-                <a class="btn-muted" href="{% url 'scheduling:chat_with_coach' coach.id %}">Chat With Coach</a>
-                <a class="btn-muted" href="{% url 'scheduling:coach_support' coach.id %}">Support</a>
             </div>
         </main>
     </div>

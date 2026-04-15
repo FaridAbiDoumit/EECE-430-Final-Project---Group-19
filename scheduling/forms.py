@@ -155,7 +155,7 @@ class TryoutCandidateForm(forms.ModelForm):
 class PlayerUpdateForm(forms.ModelForm):
     class Meta:
         model = Player
-        fields = ['status', 'is_active', 'medical_certification_expiry', 'contract_expiry']
+        fields = ['status', 'medical_certification_expiry', 'contract_expiry']
         widgets = {
             'medical_certification_expiry': forms.DateInput(attrs={'type': 'date'}),
             'contract_expiry': forms.DateInput(attrs={'type': 'date'}),
@@ -287,3 +287,8 @@ class EmailAuthenticationForm(AuthenticationForm):
                 'id': 'id_login_password',
             }
         )
+
+    def confirm_login_allowed(self, user):
+        if not user.is_active:
+            raise forms.ValidationError('This account has been deactivated. Please contact an admin.')
+        super().confirm_login_allowed(user)

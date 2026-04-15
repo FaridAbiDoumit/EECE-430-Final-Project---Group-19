@@ -56,6 +56,7 @@ urlpatterns = [
     path('coaches/<int:coach_id>/chat/', views.chat_with_coach, name='chat_with_coach'),
     path('coaches/<int:coach_id>/support/', views.coach_support, name='coach_support'),
     path('players/<int:player_id>/update/', views.update_player_status, name='update_player_status'),
+    path('players/<int:player_id>/activate/', views.activate_player, name='activate_player'),
     path('players/<int:player_id>/deactivate/', views.deactivate_player, name='deactivate_player'),
     path('coaches/<int:coach_id>/deactivate/', views.deactivate_coach, name='deactivate_coach'),
     path('coach/rsvps/', views.coach_rsvp_overview, name='coach_rsvp_overview'),

@@ -195,7 +195,7 @@
                 {% else %}
                     <a class="header-link" href="{% url 'scheduling:manage_player_detail' player.id %}">Back to Player</a>
                 {% endif %}
-                <a class="header-link" href="{% url 'scheduling:player_status_list' %}">User Status</a>
+                <a class="header-link" href="{% url 'scheduling:admin_home' %}">Admin Home</a>
             </div>
         </header>
 
@@ -210,17 +210,6 @@
                         {{ form.status }}
                         {% if form.status.errors %}
                             <ul class="error-list">{% for e in form.status.errors %}<li>{{ e }}</li>{% endfor %}</ul>
-                        {% endif %}
-                    </div>
-
-                    <!-- Active -->
-                    <div class="field-group">
-                        <div class="checkbox-row">
-                            {{ form.is_active }}
-                            <label for="{{ form.is_active.id_for_label }}">Active account</label>
-                        </div>
-                        {% if form.is_active.errors %}
-                            <ul class="error-list">{% for e in form.is_active.errors %}<li>{{ e }}</li>{% endfor %}</ul>
                         {% endif %}
                     </div>
 
@@ -248,15 +237,22 @@
                 </form>
             </div>
 
-            {% if player.is_active %}
-                <div class="danger-card">
-                    {% if player.role == "coach" %}
+            <div class="danger-card">
+                {% if player.role == "coach" %}
+                    {% if player.is_active %}
                         <a class="btn-danger" href="{% url 'scheduling:deactivate_coach' player.id %}">Deactivate Coach Profile</a>
-                    {% else %}
-                        <a class="btn-danger" href="{% url 'scheduling:deactivate_player' player.id %}">Deactivate Player Profile</a>
                     {% endif %}
-                </div>
-            {% endif %}
+                {% else %}
+                    {% if player.is_active %}
+                        <a class="btn-danger" href="{% url 'scheduling:deactivate_player' player.id %}">Deactivate Player Profile</a>
+                    {% else %}
+                        <form method="post" action="{% url 'scheduling:activate_player' player.id %}">
+                            {% csrf_token %}
+                            <button class="btn-save" type="submit">Activate Player Profile</button>
+                        </form>
+                    {% endif %}
+                {% endif %}
+            </div>
         </main>
     </div>
 </body>

@@ -6,105 +6,141 @@
         background: #3f5e4a;
     }
     .shell {
-        max-width: 1320px;
+        max-width: 1220px;
     }
-    .session-detail-wrap {
+    .session-page {
         display: grid;
-        gap: 16px;
+        gap: 18px;
     }
-    .session-detail-wrap .panel {
+    .hero-card,
+    .stat-card,
+    .detail-card {
         background: #d9d9d9;
         border: 0;
-        border-radius: 10px;
+        border-radius: 16px;
         box-shadow: none;
     }
-    .session-meta {
+    .hero-card {
+        padding: 24px;
+    }
+    .hero-top {
         display: flex;
         justify-content: space-between;
         gap: 16px;
         flex-wrap: wrap;
         align-items: flex-start;
     }
-    .session-meta h1 {
-        margin: 0 0 8px;
-        font-size: 2rem;
+    .eyebrow {
+        display: inline-block;
+        margin-bottom: 8px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: #eef3ef;
+        color: #35523f;
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
     }
-    .session-actions {
+    .hero-title {
+        margin: 0 0 8px;
+        font-size: clamp(2rem, 3vw, 2.8rem);
+        line-height: 1.1;
+    }
+    .hero-meta,
+    .hero-notes,
+    .helper-text {
+        margin: 6px 0 0;
+        color: #334155;
+    }
+    .hero-actions {
         display: flex;
         gap: 10px;
         flex-wrap: wrap;
     }
-    .frame-grid {
+    .session-link {
+        display: inline-block;
+        padding: 10px 14px;
+        border-radius: 999px;
+        border: 1px solid #1f1f1f;
+        background: #ffffff;
+        color: #111111;
+        text-decoration: none;
+        font-weight: 600;
+    }
+    .session-link.is-primary {
+        background: #244836;
+        border-color: #244836;
+        color: #ffffff;
+    }
+    .session-link.is-danger {
+        background: #7a1a1a;
+        border-color: #7a1a1a;
+        color: #ffffff;
+    }
+    .summary-grid,
+    .role-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(180px, 1fr));
         gap: 16px;
     }
-    .frame-section {
-        display: grid;
-        gap: 8px;
+    .summary-grid {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     }
-    .frame-card {
-        background: #d9d9d9;
-        border: 0;
-        border-radius: 10px;
-        padding: 12px;
-        min-height: 287px;
-        display: grid;
-        grid-template-rows: auto 1fr auto;
-        gap: 8px;
+    .role-grid {
+        grid-template-columns: repeat(3, minmax(220px, 1fr));
     }
-    .compartment-title {
+    .stat-card {
+        padding: 18px;
+    }
+    .stat-label {
+        margin: 0 0 6px;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #475569;
+    }
+    .stat-value {
         margin: 0;
-        font-size: 1.02rem;
-        letter-spacing: 0.01em;
-        color: #ffffff;
+        font-size: 1.15rem;
         font-weight: 600;
     }
-    .frame-title {
-        margin: 2px 0 0;
-        text-align: center;
-        font-size: 1.05rem;
-        font-weight: 600;
-    }
-    .frame-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    .frame-arrow {
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        border: 2px solid #1f1f1f;
+    .detail-card {
+        padding: 20px;
         display: grid;
-        place-items: center;
-        font-size: 16px;
-        line-height: 1;
-        background: #f7f7f7;
-    }
-    .rows {
-        display: grid;
-        gap: 8px;
+        gap: 12px;
         align-content: start;
     }
-    .row-item {
-        min-height: 31px;
+    .detail-card h2 {
+        margin: 0;
+        font-size: 1.2rem;
+    }
+    .full-span {
+        grid-column: 1 / -1;
+    }
+    .list-rows {
+        display: grid;
+        gap: 8px;
+        max-height: 340px;
+        overflow: auto;
+    }
+    .list-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
         border-radius: 10px;
         background: #c8c8c8;
-        padding: 4px 8px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
     }
     .status-pill {
-        height: 20px;
-        border-radius: 16px;
+        height: 22px;
+        border-radius: 999px;
         padding: 0 10px;
         display: inline-grid;
         align-items: center;
-        font-size: 14px;
-        line-height: 1;
+        font-size: 0.82rem;
+        font-weight: 600;
+        white-space: nowrap;
     }
     .is-going {
         background: #065f46;
@@ -114,195 +150,202 @@
         background: #92400e;
         color: #fcd34d;
     }
-    .is-not-going {
+    .is-not-going,
+    .is-on-break {
         background: #991b1b;
-        color: #fca5a5;
+        color: #fecaca;
     }
     .is-available {
         background: #065f46;
         color: #6ee7b7;
     }
-    .is-on-break {
-        background: #991b1b;
-        color: #fca5a5;
-    }
-    .note-title {
-        margin: 6px 0 0;
-        text-align: center;
-        font-size: 24px;
-    }
     .note-box {
-        background: #fff;
-        border: 0;
-        border-radius: 10px;
-        padding: 10px;
-        min-height: 172px;
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 12px;
+        min-height: 120px;
         white-space: pre-wrap;
-    }
-    .note-add {
-        justify-self: center;
-        min-width: 88px;
-        text-align: center;
-        background: #1e40af;
-        color: #fff;
-        border-radius: 999px;
-        padding: 4px 14px;
-        border: 0;
-        font: inherit;
-        cursor: pointer;
     }
     .note-form {
         display: grid;
-        grid-template-rows: 1fr auto;
-        gap: 8px;
-    }
-    .note-actions {
-        display: flex;
-        justify-content: center;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-    .note-view {
-        justify-self: center;
-        min-width: 88px;
-        text-align: center;
-        background: #3f5e4a;
-        color: #ffffff;
-        border-radius: 999px;
-        padding: 4px 14px;
-        border: 0;
-        font: inherit;
-        cursor: pointer;
-        text-decoration: none;
+        gap: 12px;
     }
     .note-input {
         width: 100%;
-        min-height: 172px;
+        min-height: 160px;
         border: 0;
-        border-radius: 10px;
-        padding: 10px;
+        border-radius: 12px;
+        padding: 12px;
         font: inherit;
         resize: vertical;
         background: #ffffff;
     }
-    .note-lock {
-        margin: 0;
-        text-align: center;
-        color: #444;
-    }
-    .frame-foot {
+    .note-actions {
         display: flex;
-        justify-content: center;
-        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
     }
-    .frame-down {
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        border: 2px solid #1f1f1f;
+    .note-actions a,
+    .note-actions button {
+        width: auto;
+    }
+    .rsvp-options ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
         display: grid;
-        place-items: center;
-        font-size: 16px;
-        background: #f7f7f7;
+        gap: 10px;
     }
-    .session-actions .button {
-        background: #d9d9d9;
-        border: 1px solid #1f1f1f;
-        color: #000;
+    .rsvp-options li label {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: #f4f4f4;
+        cursor: pointer;
     }
-    .session-actions .button:hover {
-        background: #c8c8c8;
-        color: #000;
+    .empty-state {
+        margin: 0;
+        color: #475569;
     }
     @media (max-width: 980px) {
-        .frame-grid {
+        .role-grid {
             grid-template-columns: 1fr;
+        }
+        .full-span {
+            grid-column: auto;
         }
     }
 </style>
 
-<div class="session-detail-wrap">
-    <section class="panel">
-        <div class="session-meta">
+<div class="session-page">
+    <section class="hero-card">
+        <div class="hero-top">
             <div>
-                <h1>{{ session.title }}</h1>
-                <p>{{ session.starts_at }} to {{ session.ends_at }}</p>
-                <p>{{ session.location }} | {{ session.get_session_type_display }}</p>
-                <p>Status: {% if session.cancelled %}Cancelled{% else %}Active{% endif %}</p>
-                <p>Going: {{ session.going_count }} | Not Going: {{ session.not_going_count }}</p>
+                <span class="eyebrow">{{ role_label }} View</span>
+                <h1 class="hero-title">{{ session.title }}</h1>
+                <p class="hero-meta">{{ session.get_session_type_display }} • {{ local_starts|date:"l, M d, Y" }} • {{ local_starts|date:"g:i A" }} - {{ local_ends|date:"g:i A" }}</p>
+                <p class="hero-meta">{{ session.location }} • {% if session.cancelled %}Cancelled{% else %}Active{% endif %}</p>
             </div>
-            <div class="session-actions">
-                <a class="button" href="{{ calendar_back_url }}">Back to Calendar</a>
+            <div class="hero-actions">
+                <a class="session-link" href="{{ calendar_back_url }}">Back to Calendar</a>
                 {% if can_manage_session %}
-                    <a class="button" href="{% url 'scheduling:edit_session' session.id %}">Edit Session</a>
-                    <a class="button" href="{% url 'scheduling:edit_session_plan' session.id %}">Session Plan</a>
-                    <a class="button" href="{% url 'scheduling:cancel_session' session.id %}">Delete Session</a>
+                    <a class="session-link is-primary" href="{% url 'scheduling:edit_session' session.id %}">Edit Session</a>
+                    <a class="session-link" href="{% url 'scheduling:edit_session_plan' session.id %}">Session Plan</a>
+                    <a class="session-link is-danger" href="{% url 'scheduling:cancel_session' session.id %}">Delete Session</a>
                 {% endif %}
             </div>
         </div>
+        {% if session.notes %}
+            <p class="hero-notes">{{ session.notes }}</p>
+        {% else %}
+            <p class="helper-text">No extra session notes have been added yet.</p>
+        {% endif %}
     </section>
 
-    <section class="frame-grid" aria-label="Session detail frames">
-        <article class="frame-section">
-            <h3 class="compartment-title">Participants List</h3>
-            <div class="frame-card">
-            <h3 class="frame-title">Participants</h3>
-            <div class="rows">
-                {% for item in participant_rows %}
-                    <div class="row-item">
-                        <span>{{ item.player.name }}</span>
-                        <span class="status-pill {{ item.status_class }}">{{ item.status_text }}</span>
-                    </div>
-                {% empty %}
-                    <div class="row-item">No participants yet</div>
-                {% endfor %}
-            </div>
-            </div>
+    <section class="summary-grid">
+        <article class="stat-card">
+            <p class="stat-label">Location</p>
+            <p class="stat-value">{{ session.location }}</p>
         </article>
+        <article class="stat-card">
+            <p class="stat-label">Session Type</p>
+            <p class="stat-value">{{ session.get_session_type_display }}</p>
+        </article>
+        <article class="stat-card">
+            <p class="stat-label">Going</p>
+            <p class="stat-value">{{ session.going_count }}</p>
+        </article>
+        <article class="stat-card">
+            <p class="stat-label">{% if is_player %}My Status{% else %}Not Going{% endif %}</p>
+            <p class="stat-value">
+                {% if is_player %}
+                    {% if current_rsvp %}{{ current_rsvp.get_status_display }}{% else %}Pending{% endif %}
+                {% else %}
+                    {{ session.not_going_count }}
+                {% endif %}
+            </p>
+        </article>
+    </section>
 
-        <article class="frame-section">
-            <h3 class="compartment-title">Personal Note</h3>
-            <div class="frame-card">
-            <h3 class="frame-title">Write Personal Note</h3>
-            {% if can_edit_personal_note %}
+    {% if is_player %}
+        <section class="role-grid">
+            <article class="detail-card">
+                <h2>My RSVP</h2>
+                <p class="helper-text">Choose whether you can attend this training session.</p>
+                <form method="post" class="note-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="player" value="{{ user_profile.id }}">
+                    <div class="rsvp-options">{{ form.status }}</div>
+                    <button type="submit">Save Response</button>
+                </form>
+            </article>
+
+            <article class="detail-card">
+                <h2>Session Plan</h2>
+                {% if session_plan %}
+                    <p class="helper-text"><strong>{{ session_plan.title }}</strong></p>
+                    <div class="note-box">{{ session_plan.drills|linebreaksbr }}</div>
+                {% else %}
+                    <div class="note-box">No session plan has been shared yet.</div>
+                {% endif %}
+            </article>
+
+            <article class="detail-card full-span">
+                <h2>Personal Notes</h2>
+                <p class="helper-text">Keep your own reminders for this session.</p>
                 <form class="note-form" method="post" action="{% url 'scheduling:personal_note' session.id %}">
                     {% csrf_token %}
                     <input type="hidden" name="player" value="{{ user_profile.id }}">
-                    <textarea class="note-input" name="content" placeholder="Write Personal Note">{% if personal_note_preview %}{{ personal_note_preview.content }}{% endif %}</textarea>
+                    <textarea class="note-input" name="content" placeholder="Write your notes here...">{% if personal_note_preview %}{{ personal_note_preview.content }}{% endif %}</textarea>
                     <div class="note-actions">
-                        <button class="note-add" type="submit">{% if personal_note_preview %}Update{% else %}Add{% endif %}</button>
-                        <a class="note-view" href="{% url 'scheduling:personal_notes_overview' %}?from_session={{ session.id }}">View Notes</a>
+                        <button type="submit">{% if personal_note_preview %}Update Note{% else %}Save Note{% endif %}</button>
+                        <a class="session-link" href="{% url 'scheduling:personal_notes_overview' %}?from_session={{ session.id }}">View Notes</a>
                     </div>
                 </form>
-            {% else %}
-                <div class="note-box">
-                    {% if personal_note_preview %}
-                        {{ personal_note_preview.content }}
-                    {% else %}
-                        Personal notes are available for player accounts.
-                    {% endif %}
-                </div>
-                <p class="note-lock">Use a player account to add notes.</p>
-            {% endif %}
-            </div>
-        </article>
+            </article>
+        </section>
+    {% else %}
+        <section class="role-grid">
+            <article class="detail-card">
+                <h2>Session Plan</h2>
+                {% if session_plan %}
+                    <p class="helper-text"><strong>{{ session_plan.title }}</strong></p>
+                    <div class="note-box">{{ session_plan.drills|linebreaksbr }}</div>
+                {% else %}
+                    <div class="note-box">No session plan yet. Use the Session Plan button to add one.</div>
+                {% endif %}
+            </article>
 
-        <article class="frame-section">
-            <h3 class="compartment-title">Available Player List</h3>
-            <div class="frame-card">
-            <h3 class="frame-title">Available Players</h3>
-            <div class="rows">
-                {% for item in available_rows %}
-                    <div class="row-item">
-                        <span>{{ item.player.name }}</span>
-                        <span class="status-pill {{ item.status_class }}">{{ item.status_text }}</span>
-                    </div>
-                {% empty %}
-                    <div class="row-item">No players found</div>
-                {% endfor %}
-            </div>
-            </div>
-        </article>
-    </section>
+            <article class="detail-card">
+                <h2>RSVP Overview</h2>
+                <div class="list-rows">
+                    {% for item in participant_rows %}
+                        <div class="list-row">
+                            <span>{{ item.player.name }}</span>
+                            <span class="status-pill {{ item.status_class }}">{{ item.status_text }}</span>
+                        </div>
+                    {% empty %}
+                        <p class="empty-state">No player responses yet.</p>
+                    {% endfor %}
+                </div>
+            </article>
+
+            <article class="detail-card">
+                <h2>Available Players</h2>
+                <div class="list-rows">
+                    {% for item in available_rows %}
+                        <div class="list-row">
+                            <span>{{ item.player.name }}</span>
+                            <span class="status-pill {{ item.status_class }}">{{ item.status_text }}</span>
+                        </div>
+                    {% empty %}
+                        <p class="empty-state">No active players found.</p>
+                    {% endfor %}
+                </div>
+            </article>
+        </section>
+    {% endif %}
 </div>
 {% endblock %}
