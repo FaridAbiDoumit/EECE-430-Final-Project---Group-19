@@ -24,6 +24,17 @@ User = get_user_model()
 
 
 class SchedulingViewsTests(TestCase):
+    def make_session(self, **overrides):
+        starts_at = overrides.pop('starts_at', timezone.now() + timedelta(days=1))
+        defaults = {
+            'title': 'Practice',
+            'starts_at': starts_at,
+            'ends_at': starts_at + timedelta(hours=2),
+            'location': 'Main Gym',
+        }
+        defaults.update(overrides)
+        return TrainingSession.objects.create(**defaults)
+
     def test_signup_creates_player_profile_and_logs_user_in(self):
         response = self.client.post(
             reverse('scheduling:signup'),
@@ -534,17 +545,15 @@ class SchedulingViewsTests(TestCase):
     def test_edit_session_creates_notifications_for_players(self):
         Player.objects.create(name='Player One', email='player1@example.com')
         Player.objects.create(name='Player Two', email='player2@example.com')
-        session = TrainingSession.objects.create(
-            title='Practice',
-            starts_at=timezone.now() + timedelta(days=1),
-            location='Main Gym',
-        )
+        session = self.make_session()
+        updated_starts_at = timezone.now() + timedelta(days=2)
 
         response = self.client.post(
             reverse('scheduling:edit_session', args=[session.id]),
             data={
                 'title': 'Updated Practice',
-                'starts_at': (timezone.now() + timedelta(days=2)).strftime('%Y-%m-%dT%H:%M'),
+                'starts_at': updated_starts_at.strftime('%Y-%m-%dT%H:%M'),
+                'ends_at': (updated_starts_at + timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M'),
                 'location': 'Court B',
                 'session_type': TrainingSession.SessionType.MATCH,
                 'notes': 'Bring match jerseys',
@@ -622,11 +631,7 @@ class SchedulingViewsTests(TestCase):
         self.assertFalse(Notification.objects.filter(id=notification.id).exists())
 
     def test_edit_session_plan_creates_plan(self):
-        session = TrainingSession.objects.create(
-            title='Practice',
-            starts_at=timezone.now() + timedelta(days=1),
-            location='Main Gym',
-        )
+        session = self.make_session()
 
         response = self.client.post(
             reverse('scheduling:edit_session_plan', args=[session.id]),
@@ -637,14 +642,21 @@ class SchedulingViewsTests(TestCase):
         self.assertTrue(SessionPlan.objects.filter(session=session, title='Warmup Plan').exists())
 
     def test_personal_note_updates_existing_note(self):
-        player = Player.objects.create(name='Player One', email='player1@example.com')
-        session = TrainingSession.objects.create(
-            title='Practice',
-            starts_at=timezone.now() + timedelta(days=1),
-            location='Main Gym',
+        user = User.objects.create_user(
+            username='player1@example.com',
+            email='player1@example.com',
+            password='strong-pass-123',
         )
+        player = Player.objects.create(
+            user=user,
+            name='Player One',
+            email='player1@example.com',
+            role=Player.Role.PLAYER,
+        )
+        session = self.make_session()
         PersonalSessionNote.objects.create(session=session, player=player, content='Bring water')
 
+        self.client.force_login(user)
         response = self.client.post(
             reverse('scheduling:personal_note', args=[session.id]),
             data={'player': player.id, 'content': 'Bring water and knee pads'},
@@ -655,6 +667,19 @@ class SchedulingViewsTests(TestCase):
         self.assertEqual(session.personal_notes.get().content, 'Bring water and knee pads')
 
     def test_create_vote_poll_creates_two_options(self):
+        user = User.objects.create_user(
+            username='coach@example.com',
+            email='coach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=user,
+            name='Coach User',
+            email='coach@example.com',
+            role=Player.Role.COACH,
+        )
+
+        self.client.force_login(user)
         response = self.client.post(
             reverse('scheduling:create_vote_poll'),
             data={
@@ -673,7 +698,17 @@ class SchedulingViewsTests(TestCase):
         self.assertEqual(poll.options.count(), 2)
 
     def test_vote_poll_updates_existing_player_vote(self):
-        player = Player.objects.create(name='Player One', email='player1@example.com')
+        user = User.objects.create_user(
+            username='player1@example.com',
+            email='player1@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(
+            user=user,
+            name='Player One',
+            email='player1@example.com',
+            role=Player.Role.PLAYER,
+        )
         poll = SessionVotePoll.objects.create(
             title='Wednesday Practice Vote',
             closes_at=timezone.now() + timedelta(days=2),
@@ -682,9 +717,10 @@ class SchedulingViewsTests(TestCase):
         option_2 = poll.options.create(starts_at=timezone.now() + timedelta(days=4), location='Court B')
         SessionVote.objects.create(poll=poll, option=option_1, player=player)
 
+        self.client.force_login(user)
         response = self.client.post(
             reverse('scheduling:vote_poll_detail', args=[poll.id]),
-            data={'player': player.id, 'option': option_2.id},
+            data={'option': option_2.id},
         )
 
         self.assertEqual(response.status_code, 302)
@@ -729,17 +765,15 @@ class SchedulingViewsTests(TestCase):
         self.assertEqual(PlayerAvailability.objects.count(), 0)
 
     def test_edit_session_updates_existing_session(self):
-        session = TrainingSession.objects.create(
-            title='Practice',
-            starts_at=timezone.now() + timedelta(days=1),
-            location='Main Gym',
-        )
+        session = self.make_session()
+        updated_starts_at = timezone.now() + timedelta(days=2)
 
         response = self.client.post(
             reverse('scheduling:edit_session', args=[session.id]),
             data={
                 'title': 'Updated Practice',
-                'starts_at': (timezone.now() + timedelta(days=2)).strftime('%Y-%m-%dT%H:%M'),
+                'starts_at': updated_starts_at.strftime('%Y-%m-%dT%H:%M'),
+                'ends_at': (updated_starts_at + timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M'),
                 'location': 'Court B',
                 'session_type': TrainingSession.SessionType.MATCH,
                 'notes': 'Bring match jerseys',
@@ -753,28 +787,43 @@ class SchedulingViewsTests(TestCase):
         self.assertEqual(session.session_type, TrainingSession.SessionType.MATCH)
         self.assertEqual(session.notes, 'Bring match jerseys')
 
-    def test_cancel_session_marks_session_as_cancelled(self):
-        session = TrainingSession.objects.create(
-            title='Practice',
-            starts_at=timezone.now() + timedelta(days=1),
-            location='Main Gym',
+    def test_cancel_session_deletes_session(self):
+        user = User.objects.create_user(
+            username='coach@example.com',
+            email='coach@example.com',
+            password='strong-pass-123',
         )
+        Player.objects.create(
+            user=user,
+            name='Coach User',
+            email='coach@example.com',
+            role=Player.Role.COACH,
+        )
+        session = self.make_session()
 
+        self.client.force_login(user)
         response = self.client.post(reverse('scheduling:cancel_session', args=[session.id]))
 
         self.assertEqual(response.status_code, 302)
-        session.refresh_from_db()
-        self.assertTrue(session.cancelled)
+        self.assertFalse(TrainingSession.objects.filter(id=session.id).exists())
 
     def test_next_session_shows_earliest_upcoming_session(self):
+        user = User.objects.create_user(
+            username='viewer@example.com',
+            email='viewer@example.com',
+            password='strong-pass-123',
+        )
+        self.client.force_login(user)
         TrainingSession.objects.create(
             title='Later Session',
             starts_at=timezone.now() + timedelta(days=2),
+            ends_at=timezone.now() + timedelta(days=2, hours=2),
             location='Court B',
         )
         earliest = TrainingSession.objects.create(
             title='Earlier Session',
             starts_at=timezone.now() + timedelta(hours=3),
+            ends_at=timezone.now() + timedelta(hours=5),
             location='Court A',
         )
 
@@ -785,11 +834,7 @@ class SchedulingViewsTests(TestCase):
 
     def test_session_detail_updates_existing_rsvp(self):
         player = Player.objects.create(name='Player One', email='player1@example.com')
-        session = TrainingSession.objects.create(
-            title='Practice',
-            starts_at=timezone.now() + timedelta(days=1),
-            location='Main Gym',
-        )
+        session = self.make_session()
         SessionRSVP.objects.create(session=session, player=player, status=SessionRSVP.Status.GOING)
 
         response = self.client.post(
