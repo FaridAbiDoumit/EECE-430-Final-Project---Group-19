@@ -173,6 +173,15 @@ class MessageForm(forms.ModelForm):
         }
 
 
+class ChatMessageForm(forms.ModelForm):
+    class Meta:
+        model = Message
+        fields = ['content']
+        widgets = {
+            'content': forms.Textarea(attrs={'placeholder': 'Write your message...', 'class': 'form-textarea', 'rows': 4}),
+        }
+
+
 class SupportTicketForm(forms.ModelForm):
     class Meta:
         model = SupportTicket

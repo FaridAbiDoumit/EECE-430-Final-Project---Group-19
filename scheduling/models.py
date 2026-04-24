@@ -266,6 +266,13 @@ class TryoutCandidate(models.Model):
 
 class Message(models.Model):
     player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='messages')
+    sender = models.ForeignKey(
+        Player,
+        on_delete=models.SET_NULL,
+        related_name='sent_messages',
+        null=True,
+        blank=True,
+    )
     subject = models.CharField(max_length=200)
     content = models.TextField()
     sender_is_admin = models.BooleanField(default=True)

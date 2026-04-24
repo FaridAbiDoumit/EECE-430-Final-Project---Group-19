@@ -8,9 +8,11 @@ from django.contrib import messages
 from django.contrib.sessions.models import Session
 from django.db.models import Avg, Count, Q, Sum, Value
 from django.db.models.functions import Coalesce
+from django.http import JsonResponse
 from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from urllib.parse import urlencode
 
 from .forms import (
     EmailAuthenticationForm,
@@ -27,6 +29,7 @@ from .forms import (
     TryoutCandidateForm,
     TryoutSessionForm,
     MessageForm,
+    ChatMessageForm,
     SupportTicketForm,
     MatchForm,
     PlayerMatchStatForm,
@@ -496,14 +499,160 @@ def _role_label_for(user):
 
 @login_required(login_url='scheduling:login')
 def chatting_hub(request):
-    return render(
-        request,
-        'scheduling/chatting_hub.html',
-        {
-            'home_url': reverse(_post_login_route_for(request.user)),
-            'role_label': _role_label_for(request.user),
-        },
-    )
+    user_profile = getattr(request.user, 'player_profile', None)
+    is_admin = request.user.is_staff
+
+    contacts = Player.objects.filter(is_active=True)
+    if user_profile is not None:
+        contacts = contacts.exclude(pk=user_profile.pk)
+
+    search_query = request.GET.get('search', '').strip()
+    if search_query:
+        contacts = contacts.filter(
+            Q(name__icontains=search_query) | Q(email__icontains=search_query)
+        )
+
+    contacts = contacts.order_by('name')
+
+    unread_contact_ids = []
+    if user_profile is not None:
+        unread_contact_ids = list(
+            Message.objects.filter(
+                player=user_profile,
+                sender__in=contacts,
+                is_read=False,
+            )
+            .values_list('sender_id', flat=True)
+            .distinct()
+        )
+
+    selected_id = request.GET.get('selected')
+    selected_user = None
+    if selected_id:
+        selected_user = contacts.filter(pk=selected_id).first()
+
+    if selected_user is None and contacts.exists():
+        selected_user = contacts.first()
+
+    if selected_user is not None and user_profile is not None:
+        Message.objects.filter(
+            player=user_profile,
+            sender=selected_user,
+            is_read=False,
+        ).update(is_read=True)
+
+    conversation_messages = []
+    if selected_user is not None:
+        if user_profile is not None:
+            conversation_messages = Message.objects.filter(
+                Q(player=selected_user, sender=user_profile)
+                | Q(player=user_profile, sender=selected_user)
+            ).order_by('created_at')
+        elif is_admin:
+            conversation_messages = Message.objects.filter(
+                player=selected_user,
+                sender_is_admin=True,
+            ).order_by('created_at')
+        else:
+            conversation_messages = Message.objects.filter(player=selected_user).order_by('created_at')
+
+    if request.method == 'POST':
+        selected_id = request.POST.get('selected_id')
+        selected_user = Player.objects.filter(pk=selected_id, is_active=True).first()
+        form = ChatMessageForm(request.POST)
+        if selected_user is None:
+            messages.error(request, 'Please select a contact to send your message.')
+        elif form.is_valid():
+            message = form.save(commit=False)
+            message.player = selected_user
+            message.subject = f'Chat with {selected_user.name}'
+            message.sender_is_admin = is_admin
+            message.sender = user_profile if user_profile is not None else None
+            message.save()
+            params = {'selected': selected_user.id}
+            if search_query:
+                params['search'] = search_query
+            return redirect(f"{reverse('scheduling:chatting_hub')}?{urlencode(params)}")
+    else:
+        form = ChatMessageForm()
+
+    context = {
+        'home_url': reverse(_post_login_route_for(request.user)),
+        'role_label': _role_label_for(request.user),
+        'contacts': contacts,
+        'selected_user': selected_user,
+        'conversation_messages': conversation_messages,
+        'search_query': search_query,
+        'form': form,
+        'is_admin': is_admin,
+        'unread_contact_ids': unread_contact_ids,
+    }
+    return render(request, 'scheduling/chatting_hub.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def chatting_messages(request):
+    user_profile = getattr(request.user, 'player_profile', None)
+    selected_id = request.GET.get('selected')
+    selected_user = None
+    if selected_id:
+        selected_user = Player.objects.filter(pk=selected_id, is_active=True).first()
+
+    if selected_user is None:
+        return JsonResponse({'messages': []})
+
+    if user_profile is not None:
+        conversation_messages = Message.objects.filter(
+            Q(player=selected_user, sender=user_profile)
+            | Q(player=user_profile, sender=selected_user)
+        ).order_by('created_at')
+    elif request.user.is_staff:
+        conversation_messages = Message.objects.filter(
+            player=selected_user,
+            sender_is_admin=True,
+        ).order_by('created_at')
+    else:
+        conversation_messages = Message.objects.filter(player=selected_user).order_by('created_at')
+
+    messages_data = []
+    for message in conversation_messages:
+        is_sent = user_profile is not None and message.player_id == selected_user.id
+        if is_sent:
+            author = 'You'
+        elif message.sender is not None:
+            author = message.sender.name
+        else:
+            author = selected_user.name
+
+        messages_data.append({
+            'id': message.id,
+            'author': author,
+            'content': message.content,
+            'created_at': message.created_at.strftime('%b %d, %Y - %H:%M'),
+            'sent_by_current_user': is_sent,
+        })
+
+    return JsonResponse({'messages': messages_data})
+
+
+@login_required(login_url='scheduling:login')
+def chatting_unread_status(request):
+    user_profile = getattr(request.user, 'player_profile', None)
+    unread_contact_ids = []
+
+    if user_profile is not None:
+        contacts = Player.objects.filter(is_active=True).exclude(pk=user_profile.pk)
+        unread_contact_ids = list(
+            Message.objects.filter(
+                player=user_profile,
+                sender__in=contacts,
+                is_read=False,
+            )
+            .values_list('sender_id', flat=True)
+            .distinct()
+        )
+
+    return JsonResponse({'unread_contact_ids': unread_contact_ids})
 
 
 @login_required(login_url='scheduling:login')
