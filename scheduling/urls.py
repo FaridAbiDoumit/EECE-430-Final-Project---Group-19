@@ -14,6 +14,7 @@ urlpatterns = [
     path('auth/logout/', views.logout_view, name='logout'),
     path('player/home/', views.player_home, name='player_home'),
     path('player/messages/', views.player_messages, name='player_messages'),
+    path('player/soreness/', views.log_player_soreness, name='log_player_soreness'),
     path('coach/home/', views.coach_home, name='coach_home'),
     path('staff/home/', views.admin_home, name='admin_home'),
     path('sessions/new/', views.create_session, name='create_session'),

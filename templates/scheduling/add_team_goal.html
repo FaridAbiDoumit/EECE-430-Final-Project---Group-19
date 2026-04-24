@@ -30,7 +30,7 @@
             padding: 32px 28px;
         }
         .form-shell h1 {
-            margin: 0 0 18px;
+            margin: 0 0 12px;
             font-size: 1.6rem;
         }
         label {
@@ -38,7 +38,8 @@
             margin-top: 12px;
             font-weight: 500;
         }
-        input {
+        input,
+        select {
             width: 100%;
             padding: 10px 12px;
             border: 1px solid #999;
@@ -67,14 +68,18 @@
             font-size: 0.95rem;
         }
         .errorlist {
-            list-style: none; padding: 0; margin: 6px 0 0;
-            color: #c00; font-size: 0.9rem;
+            list-style: none;
+            padding: 0;
+            margin: 6px 0 0;
+            color: #c00;
+            font-size: 0.9rem;
         }
     </style>
 </head>
 <body>
     <div class="form-shell">
         <h1>Add Team Goal</h1>
+        <p style="margin:0 0 18px;color:#444;">Choose the metric, define the target, and add the short objective text shown on the dashboard.</p>
         <form method="post">
             {% csrf_token %}
             {% for field in form %}
@@ -84,7 +89,7 @@
             {% endfor %}
             <button type="submit">Save Goal</button>
         </form>
-        <a class="back-link" href="{% url 'scheduling:team_stats' %}">← Back to Team Stats</a>
+        <a class="back-link" href="{% url 'scheduling:team_stats' %}">&larr; Back to Team Stats</a>
     </div>
 </body>
 </html>

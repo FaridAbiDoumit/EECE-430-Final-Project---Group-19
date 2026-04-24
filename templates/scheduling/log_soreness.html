@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Soreness | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #3f5e4a;
+            --paper: #d9d9d9;
+            --card: #ececec;
+            --ink: #111111;
+            --shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--forest);
+            color: var(--ink);
+            font-family: 'Josefin Sans', sans-serif;
+        }
+        .shell {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 28px 20px 50px;
+            display: grid;
+            gap: 22px;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .header h1 {
+            margin: 0;
+            color: #fff;
+            font-size: clamp(1.8rem, 2vw + 1rem, 2.6rem);
+            font-weight: 600;
+        }
+        .back-btn {
+            border: 1px solid #1f1f1f;
+            background: var(--paper);
+            border-radius: 10px;
+            padding: 10px 16px;
+            font-size: 0.95rem;
+            text-decoration: none;
+            color: inherit;
+        }
+        .panel {
+            background: var(--paper);
+            border-radius: 14px;
+            padding: 22px;
+            box-shadow: var(--shadow);
+        }
+        .panel h2 {
+            margin: 0 0 14px;
+            font-size: 1.25rem;
+        }
+        label {
+            display: block;
+            margin-top: 12px;
+            font-weight: 500;
+        }
+        input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #999;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 1rem;
+            margin-top: 4px;
+            background: #fff;
+        }
+        button {
+            margin-top: 18px;
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            background: #111;
+            color: #fff;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .errorlist {
+            list-style: none;
+            padding: 0;
+            margin: 6px 0 0;
+            color: #a61b1b;
+        }
+        .history-list {
+            display: grid;
+            gap: 10px;
+        }
+        .history-item {
+            background: var(--card);
+            border-radius: 10px;
+            padding: 12px 14px;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .history-meta {
+            color: #4a4a4a;
+        }
+    </style>
+</head>
+<body>
+    <main class="shell">
+        <header class="header">
+            <h1>Daily Soreness</h1>
+            <a class="back-btn" href="{% url 'scheduling:player_home' %}">Back to Home</a>
+        </header>
+
+        {% if messages %}
+            <section class="panel">
+                {% for message in messages %}
+                    <div>{{ message }}</div>
+                {% endfor %}
+            </section>
+        {% endif %}
+
+        <section class="panel">
+            <h2>Log Today's Feeling</h2>
+            <form method="post">
+                {% csrf_token %}
+                {% for field in form %}
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                {% endfor %}
+                <button type="submit">Save Soreness Log</button>
+            </form>
+        </section>
+
+        <section class="panel">
+            <h2>Recent Entries</h2>
+            {% if recent_reports %}
+                <div class="history-list">
+                    {% for report in recent_reports %}
+                        <div class="history-item">
+                            <strong>Level {{ report.soreness_level }}/10</strong>
+                            <span class="history-meta">{{ report.created_at|date:"M j, Y H:i" }}</span>
+                            <span>{{ report.notes|default:"No note added." }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p>No soreness logs yet.</p>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>

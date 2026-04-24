@@ -357,7 +357,18 @@ class PlayerMatchStat(models.Model):
 
 
 class TeamGoal(models.Model):
+    class Metric(models.TextChoices):
+        GOALS = 'goals', 'Goals'
+        POINTS = 'points', 'Points'
+        ASSISTS = 'assists', 'Assists'
+        BLOCKS = 'blocks', 'Blocks'
+        ACES = 'aces', 'Aces'
+        INTERCEPTIONS = 'interceptions', 'Interceptions'
+        RETURNS = 'returns', 'Returns'
+
     description = models.CharField(max_length=200)
+    metric = models.CharField(max_length=20, choices=Metric.choices, default=Metric.POINTS)
+    target_value = models.PositiveIntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -365,3 +376,21 @@ class TeamGoal(models.Model):
 
     def __str__(self):
         return self.description
+
+
+class PlayerSorenessReport(models.Model):
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='soreness_reports')
+    soreness_level = models.PositiveSmallIntegerField()
+    notes = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+    def __str__(self):
+        return f'{self.player} soreness {self.soreness_level}'
+
+    def clean(self):
+        super().clean()
+        if self.soreness_level < 1 or self.soreness_level > 10:
+            raise ValidationError({'soreness_level': 'Soreness level must be between 1 and 10.'})
