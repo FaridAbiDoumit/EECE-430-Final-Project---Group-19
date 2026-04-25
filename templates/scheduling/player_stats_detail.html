@@ -188,6 +188,40 @@
             </div>
         </section>
 
+        <section class="panel">
+            <h2>Per-Match Averages</h2>
+            <div class="kpi-row">
+                <div class="kpi-card">
+                    <div class="kpi-value">{{ averages.avg_goals }}</div>
+                    <div class="kpi-label">Goals / Match</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value">{{ averages.avg_points }}</div>
+                    <div class="kpi-label">Points / Match</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value">{{ averages.avg_assists }}</div>
+                    <div class="kpi-label">Assists / Match</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value">{{ averages.avg_blocks }}</div>
+                    <div class="kpi-label">Blocks / Match</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value">{{ averages.avg_aces }}</div>
+                    <div class="kpi-label">Aces / Match</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value">{{ averages.avg_interceptions }}</div>
+                    <div class="kpi-label">Interceptions / Match</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value">{{ averages.avg_returns }}</div>
+                    <div class="kpi-label">Returns / Match</div>
+                </div>
+            </div>
+        </section>
+
         {% if latest_injury %}
         <section class="injury-banner">
             <strong>Most Recent Injury:</strong> {{ latest_injury }}
@@ -202,6 +236,13 @@
                     <h3>Histogram of Key Metrics</h3>
                     <div class="chart-box">
                         <canvas id="histogramChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <h3>Average Output Per Match</h3>
+                    <div class="chart-box">
+                        <canvas id="averageHistogramChart"></canvas>
                     </div>
                 </div>
 
@@ -324,6 +365,37 @@
                         beginAtZero: true,
                         ticks: { stepSize: 1 },
                         title: { display: true, text: 'Total Count' },
+                    },
+                },
+            },
+        });
+
+        new Chart(document.getElementById('averageHistogramChart').getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: {{ histogram_labels|safe }},
+                datasets: [{
+                    label: 'Average Per Match',
+                    data: {{ average_histogram_data|safe }},
+                    backgroundColor: [
+                        'rgba(21, 101, 192, 0.55)',
+                        'rgba(46, 125, 50, 0.55)',
+                        'rgba(245, 127, 23, 0.55)',
+                        'rgba(123, 31, 162, 0.55)',
+                        'rgba(198, 40, 40, 0.55)'
+                    ],
+                    borderWidth: 1,
+                    borderRadius: 6,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Average' },
                     },
                 },
             },

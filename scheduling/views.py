@@ -6,14 +6,18 @@ from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.contrib.sessions.models import Session
-from django.db.models import Count, Q, Sum
+from django.db.models import Avg, Count, Q, Sum, Value
+from django.db.models.functions import Coalesce
+from django.http import JsonResponse
 from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from urllib.parse import urlencode
 
 from .forms import (
     EmailAuthenticationForm,
     PlayerAvailabilityForm,
+    PlayerSorenessReportForm,
     PersonalSessionNoteForm,
     PlayerUpdateForm,
     SessionRSVPForm,
@@ -25,6 +29,7 @@ from .forms import (
     TryoutCandidateForm,
     TryoutSessionForm,
     MessageForm,
+    ChatMessageForm,
     SupportTicketForm,
     MatchForm,
     PlayerMatchStatForm,
@@ -47,9 +52,21 @@ from .models import (
     SupportTicket,
     Match,
     PlayerMatchStat,
+    PlayerSorenessReport,
     TeamGoal,
     PersonalCalendarEvent,
 )
+
+
+TEAM_STAT_METRICS = {
+    'goals': 'Goals',
+    'points': 'Points',
+    'assists': 'Assists',
+    'blocks': 'Blocks',
+    'aces': 'Aces',
+    'interceptions': 'Interceptions',
+    'returns': 'Returns',
+}
 
 
 def _post_login_route_for(user):
@@ -141,6 +158,37 @@ def _notify_coaches_of_player_rsvp(player, session, rsvp_status):
     )
 
 
+def _player_metric_rankings(metric_key, descending=True, limit=5):
+    metric_key = metric_key if metric_key in TEAM_STAT_METRICS else 'points'
+    order_prefix = '-' if descending else ''
+    return list(
+        Player.objects.filter(role=Player.Role.PLAYER, is_active=True)
+        .annotate(metric_total=Coalesce(Sum(f'match_stats__{metric_key}'), Value(0)))
+        .order_by(f'{order_prefix}metric_total', 'name')[:limit]
+    )
+
+
+def _season_metric_totals():
+    totals = PlayerMatchStat.objects.aggregate(
+        total_goals=Coalesce(Sum('goals'), Value(0)),
+        total_points=Coalesce(Sum('points'), Value(0)),
+        total_assists=Coalesce(Sum('assists'), Value(0)),
+        total_blocks=Coalesce(Sum('blocks'), Value(0)),
+        total_aces=Coalesce(Sum('aces'), Value(0)),
+        total_interceptions=Coalesce(Sum('interceptions'), Value(0)),
+        total_returns=Coalesce(Sum('returns'), Value(0)),
+    )
+    return {
+        'goals': totals['total_goals'],
+        'points': totals['total_points'],
+        'assists': totals['total_assists'],
+        'blocks': totals['total_blocks'],
+        'aces': totals['total_aces'],
+        'interceptions': totals['total_interceptions'],
+        'returns': totals['total_returns'],
+    }
+
+
 def landing_page(request):
     if request.user.is_authenticated:
         return redirect(_post_login_route_for(request.user))
@@ -211,12 +259,14 @@ def player_home(request):
             .values_list('status', flat=True)
             .first()
         )
+    latest_soreness = player.soreness_reports.first()
 
     context = {
         'player': player,
         'welcome_name': player.name,
         'next_session': next_session,
         'next_session_rsvp': next_session_rsvp,
+        'latest_soreness': latest_soreness,
         'unread_notifications': player.notifications.filter(read_at__isnull=True).count(),
         'rsvp_count': player.session_rsvps.count(),
         'availability_count': player.availability_slots.count(),
@@ -243,6 +293,36 @@ def player_messages(request):
         'messages': player_msgs,
     }
     return render(request, 'scheduling/player_messages.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def log_player_soreness(request):
+    player = getattr(request.user, 'player_profile', None)
+    if player is None or player.role != Player.Role.PLAYER:
+        messages.info(request, 'This page is currently available only for player accounts.')
+        return redirect('scheduling:dashboard')
+
+    if request.method == 'POST':
+        form = PlayerSorenessReportForm(request.POST)
+        if form.is_valid():
+            report = form.save(commit=False)
+            report.player = player
+            report.save()
+            messages.success(request, 'Daily soreness saved.')
+            return redirect('scheduling:log_player_soreness')
+    else:
+        form = PlayerSorenessReportForm()
+
+    recent_reports = player.soreness_reports.all()[:5]
+    return render(
+        request,
+        'scheduling/log_soreness.html',
+        {
+            'player': player,
+            'form': form,
+            'recent_reports': recent_reports,
+        },
+    )
 
 
 @login_required(login_url='scheduling:login')
@@ -419,14 +499,160 @@ def _role_label_for(user):
 
 @login_required(login_url='scheduling:login')
 def chatting_hub(request):
-    return render(
-        request,
-        'scheduling/chatting_hub.html',
-        {
-            'home_url': reverse(_post_login_route_for(request.user)),
-            'role_label': _role_label_for(request.user),
-        },
-    )
+    user_profile = getattr(request.user, 'player_profile', None)
+    is_admin = request.user.is_staff
+
+    contacts = Player.objects.filter(is_active=True)
+    if user_profile is not None:
+        contacts = contacts.exclude(pk=user_profile.pk)
+
+    search_query = request.GET.get('search', '').strip()
+    if search_query:
+        contacts = contacts.filter(
+            Q(name__icontains=search_query) | Q(email__icontains=search_query)
+        )
+
+    contacts = contacts.order_by('name')
+
+    unread_contact_ids = []
+    if user_profile is not None:
+        unread_contact_ids = list(
+            Message.objects.filter(
+                player=user_profile,
+                sender__in=contacts,
+                is_read=False,
+            )
+            .values_list('sender_id', flat=True)
+            .distinct()
+        )
+
+    selected_id = request.GET.get('selected')
+    selected_user = None
+    if selected_id:
+        selected_user = contacts.filter(pk=selected_id).first()
+
+    if selected_user is None and contacts.exists():
+        selected_user = contacts.first()
+
+    if selected_user is not None and user_profile is not None:
+        Message.objects.filter(
+            player=user_profile,
+            sender=selected_user,
+            is_read=False,
+        ).update(is_read=True)
+
+    conversation_messages = []
+    if selected_user is not None:
+        if user_profile is not None:
+            conversation_messages = Message.objects.filter(
+                Q(player=selected_user, sender=user_profile)
+                | Q(player=user_profile, sender=selected_user)
+            ).order_by('created_at')
+        elif is_admin:
+            conversation_messages = Message.objects.filter(
+                player=selected_user,
+                sender_is_admin=True,
+            ).order_by('created_at')
+        else:
+            conversation_messages = Message.objects.filter(player=selected_user).order_by('created_at')
+
+    if request.method == 'POST':
+        selected_id = request.POST.get('selected_id')
+        selected_user = Player.objects.filter(pk=selected_id, is_active=True).first()
+        form = ChatMessageForm(request.POST)
+        if selected_user is None:
+            messages.error(request, 'Please select a contact to send your message.')
+        elif form.is_valid():
+            message = form.save(commit=False)
+            message.player = selected_user
+            message.subject = f'Chat with {selected_user.name}'
+            message.sender_is_admin = is_admin
+            message.sender = user_profile if user_profile is not None else None
+            message.save()
+            params = {'selected': selected_user.id}
+            if search_query:
+                params['search'] = search_query
+            return redirect(f"{reverse('scheduling:chatting_hub')}?{urlencode(params)}")
+    else:
+        form = ChatMessageForm()
+
+    context = {
+        'home_url': reverse(_post_login_route_for(request.user)),
+        'role_label': _role_label_for(request.user),
+        'contacts': contacts,
+        'selected_user': selected_user,
+        'conversation_messages': conversation_messages,
+        'search_query': search_query,
+        'form': form,
+        'is_admin': is_admin,
+        'unread_contact_ids': unread_contact_ids,
+    }
+    return render(request, 'scheduling/chatting_hub.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def chatting_messages(request):
+    user_profile = getattr(request.user, 'player_profile', None)
+    selected_id = request.GET.get('selected')
+    selected_user = None
+    if selected_id:
+        selected_user = Player.objects.filter(pk=selected_id, is_active=True).first()
+
+    if selected_user is None:
+        return JsonResponse({'messages': []})
+
+    if user_profile is not None:
+        conversation_messages = Message.objects.filter(
+            Q(player=selected_user, sender=user_profile)
+            | Q(player=user_profile, sender=selected_user)
+        ).order_by('created_at')
+    elif request.user.is_staff:
+        conversation_messages = Message.objects.filter(
+            player=selected_user,
+            sender_is_admin=True,
+        ).order_by('created_at')
+    else:
+        conversation_messages = Message.objects.filter(player=selected_user).order_by('created_at')
+
+    messages_data = []
+    for message in conversation_messages:
+        is_sent = user_profile is not None and message.player_id == selected_user.id
+        if is_sent:
+            author = 'You'
+        elif message.sender is not None:
+            author = message.sender.name
+        else:
+            author = selected_user.name
+
+        messages_data.append({
+            'id': message.id,
+            'author': author,
+            'content': message.content,
+            'created_at': message.created_at.strftime('%b %d, %Y - %H:%M'),
+            'sent_by_current_user': is_sent,
+        })
+
+    return JsonResponse({'messages': messages_data})
+
+
+@login_required(login_url='scheduling:login')
+def chatting_unread_status(request):
+    user_profile = getattr(request.user, 'player_profile', None)
+    unread_contact_ids = []
+
+    if user_profile is not None:
+        contacts = Player.objects.filter(is_active=True).exclude(pk=user_profile.pk)
+        unread_contact_ids = list(
+            Message.objects.filter(
+                player=user_profile,
+                sender__in=contacts,
+                is_read=False,
+            )
+            .values_list('sender_id', flat=True)
+            .distinct()
+        )
+
+    return JsonResponse({'unread_contact_ids': unread_contact_ids})
 
 
 @login_required(login_url='scheduling:login')
@@ -1807,13 +2033,52 @@ def team_stats_dashboard(request):
         Match.objects.order_by('date').values_list('opponent', 'goals_for')
     )
 
-    team_goals = TeamGoal.objects.all()
+    metric_key = request.GET.get('metric', 'points')
+    if metric_key not in TEAM_STAT_METRICS:
+        metric_key = 'points'
+    ranking_metric_label = TEAM_STAT_METRICS[metric_key]
+    top_players = _player_metric_rankings(metric_key, descending=True)
+    weak_players = _player_metric_rankings(metric_key, descending=False)
+
+    season_totals = _season_metric_totals()
+    season_total_sum = sum(season_totals.values())
+    season_percentages = [
+        {
+            'label': TEAM_STAT_METRICS[key],
+            'value': season_totals[key],
+            'percentage': round((season_totals[key] / season_total_sum) * 100, 1) if season_total_sum else 0,
+        }
+        for key in TEAM_STAT_METRICS
+    ]
+
+    team_goals = []
+    for goal in TeamGoal.objects.all():
+        current_value = season_totals.get(goal.metric, 0)
+        progress_pct = round((current_value / goal.target_value) * 100) if goal.target_value else 0
+        team_goals.append(
+            {
+                'goal': goal,
+                'current_value': current_value,
+                'progress_pct': progress_pct,
+            }
+        )
 
     players = Player.objects.filter(role=Player.Role.PLAYER, is_active=True)
+    soreness_overview = []
+    for player in players:
+        latest_report = player.soreness_reports.first()
+        soreness_overview.append(
+            {
+                'player': player,
+                'latest_report': latest_report,
+            }
+        )
 
     import json
     chart_labels = json.dumps([g[0] for g in goals_per_game])
     chart_data = json.dumps([g[1] for g in goals_per_game])
+    season_percentage_labels = json.dumps([item['label'] for item in season_percentages])
+    season_percentage_data = json.dumps([item['percentage'] for item in season_percentages])
 
     context = {
         'total_wins': total_wins,
@@ -1823,6 +2088,15 @@ def team_stats_dashboard(request):
         'top_scorers': top_scorers,
         'top_defenders': top_defenders,
         'team_goals': team_goals,
+        'top_players': top_players,
+        'weak_players': weak_players,
+        'ranking_metric': metric_key,
+        'ranking_metric_label': ranking_metric_label,
+        'metric_options': TEAM_STAT_METRICS.items(),
+        'season_percentages': season_percentages,
+        'season_percentage_labels': season_percentage_labels,
+        'season_percentage_data': season_percentage_data,
+        'soreness_overview': soreness_overview,
         'chart_labels': chart_labels,
         'chart_data': chart_data,
         'match_count': matches.count(),
@@ -1862,6 +2136,16 @@ def player_stats_detail(request, player_id):
         if totals[k] is None:
             totals[k] = 0
 
+    averages = {
+        'avg_goals': round(totals['total_goals'] / stats.count(), 2) if stats.count() else 0,
+        'avg_interceptions': round(totals['total_interceptions'] / stats.count(), 2) if stats.count() else 0,
+        'avg_points': round(totals['total_points'] / stats.count(), 2) if stats.count() else 0,
+        'avg_blocks': round(totals['total_blocks'] / stats.count(), 2) if stats.count() else 0,
+        'avg_assists': round(totals['total_assists'] / stats.count(), 2) if stats.count() else 0,
+        'avg_aces': round(totals['total_aces'] / stats.count(), 2) if stats.count() else 0,
+        'avg_returns': round(totals['total_returns'] / stats.count(), 2) if stats.count() else 0,
+    }
+
     latest_injury = ''
     for s in stats:
         if s.most_recent_injury:
@@ -1891,11 +2175,19 @@ def player_stats_detail(request, player_id):
         totals['total_interceptions'],
         totals['total_points'],
     ])
+    average_histogram_data = json.dumps([
+        averages['avg_aces'],
+        averages['avg_returns'],
+        averages['avg_blocks'],
+        averages['avg_interceptions'],
+        averages['avg_points'],
+    ])
 
     context = {
         'player': player,
         'stats': stats,
         'totals': totals,
+        'averages': averages,
         'latest_injury': latest_injury,
         'matches_played': stats.count(),
         'can_view_team_dashboard': request.user.is_staff or is_coach,
@@ -1907,6 +2199,7 @@ def player_stats_detail(request, player_id):
         'points_series': points_series,
         'histogram_labels': histogram_labels,
         'histogram_data': histogram_data,
+        'average_histogram_data': average_histogram_data,
     }
     return render(request, 'scheduling/player_stats_detail.html', context)
 

@@ -3,45 +3,519 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chatting</title>
+    <title>Chat | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --forest: #46674f;
+            --paper: #dedede;
+            --accent: #0df2dc;
+            --header-left: #eceeed;
+            --header-right: #b7c9b4;
+            --ink: #111111;
+            --chip-border: #81918a;
+            --shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+            --muted: #4b5563;
+            --panel: #fffdf8;
+            --line: #d9d1c3;
+        }
+        * { box-sizing: border-box; }
         body {
             margin: 0;
             min-height: 100vh;
+            font-family: 'Josefin Sans', sans-serif;
+            color: var(--ink);
+            background: var(--forest);
+        }
+        a { color: inherit; text-decoration: none; }
+        .notifications-shell {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .notifications-header {
+            background: linear-gradient(90deg, var(--header-left) 0%, var(--header-right) 100%);
+            padding: 42px 34px 36px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+        }
+        .notifications-title {
+            margin: 0;
+            font-size: clamp(2rem, 2vw + 1.4rem, 3.1rem);
+            font-weight: 600;
+            position: relative;
+            display: inline-block;
+            padding-bottom: 14px;
+        }
+        .notifications-title::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: min(100%, 235px);
+            height: 3px;
+            background: var(--accent);
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.25);
+        }
+        .header-meta {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .role-chip,
+        .back-link {
+            padding: 8px 12px;
+            border: 1px solid var(--chip-border);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.15);
+            font-size: 0.98rem;
+        }
+        .back-link {
+            background: #f7f7f7;
+        }
+        .notifications-content {
+            flex: 1;
+            padding: 36px 34px 56px;
+            max-width: 1180px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        .chat-layout {
             display: grid;
-            place-items: center;
-            background: #f2ecdf;
-            color: #1f2a30;
-            font-family: Georgia, "Times New Roman", serif;
+            grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+            gap: 20px;
         }
         .panel {
-            width: min(560px, 92vw);
-            background: #fffdf8;
-            border: 1px solid #d9d1c3;
+            background: var(--paper);
+            border-radius: 18px;
+            padding: 20px;
+            box-shadow: var(--shadow);
+        }
+        .chat-sidebar {
+            display: grid;
+            gap: 20px;
+        }
+        .chat-sidebar__top {
+            display: grid;
+            gap: 12px;
+        }
+        .chat-sidebar__top h2 {
+            margin: 0;
+            font-size: 1.35rem;
+        }
+        .chat-search-form input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            font: inherit;
+            color: var(--ink);
+            background: white;
+        }
+        .chat-section h3 {
+            margin: 0 0 10px;
+            font-size: 0.95rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--muted);
+        }
+        .chat-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            gap: 10px;
+        }
+        .chat-list--muted .chat-list__item {
+            opacity: 0.75;
+        }
+        .chat-list__item {
             border-radius: 16px;
-            padding: 24px;
-            text-align: center;
+            overflow: hidden;
         }
-        .back-button {
-            display: inline-block;
-            margin-top: 12px;
-            padding: 10px 14px;
-            border-radius: 999px;
-            border: 1px solid #1f2a30;
-            color: #1f2a30;
+        .chat-list__item a,
+        .chat-list__item div {
+            display: grid;
+            gap: 6px;
+            padding: 14px 16px;
+            color: var(--ink);
             text-decoration: none;
+            background: white;
+            border: 1px solid var(--line);
         }
-        .back-button:hover {
-            background: #1f2a30;
-            color: #fff;
+        .chat-list__item.active a {
+            background: #e6f0e7;
+            border-color: #b6d2b8;
+        }
+        .chat-unread-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #2b7cff;
+            display: inline-flex;
+            margin-left: 8px;
+            vertical-align: middle;
+            flex-shrink: 0;
+        }
+        .chat-list__name {
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .chat-list__meta {
+            font-size: 0.92rem;
+            color: #5e6a5b;
+        }
+        .chat-main {
+            display: grid;
+            gap: 20px;
+        }
+        .chat-window {
+            display: grid;
+            gap: 20px;
+            min-height: 620px;
+            max-height: 620px;
+        }
+        .chat-window__header h1 {
+            margin: 0 0 8px;
+            font-size: clamp(1.9rem, 2vw, 2.4rem);
+        }
+        .chat-window__header p {
+            margin: 0;
+            color: var(--muted);
+        }
+        .messages-scroll {
+            overflow-y: auto;
+            display: grid;
+            gap: 14px;
+            padding-right: 4px;
+            max-height: 430px;
+        }
+        .message {
+            display: flex;
+        }
+        .message-sent {
+            justify-content: flex-end;
+        }
+        .message-received {
+            justify-content: flex-start;
+        }
+        .message-bubble {
+            display: inline-block;
+            width: fit-content;
+            max-width: 78%;
+            min-width: 140px;
+            background: #f1f7ef;
+            border: 1px solid #d8e2d3;
+            border-radius: 18px;
+            padding: 14px 16px;
+            box-shadow: 0 3px 8px rgba(24, 41, 29, 0.05);
+            word-break: break-word;
+            white-space: normal;
+        }
+        .message-sent .message-bubble {
+            background: #e8f3e7;
+        }
+        .message-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 0.82rem;
+            color: #5e6a5b;
+            margin-bottom: 8px;
+        }
+        .message-author {
+            font-weight: 700;
+        }
+        .chat-empty {
+            margin: auto;
+            text-align: center;
+            color: #7d8b7a;
+            font-size: 1rem;
+        }
+        .chat-compose {
+            display: grid;
+            gap: 12px;
+        }
+        .chat-compose textarea {
+            width: 100%;
+            min-height: 140px;
+            padding: 14px 16px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            resize: vertical;
+            font: inherit;
+            color: var(--ink);
+            background: white;
+        }
+        .chat-compose textarea:focus {
+            outline: none;
+            border-color: #7aa66f;
+            box-shadow: 0 0 0 3px rgba(122, 166, 111, 0.12);
+        }
+        .button {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 18px;
+            border-radius: 999px;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            background: #46674f;
+            color: white;
+        }
+        .button:hover {
+            opacity: 0.95;
+        }
+        .muted {
+            color: #7d8b7a;
+        }
+        @media (max-width: 960px) {
+            .chat-layout {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
-    <section class="panel">
-        <h1>Chatting</h1>
-        <p>This feature is not implemented yet.</p>
-        <a class="back-button" href="{{ home_url }}">Back to Welcome Page</a>
-    </section>
+    <div class="notifications-shell">
+        <header class="notifications-header">
+            <div>
+                <h1 class="notifications-title">Chat</h1>
+            </div>
+            <div class="header-meta">
+                <span class="role-chip">{{ role_label }}</span>
+                <a class="back-link" href="{{ home_url }}">Back to welcome page</a>
+            </div>
+        </header>
+
+        <main class="notifications-content">
+            <div class="chat-layout">
+                <section class="chat-sidebar panel">
+                    <div class="chat-sidebar__top">
+                        <h2>Chats</h2>
+                        <form method="get" class="chat-search-form">
+                            <input
+                                type="text"
+                                name="search"
+                                value="{{ search_query }}"
+                                placeholder="Search by name or email"
+                                aria-label="Search chats"
+                            />
+                        </form>
+                    </div>
+
+                    <div class="chat-section">
+                        <h3>Individuals</h3>
+                        {% if contacts %}
+                            <ul class="chat-list">
+                                {% for contact in contacts %}
+                                    <li class="chat-list__item {% if selected_user and contact.id == selected_user.id %}active{% endif %}" data-contact-id="{{ contact.id }}">
+                                        <a href="?selected={{ contact.id }}{% if search_query %}&search={{ search_query|urlencode }}{% endif %}">
+                                            <span class="chat-list__name">
+                                                {{ contact.name }}
+                                                {% if contact.id in unread_contact_ids %}
+                                                    <span class="chat-unread-dot"></span>
+                                                {% endif %}
+                                            </span>
+                                            <span class="chat-list__meta">{{ contact.email }}</span>
+                                        </a>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="muted">No contacts found.</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="chat-section">
+                        <h3>Groups</h3>
+                        <ul class="chat-list chat-list--muted">
+                            <li class="chat-list__item"><div>Team A (Main)</div></li>
+                            <li class="chat-list__item"><div>Team A (players only)</div></li>
+                        </ul>
+                    </div>
+
+                    <div class="chat-section">
+                        <h3>Announcements</h3>
+                        <ul class="chat-list chat-list--muted">
+                            <li class="chat-list__item"><div>Team announcements</div></li>
+                            <li class="chat-list__item"><div>System notices</div></li>
+                        </ul>
+                    </div>
+                </section>
+
+                <section class="chat-main">
+                    <div class="chat-window panel">
+                        <div class="chat-window__header">
+                            <h1>Chatting</h1>
+                            {% if selected_user %}
+                                <p>Conversation with <strong>{{ selected_user.name }}</strong> — {{ selected_user.email }}</p>
+                            {% else %}
+                                <p>Select a contact on the left to start a conversation.</p>
+                            {% endif %}
+                        </div>
+
+                        {% if selected_user %}
+                            <div class="messages-scroll" id="messagesContainer" data-selected-id="{{ selected_user.id }}">
+                                {% if conversation_messages %}
+                                    {% for message in conversation_messages %}
+                                        {% if is_admin and message.sender_is_admin %}
+                                            <article class="message message-sent">
+                                                <div class="message-bubble">
+                                                    <div class="message-meta">
+                                                        <span class="message-author">You</span>
+                                                        <time>{{ message.created_at|date:"M d, Y - H:i" }}</time>
+                                                    </div>
+                                                    <p>{{ message.content }}</p>
+                                                </div>
+                                            </article>
+                                        {% elif message.player.id == selected_user.id %}
+                                            <article class="message message-sent">
+                                                <div class="message-bubble">
+                                                    <div class="message-meta">
+                                                        <span class="message-author">You</span>
+                                                        <time>{{ message.created_at|date:"M d, Y - H:i" }}</time>
+                                                    </div>
+                                                    <p>{{ message.content }}</p>
+                                                </div>
+                                            </article>
+                                        {% else %}
+                                            <article class="message message-received">
+                                                <div class="message-bubble">
+                                                    <div class="message-meta">
+                                                        <span class="message-author">{{ selected_user.name }}</span>
+                                                        <time>{{ message.created_at|date:"M d, Y - H:i" }}</time>
+                                                    </div>
+                                                    <p>{{ message.content }}</p>
+                                                </div>
+                                            </article>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            <div class="chat-empty">
+                                <p>No contact selected. Use the search field to find a user by email.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    {% if selected_user %}
+                        <form method="post" class="chat-compose panel">
+                            {% csrf_token %}
+                            <input type="hidden" name="selected_id" value="{{ selected_user.id }}" />
+                            {{ form.content }}
+                            <button type="submit" class="button">Send message</button>
+                        </form>
+                    {% endif %}
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        (function() {
+            const container = document.getElementById('messagesContainer');
+            if (!container) {
+                return;
+            }
+
+            const selectedId = container.dataset.selectedId;
+            if (!selectedId) {
+                return;
+            }
+
+            const messagesEndpoint = '{% url "scheduling:chatting_messages" %}';
+            const unreadEndpoint = '{% url "scheduling:chatting_unread_status" %}';
+
+            function renderMessages(messages) {
+                if (!messages.length) {
+                    container.innerHTML = '<div class="chat-empty"><p>No messages yet. Send the first note below.</p></div>';
+                    return;
+                }
+
+                container.innerHTML = messages.map(message => {
+                    const author = message.sent_by_current_user ? 'You' : message.author;
+                    const sideClass = message.sent_by_current_user ? 'message-sent' : 'message-received';
+                    return `
+                        <article class="message ${sideClass}">
+                            <div class="message-bubble">
+                                <div class="message-meta">
+                                    <span class="message-author">${author}</span>
+                                    <time>${message.created_at}</time>
+                                </div>
+                                <p>${message.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+                            </div>
+                        </article>
+                    `;
+                }).join('');
+                container.scrollTop = container.scrollHeight;
+            }
+
+            async function fetchMessages() {
+                try {
+                    const response = await fetch(`${messagesEndpoint}?selected=${encodeURIComponent(selectedId)}`);
+                    if (!response.ok) {
+                        return;
+                    }
+                    const data = await response.json();
+                    renderMessages(data.messages || []);
+                } catch (error) {
+                    console.error('Unable to refresh chat messages:', error);
+                }
+            }
+
+            function updateUnreadDots(unreadIds) {
+                document.querySelectorAll('[data-contact-id]').forEach(item => {
+                    const contactId = item.dataset.contactId;
+                    const hasUnread = unreadIds.includes(Number(contactId));
+                    const dot = item.querySelector('.chat-unread-dot');
+
+                    if (hasUnread && !dot) {
+                        const nameEl = item.querySelector('.chat-list__name');
+                        if (nameEl) {
+                            const newDot = document.createElement('span');
+                            newDot.className = 'chat-unread-dot';
+                            nameEl.appendChild(newDot);
+                        }
+                    }
+
+                    if (!hasUnread && dot) {
+                        dot.remove();
+                    }
+                });
+            }
+
+            async function fetchUnreadStatus() {
+                try {
+                    const response = await fetch(unreadEndpoint);
+                    if (!response.ok) {
+                        return;
+                    }
+                    const data = await response.json();
+                    updateUnreadDots(data.unread_contact_ids || []);
+                } catch (error) {
+                    console.error('Unable to refresh unread chat status:', error);
+                }
+            }
+
+            fetchMessages();
+            fetchUnreadStatus();
+            setInterval(() => {
+                fetchMessages();
+                fetchUnreadStatus();
+            }, 5000);
+        })();
+    </script>
 </body>
 </html>

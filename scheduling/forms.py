@@ -6,6 +6,7 @@ from django.utils import timezone
 from .models import (
     Player,
     PlayerAvailability,
+    PlayerSorenessReport,
     PersonalSessionNote,
     SessionRSVP,
     SessionPlan,
@@ -172,6 +173,15 @@ class MessageForm(forms.ModelForm):
         }
 
 
+class ChatMessageForm(forms.ModelForm):
+    class Meta:
+        model = Message
+        fields = ['content']
+        widgets = {
+            'content': forms.Textarea(attrs={'placeholder': 'Write your message...', 'class': 'form-textarea', 'rows': 4}),
+        }
+
+
 class SupportTicketForm(forms.ModelForm):
     class Meta:
         model = SupportTicket
@@ -206,7 +216,27 @@ class PlayerMatchStatForm(forms.ModelForm):
 class TeamGoalForm(forms.ModelForm):
     class Meta:
         model = TeamGoal
-        fields = ['description']
+        fields = ['description', 'metric', 'target_value']
+        widgets = {
+            'description': forms.TextInput(attrs={'placeholder': 'Shared team objective'}),
+            'target_value': forms.NumberInput(attrs={'min': 1}),
+        }
+
+
+class PlayerSorenessReportForm(forms.ModelForm):
+    class Meta:
+        model = PlayerSorenessReport
+        fields = ['soreness_level', 'notes']
+        widgets = {
+            'soreness_level': forms.NumberInput(attrs={'min': 1, 'max': 10}),
+            'notes': forms.TextInput(attrs={'placeholder': 'Optional note for today'}),
+        }
+
+    def clean_soreness_level(self):
+        soreness_level = self.cleaned_data['soreness_level']
+        if soreness_level < 1 or soreness_level > 10:
+            raise forms.ValidationError('Soreness level must be between 1 and 10.')
+        return soreness_level
 
 
 class SignUpForm(forms.Form):

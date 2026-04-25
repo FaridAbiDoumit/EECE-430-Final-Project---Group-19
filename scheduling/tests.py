@@ -6,14 +6,18 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import (
+    Match,
     Notification,
     Player,
     PlayerAvailability,
+    PlayerMatchStat,
+    PlayerSorenessReport,
     PersonalSessionNote,
     SessionRSVP,
     SessionPlan,
     SessionVote,
     SessionVotePoll,
+    TeamGoal,
     TryoutCandidate,
     TryoutSession,
     TrainingSession,
@@ -1265,3 +1269,163 @@ class SchedulingViewsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'You accepted')
+
+    def test_player_can_log_daily_soreness(self):
+        player_user = User.objects.create_user(
+            username='sorenessplayer@example.com',
+            email='sorenessplayer@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(
+            user=player_user,
+            name='Soreness Player',
+            email='sorenessplayer@example.com',
+            role=Player.Role.PLAYER,
+        )
+
+        self.client.force_login(player_user)
+        response = self.client.post(
+            reverse('scheduling:log_player_soreness'),
+            data={'soreness_level': 7, 'notes': 'Shoulder feels tight'},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        report = PlayerSorenessReport.objects.get(player=player)
+        self.assertEqual(report.soreness_level, 7)
+        self.assertEqual(report.notes, 'Shoulder feels tight')
+
+    def test_player_home_shows_latest_soreness_card(self):
+        player_user = User.objects.create_user(
+            username='homesoreness@example.com',
+            email='homesoreness@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(
+            user=player_user,
+            name='Home Soreness',
+            email='homesoreness@example.com',
+            role=Player.Role.PLAYER,
+        )
+        PlayerSorenessReport.objects.create(player=player, soreness_level=4, notes='Light fatigue')
+
+        self.client.force_login(player_user)
+        response = self.client.get(reverse('scheduling:player_home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Daily soreness')
+        self.assertContains(response, 'Latest level: 4/10')
+
+    def test_team_goal_form_persists_metric_and_target_value(self):
+        coach_user = User.objects.create_user(
+            username='goalcoach@example.com',
+            email='goalcoach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=coach_user,
+            name='Goal Coach',
+            email='goalcoach@example.com',
+            role=Player.Role.COACH,
+        )
+
+        self.client.force_login(coach_user)
+        response = self.client.post(
+            reverse('scheduling:add_team_goal'),
+            data={
+                'description': 'Improve our serving output',
+                'metric': TeamGoal.Metric.ACES,
+                'target_value': 12,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        goal = TeamGoal.objects.get()
+        self.assertEqual(goal.metric, TeamGoal.Metric.ACES)
+        self.assertEqual(goal.target_value, 12)
+
+    def test_team_stats_computes_goal_progress_and_shows_latest_soreness(self):
+        coach_user = User.objects.create_user(
+            username='statscoach@example.com',
+            email='statscoach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=coach_user,
+            name='Stats Coach',
+            email='statscoach@example.com',
+            role=Player.Role.COACH,
+        )
+        player = Player.objects.create(
+            name='Tracked Player',
+            email='tracked@example.com',
+            role=Player.Role.PLAYER,
+        )
+        match = Match.objects.create(opponent='Rivals', date=timezone.now().date(), goals_for=3, goals_against=1)
+        PlayerMatchStat.objects.create(match=match, player=player, points=10, aces=2, assists=1)
+        TeamGoal.objects.create(description='Reach point target', metric=TeamGoal.Metric.POINTS, target_value=20)
+        PlayerSorenessReport.objects.create(player=player, soreness_level=6, notes='Normal soreness')
+
+        self.client.force_login(coach_user)
+        response = self.client.get(reverse('scheduling:team_stats'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['team_goals'][0]['progress_pct'], 50)
+        self.assertEqual(response.context['soreness_overview'][0]['latest_report'].soreness_level, 6)
+        self.assertContains(response, 'Latest Soreness Levels')
+
+    def test_team_stats_rankings_respect_selected_metric(self):
+        coach_user = User.objects.create_user(
+            username='rankingcoach@example.com',
+            email='rankingcoach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=coach_user,
+            name='Ranking Coach',
+            email='rankingcoach@example.com',
+            role=Player.Role.COACH,
+        )
+        first = Player.objects.create(name='First Player', email='firstmetric@example.com', role=Player.Role.PLAYER)
+        second = Player.objects.create(name='Second Player', email='secondmetric@example.com', role=Player.Role.PLAYER)
+        match = Match.objects.create(opponent='Ranking Match', date=timezone.now().date(), goals_for=2, goals_against=2)
+        PlayerMatchStat.objects.create(match=match, player=first, assists=1, points=20)
+        PlayerMatchStat.objects.create(match=match, player=second, assists=5, points=3)
+
+        self.client.force_login(coach_user)
+        response = self.client.get(reverse('scheduling:team_stats'), {'metric': 'assists'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['ranking_metric'], 'assists')
+        self.assertEqual(response.context['top_players'][0].name, 'Second Player')
+        self.assertEqual(response.context['weak_players'][0].name, 'First Player')
+
+    def test_player_stats_detail_includes_average_summary(self):
+        coach_user = User.objects.create_user(
+            username='averagecoach@example.com',
+            email='averagecoach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=coach_user,
+            name='Average Coach',
+            email='averagecoach@example.com',
+            role=Player.Role.COACH,
+        )
+        player = Player.objects.create(
+            name='Average Player',
+            email='averageplayer@example.com',
+            role=Player.Role.PLAYER,
+        )
+        first_match = Match.objects.create(opponent='One', date=timezone.now().date(), goals_for=1, goals_against=0)
+        second_match = Match.objects.create(opponent='Two', date=timezone.now().date() + timedelta(days=1), goals_for=2, goals_against=1)
+        PlayerMatchStat.objects.create(match=first_match, player=player, points=6, blocks=2, aces=1)
+        PlayerMatchStat.objects.create(match=second_match, player=player, points=4, blocks=4, aces=3)
+
+        self.client.force_login(coach_user)
+        response = self.client.get(reverse('scheduling:player_stats_detail', args=[player.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['averages']['avg_points'], 5.0)
+        self.assertEqual(response.context['averages']['avg_blocks'], 3.0)
+        self.assertContains(response, 'Per-Match Averages')
+        self.assertContains(response, 'Average Output Per Match')

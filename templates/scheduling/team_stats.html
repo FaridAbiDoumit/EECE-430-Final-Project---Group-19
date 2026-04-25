@@ -86,10 +86,10 @@
             font-size: 0.95rem;
             color: #444;
         }
-        .kpi-win  .kpi-value { color: #2e7d32; }
+        .kpi-win .kpi-value { color: #2e7d32; }
         .kpi-loss .kpi-value { color: #c62828; }
         .kpi-draw .kpi-value { color: #f57f17; }
-        .kpi-pct  .kpi-value { color: #1565c0; }
+        .kpi-pct .kpi-value { color: #1565c0; }
         .panel {
             background: var(--paper);
             border-radius: 14px;
@@ -101,21 +101,41 @@
             font-size: 1.4rem;
             font-weight: 600;
         }
+        .panel-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+        .panel-head h2 {
+            margin: 0;
+        }
         .two-col {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
         }
-        .rank-list {
+        .three-col {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 20px;
+        }
+        .rank-list,
+        .soreness-list {
             list-style: none;
             padding: 0;
             margin: 0;
             display: grid;
             gap: 8px;
         }
-        .rank-item {
+        .rank-item,
+        .soreness-item {
             display: flex;
             justify-content: space-between;
+            align-items: center;
+            gap: 10px;
             background: var(--card-bg);
             border-radius: 8px;
             padding: 10px 14px;
@@ -125,20 +145,95 @@
             min-width: 28px;
         }
         .rank-name { flex: 1; }
-        .rank-val  { font-weight: 600; }
+        .rank-val { font-weight: 600; }
         .goals-section {
             display: grid;
-            gap: 8px;
+            gap: 10px;
         }
         .goal-item {
             background: var(--card-bg);
-            border-radius: 8px;
-            padding: 10px 14px;
+            border-radius: 10px;
+            padding: 14px;
+            display: grid;
+            gap: 10px;
+        }
+        .goal-topline {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .goal-meta {
+            color: #444;
+            font-size: 0.95rem;
+        }
+        .progress-track {
+            width: 100%;
+            height: 10px;
+            background: #c7c7c7;
+            border-radius: 999px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #1565c0 0%, #0df2dc 100%);
+            border-radius: 999px;
         }
         .chart-container {
             position: relative;
             width: 100%;
             max-height: 340px;
+        }
+        .chart-container.tall {
+            height: 320px;
+            max-height: none;
+        }
+        .filter-form {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .filter-form select,
+        .filter-form button {
+            padding: 9px 12px;
+            border-radius: 8px;
+            border: 1px solid #999;
+            font-family: inherit;
+            font-size: 0.95rem;
+        }
+        .filter-form button {
+            background: #111;
+            color: #fff;
+            cursor: pointer;
+            border-color: #111;
+        }
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+        }
+        .metric-card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 14px;
+            text-align: center;
+        }
+        .metric-card strong {
+            display: block;
+            font-size: 1.25rem;
+            margin-bottom: 4px;
+        }
+        .soreness-badge {
+            min-width: 86px;
+            text-align: center;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #fff;
+            font-weight: 600;
+        }
+        @media (max-width: 980px) {
+            .three-col { grid-template-columns: 1fr; }
         }
         @media (max-width: 800px) {
             .two-col { grid-template-columns: 1fr; }
@@ -164,7 +259,6 @@
             </ul>
         {% endif %}
 
-        <!-- KPI cards -->
         <section class="kpi-row" aria-label="Key stats">
             <div class="kpi-card kpi-win">
                 <div class="kpi-value">{{ total_wins }}</div>
@@ -188,7 +282,6 @@
             </div>
         </section>
 
-        <!-- Top scorers & defenders -->
         <section class="two-col">
             <div class="panel">
                 <h2>Top Scorers</h2>
@@ -225,55 +318,158 @@
             </div>
         </section>
 
-        <!-- Goals per game chart -->
         <section class="panel">
-            <h2>Goals Scored Per Game</h2>
-            {% if match_count > 0 %}
-                <div class="chart-container">
-                    <canvas id="goalsChart"></canvas>
+            <div class="panel-head">
+                <h2>Player Rankings</h2>
+                <form class="filter-form" method="get">
+                    <label for="metric">Metric</label>
+                    <select id="metric" name="metric">
+                        {% for value, label in metric_options %}
+                            <option value="{{ value }}"{% if ranking_metric == value %} selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit">Apply</button>
+                </form>
+            </div>
+            <div class="two-col">
+                <div>
+                    <h3 style="margin:0 0 12px;">Top Players by {{ ranking_metric_label }}</h3>
+                    <ol class="rank-list">
+                        {% for player in top_players %}
+                            <li class="rank-item">
+                                <span class="rank-pos">{{ forloop.counter }}.</span>
+                                <span class="rank-name">{{ player.name }}</span>
+                                <span class="rank-val">{{ player.metric_total }}</span>
+                            </li>
+                        {% empty %}
+                            <li class="rank-item">No player data yet.</li>
+                        {% endfor %}
+                    </ol>
                 </div>
-            {% else %}
-                <p style="color:#666;">No match data available yet.</p>
-            {% endif %}
+                <div>
+                    <h3 style="margin:0 0 12px;">Players Needing Work in {{ ranking_metric_label }}</h3>
+                    <ol class="rank-list">
+                        {% for player in weak_players %}
+                            <li class="rank-item">
+                                <span class="rank-pos">{{ forloop.counter }}.</span>
+                                <span class="rank-name">{{ player.name }}</span>
+                                <span class="rank-val">{{ player.metric_total }}</span>
+                            </li>
+                        {% empty %}
+                            <li class="rank-item">No player data yet.</li>
+                        {% endfor %}
+                    </ol>
+                </div>
+            </div>
         </section>
 
-        <!-- Player stats links -->
-        <section class="panel">
-            <h2>Player Stats</h2>
-            {% if players %}
-                <div style="display:flex;flex-wrap:wrap;gap:10px;">
-                    {% for p in players %}
-                        <a href="{% url 'scheduling:player_stats_detail' p.id %}"
-                           style="display:inline-block;background:#111;color:#fff;padding:8px 16px;border-radius:8px;font-size:0.92rem;transition:background .2s;"
-                           onmouseover="this.style.background='#333'" onmouseout="this.style.background='#111'">
-                            {{ p.name }}
-                        </a>
-                    {% endfor %}
-                </div>
-            {% else %}
-                <p style="color:#666;">No players registered yet.</p>
-            {% endif %}
+        <section class="two-col">
+            <div class="panel">
+                <h2>Goals Scored Per Game</h2>
+                {% if match_count > 0 %}
+                    <div class="chart-container">
+                        <canvas id="goalsChart"></canvas>
+                    </div>
+                {% else %}
+                    <p style="color:#666;">No match data available yet.</p>
+                {% endif %}
+            </div>
+
+            <div class="panel">
+                <h2>Season Metric Breakdown</h2>
+                {% if season_percentages %}
+                    <div class="chart-container tall">
+                        <canvas id="seasonPercentagesChart"></canvas>
+                    </div>
+                {% else %}
+                    <p style="color:#666;">No stat data available yet.</p>
+                {% endif %}
+            </div>
         </section>
 
-        <!-- Coach goals -->
         <section class="panel">
-            <h2>Team Goals (set by Coach)</h2>
-            {% if team_goals %}
-                <div class="goals-section">
-                    {% for goal in team_goals %}
-                        <div class="goal-item">{{ goal.description }}</div>
-                    {% endfor %}
-                </div>
-            {% else %}
-                <p style="color:#666;">No team goals set yet. <a href="{% url 'scheduling:add_team_goal' %}" style="text-decoration:underline;">Add one</a>.</p>
-            {% endif %}
+            <h2>Season Summary Percentages</h2>
+            <div class="metric-grid">
+                {% for item in season_percentages %}
+                    <div class="metric-card">
+                        <strong>{{ item.percentage }}%</strong>
+                        <div>{{ item.label }}</div>
+                        <div style="color:#555;">{{ item.value }} total</div>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="three-col">
+            <div class="panel">
+                <h2>Player Stats</h2>
+                {% if players %}
+                    <div style="display:flex;flex-wrap:wrap;gap:10px;">
+                        {% for p in players %}
+                            <a href="{% url 'scheduling:player_stats_detail' p.id %}"
+                               style="display:inline-block;background:#111;color:#fff;padding:8px 16px;border-radius:8px;font-size:0.92rem;transition:background .2s;"
+                               onmouseover="this.style.background='#333'" onmouseout="this.style.background='#111'">
+                                {{ p.name }}
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p style="color:#666;">No players registered yet.</p>
+                {% endif %}
+            </div>
+
+            <div class="panel">
+                <h2>Team Goals</h2>
+                {% if team_goals %}
+                    <div class="goals-section">
+                        {% for item in team_goals %}
+                            <div class="goal-item">
+                                <div class="goal-topline">
+                                    <strong>{{ item.goal.description }}</strong>
+                                    <span>{{ item.progress_pct }}%</span>
+                                </div>
+                                <div class="goal-meta">
+                                    Metric: {{ item.goal.get_metric_display }} |
+                                    Current: {{ item.current_value }} |
+                                    Target: {{ item.goal.target_value }}
+                                </div>
+                                <div class="progress-track">
+                                    <div class="progress-bar" style="width:{% if item.progress_pct > 100 %}100{% else %}{{ item.progress_pct }}{% endif %}%;"></div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p style="color:#666;">No team goals set yet. <a href="{% url 'scheduling:add_team_goal' %}" style="text-decoration:underline;">Add one</a>.</p>
+                {% endif %}
+            </div>
+
+            <div class="panel">
+                <h2>Latest Soreness Levels</h2>
+                {% if soreness_overview %}
+                    <ul class="soreness-list">
+                        {% for item in soreness_overview %}
+                            <li class="soreness-item">
+                                <span>{{ item.player.name }}</span>
+                                {% if item.latest_report %}
+                                    <span class="soreness-badge">{{ item.latest_report.soreness_level }}/10</span>
+                                {% else %}
+                                    <span class="soreness-badge">No log</span>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p style="color:#666;">No players available.</p>
+                {% endif %}
+            </div>
         </section>
     </main>
 
-    {% if match_count > 0 %}
     <script>
-        const ctx = document.getElementById('goalsChart').getContext('2d');
-        new Chart(ctx, {
+        {% if match_count > 0 %}
+        const goalsCtx = document.getElementById('goalsChart').getContext('2d');
+        new Chart(goalsCtx, {
             type: 'bar',
             data: {
                 labels: {{ chart_labels|safe }},
@@ -304,7 +500,36 @@
                 },
             },
         });
+        {% endif %}
+
+        new Chart(document.getElementById('seasonPercentagesChart').getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: {{ season_percentage_labels|safe }},
+                datasets: [{
+                    data: {{ season_percentage_data|safe }},
+                    backgroundColor: [
+                        '#1565c0',
+                        '#2e7d32',
+                        '#f57f17',
+                        '#7b1fa2',
+                        '#c62828',
+                        '#00838f',
+                        '#5d4037'
+                    ],
+                    borderWidth: 0,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                    },
+                },
+            },
+        });
     </script>
-    {% endif %}
 </body>
 </html>
