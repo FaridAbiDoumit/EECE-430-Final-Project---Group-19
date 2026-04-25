@@ -71,9 +71,13 @@
         }
         .field + .field,
         .role-block,
+        .team-block,
         .submit-row,
         .switch-link {
             margin-top: 34px;
+        }
+        .team-block[hidden] {
+            display: none !important;
         }
         .field-errors,
         .non-field-errors {
@@ -330,6 +334,14 @@
                     {% endif %}
                 </div>
 
+                <div class="team-block">
+                    <p class="role-label">Choose your team</p>
+                    {{ form.team }}
+                    {% if form.team.errors %}
+                        <ul class="field-errors">{% for error in form.team.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                    {% endif %}
+                </div>
+
                 <div class="submit-row">
                     <button class="submit-button" type="submit">Create Account</button>
                 </div>
@@ -401,6 +413,30 @@
                 button.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
             });
         }
+
+        const roleInputs = document.querySelectorAll('input[name="role"]');
+        const teamBlock = document.querySelector('.team-block');
+        const teamInput = document.getElementById('id_team');
+
+        function updateTeamFieldForRole() {
+            if (!teamBlock || !teamInput) {
+                return;
+            }
+
+            const selectedRole = document.querySelector('input[name="role"]:checked')?.value;
+            const isHandler = selectedRole === 'league_system_handler';
+            teamBlock.hidden = isHandler;
+            teamInput.disabled = isHandler;
+
+            if (isHandler) {
+                teamInput.value = '';
+            }
+        }
+
+        for (const roleInput of roleInputs) {
+            roleInput.addEventListener('change', updateTeamFieldForRole);
+        }
+        updateTeamFieldForRole();
     </script>
 </body>
 </html>

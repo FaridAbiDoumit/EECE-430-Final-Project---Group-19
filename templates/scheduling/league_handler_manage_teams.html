@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage League Teams | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #46674f;
+            --paper: #dedede;
+            --header-left: #eceeed;
+            --header-right: #b7c9b4;
+            --ink: #111111;
+            --accent: #0df2dc;
+            --chip-border: #81918a;
+            --shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--forest);
+            color: var(--ink);
+            font-family: 'Josefin Sans', sans-serif;
+        }
+        a { color: inherit; text-decoration: none; }
+
+        .page-shell {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .page-header {
+            background: linear-gradient(90deg, var(--header-left) 0%, var(--header-right) 100%);
+            padding: 42px 34px 34px;
+        }
+        .page-title {
+            margin: 0;
+            font-size: clamp(2rem, 2vw + 1.2rem, 3rem);
+            font-weight: 600;
+            position: relative;
+            display: inline-block;
+            padding-bottom: 12px;
+        }
+        .page-title::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: min(100%, 250px);
+            height: 3px;
+            background: var(--accent);
+        }
+        .page-subtitle {
+            margin: 10px 0 0;
+            color: #2f3d2c;
+        }
+
+        .page-content {
+            flex: 1;
+            padding: 42px 28px 52px;
+            display: grid;
+            gap: 24px;
+            max-width: 980px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .panel {
+            background: var(--paper);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            padding: 24px;
+        }
+
+        .action-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .action-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 14px;
+            border-radius: 10px;
+            background: #111;
+            color: #fff;
+            font-weight: 600;
+        }
+        .action-link:hover {
+            background: #333;
+        }
+
+        .team-form {
+            margin-top: 14px;
+            display: grid;
+            gap: 10px;
+        }
+        .team-form input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #999;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 1rem;
+            background: #fff;
+        }
+        .team-form button {
+            width: fit-content;
+            padding: 10px 14px;
+            border: none;
+            border-radius: 10px;
+            background: #111;
+            color: #fff;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .team-form button:hover {
+            background: #333;
+        }
+
+        .field-errors {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            color: #9c2f2f;
+            font-size: 0.92rem;
+        }
+
+        .team-list {
+            margin: 14px 0 0;
+            padding: 0;
+            list-style: none;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .team-list li {
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: #f5f5f5;
+            border: 1px solid #c8c8c8;
+            font-size: 0.92rem;
+        }
+
+        @media (max-width: 680px) {
+            .page-header {
+                padding: 26px 18px 26px;
+            }
+            .page-content {
+                padding: 24px 16px 36px;
+            }
+            .panel {
+                padding: 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-shell">
+        <header class="page-header">
+            <h1 class="page-title">Manage League Teams</h1>
+            <p class="page-subtitle">Add teams that players, coaches, and admins can choose at signup.</p>
+        </header>
+
+        <main class="page-content">
+            {% if messages %}
+                <ul style="list-style:none;padding:0;margin:0;">
+                    {% for message in messages %}
+                        <li style="background:#fff;border-radius:8px;padding:10px 14px;margin-bottom:6px;">{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            <section class="panel" aria-label="team management actions">
+                <div class="action-row">
+                    <h2 style="margin:0;">Add Team</h2>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                        <a class="action-link" href="{% url 'scheduling:create_club_admin' %}">Create Club Admin</a>
+                        <a class="action-link" href="{% url 'scheduling:league_system_handler_home' %}">Back to Handler Home</a>
+                    </div>
+                </div>
+                <form class="team-form" method="post" action="{% url 'scheduling:league_handler_manage_teams' %}">
+                    {% csrf_token %}
+                    {{ team_form.name }}
+                    {% if team_form.name.errors %}
+                        <ul class="field-errors">{% for error in team_form.name.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                    {% endif %}
+                    {% if team_form.non_field_errors %}
+                        <ul class="field-errors">{% for error in team_form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                    {% endif %}
+                    <button type="submit">Add Team</button>
+                </form>
+            </section>
+
+            <section class="panel" aria-label="league teams list">
+                <h2 style="margin:0;">League Teams ({{ team_count }})</h2>
+                {% if teams %}
+                    <ul class="team-list">
+                        {% for team in teams %}
+                            <li>{{ team.name }}</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p style="margin:12px 0 0;color:#374151;">No teams yet. Add your first team above.</p>
+                {% endif %}
+            </section>
+        </main>
+    </div>
+</body>
+</html>

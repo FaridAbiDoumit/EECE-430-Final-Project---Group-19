@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upcoming Games | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #46674f;
+            --paper: #dedede;
+            --header-left: #eceeed;
+            --header-right: #b7c9b4;
+            --ink: #111111;
+            --accent: #0df2dc;
+            --chip-border: #81918a;
+            --shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+            --muted: #4b5563;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Josefin Sans', sans-serif;
+            color: var(--ink);
+            background: var(--forest);
+        }
+        a { color: inherit; text-decoration: none; }
+        .page-shell {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .page-header {
+            background: linear-gradient(90deg, var(--header-left) 0%, var(--header-right) 100%);
+            padding: 42px 34px 36px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+        }
+        .page-title {
+            margin: 0;
+            font-size: clamp(2rem, 2vw + 1.4rem, 3.1rem);
+            font-weight: 600;
+            position: relative;
+            display: inline-block;
+            padding-bottom: 14px;
+        }
+        .page-title::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: min(100%, 270px);
+            height: 3px;
+            background: var(--accent);
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.25);
+        }
+        .page-subtitle {
+            margin: 6px 0 0;
+            font-size: 1rem;
+            color: #4b5563;
+        }
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .header-chip {
+            padding: 8px 12px;
+            border: 1px solid var(--chip-border);
+            border-radius: 8px;
+            font-size: 0.98rem;
+            background: rgba(255, 255, 255, 0.15);
+        }
+        .header-link {
+            padding: 8px 12px;
+            border: 1px solid var(--chip-border);
+            border-radius: 8px;
+            font-size: 0.98rem;
+            background: #ffffff;
+        }
+        .header-link:hover { background: #f0f0f0; }
+        .page-content {
+            flex: 1;
+            padding: 36px 34px 56px;
+            max-width: 1100px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        .messages { list-style: none; padding: 0; margin: 0 0 20px; }
+        .messages li {
+            background: #fffbe6;
+            border: 1px solid #f0e070;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 8px;
+            font-size: 0.92rem;
+        }
+        .messages li.error   { background: #fdecea; border-color: #f5c6cb; }
+        .messages li.success { background: #d4f0e0; border-color: #a8dfc0; }
+        .empty-state {
+            background: var(--paper);
+            border-radius: 18px;
+            padding: 48px 22px;
+            box-shadow: var(--shadow);
+            text-align: center;
+            color: var(--muted);
+            font-size: 1rem;
+        }
+        .game-list { display: grid; gap: 22px; }
+        .game-card {
+            background: var(--paper);
+            border-radius: 18px;
+            padding: 26px 28px 22px;
+            box-shadow: var(--shadow);
+        }
+        .game-card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
+        }
+        .matchup {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin: 0;
+        }
+        .matchup-vs {
+            font-weight: 400;
+            font-size: 1rem;
+            color: #555;
+            margin: 0 6px;
+        }
+        .game-meta {
+            margin: 6px 0 0;
+            font-size: 0.93rem;
+            color: #555;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .game-notes {
+            margin-top: 6px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .status-badge {
+            flex-shrink: 0;
+            display: inline-block;
+            padding: 5px 13px;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .badge-going     { background: #d4edda; color: #1a7a3f; }
+        .badge-not_going { background: #f8d7da; color: #b52020; }
+        .badge-injured   { background: #fff3cd; color: #c07000; }
+        .badge-maybe     { background: #e2e3e5; color: #555; }
+        .card-divider {
+            border: none;
+            border-top: 1px solid rgba(0,0,0,0.1);
+            margin: 18px 0;
+        }
+        .attendance-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #333;
+            margin: 0 0 12px;
+        }
+        .attendance-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+            gap: 10px;
+        }
+        .att-group {
+            background: #f5f5f5;
+            border-radius: 10px;
+            padding: 11px 14px;
+        }
+        .att-group-label {
+            font-size: 0.82rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin: 0 0 5px;
+        }
+        .att-going     { color: #1a7a3f; }
+        .att-not-going { color: #b52020; }
+        .att-injured   { color: #c07000; }
+        .att-maybe     { color: #555; }
+        .att-names {
+            font-size: 0.88rem;
+            color: #333;
+            line-height: 1.55;
+        }
+        .att-empty { color: #999; font-style: italic; }
+        .status-form {
+            margin-top: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .status-form label { font-size: 0.93rem; font-weight: 500; }
+        .status-select {
+            padding: 7px 11px;
+            border-radius: 8px;
+            border: 1px solid #bbb;
+            font-family: inherit;
+            font-size: 0.9rem;
+            background: #fff;
+        }
+        .save-btn {
+            padding: 7px 18px;
+            background: var(--forest);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .save-btn:hover { background: #384f3d; }
+        @media (max-width: 800px) {
+            .page-header { flex-direction: column; align-items: stretch; padding: 26px 18px 28px; }
+            .header-actions { justify-content: flex-start; }
+            .page-content { padding: 24px 18px 40px; }
+            .game-card { padding: 18px; }
+            .attendance-grid { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 480px) {
+            .attendance-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<div class="page-shell">
+    <header class="page-header">
+        <div>
+            <h1 class="page-title">Upcoming Games</h1>
+            {% if team %}<p class="page-subtitle">{{ team.name }}</p>{% endif %}
+        </div>
+        <div class="header-actions">
+            {% if is_player %}
+                <span class="header-chip">Player</span>
+                <a class="header-link" href="{% url 'scheduling:player_home' %}">Back</a>
+            {% else %}
+                <span class="header-chip">Admin</span>
+                <a class="header-link" href="{% url 'scheduling:admin_home' %}">Back to admin home</a>
+            {% endif %}
+        </div>
+    </header>
+
+    <main class="page-content">
+        {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+            <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if enriched_games %}
+        <div class="game-list">
+            {% for entry in enriched_games %}
+            <div class="game-card">
+                <div class="game-card-header">
+                    <div>
+                        <p class="matchup">
+                            {{ entry.game.home_team.name }}
+                            <span class="matchup-vs">vs</span>
+                            {{ entry.game.away_team.name }}
+                        </p>
+                        <div class="game-meta">
+                            <span>{{ entry.game.scheduled_at|date:"l, d M Y" }}</span>
+                            <span>{{ entry.game.scheduled_at|time:"H:i" }}</span>
+                            {% if entry.game.venue %}<span>{{ entry.game.venue }}</span>{% endif %}
+                        </div>
+                        {% if entry.game.notes %}
+                        <p class="game-notes">{{ entry.game.notes }}</p>
+                        {% endif %}
+                    </div>
+                    {% if is_player %}
+                        {% if entry.my_status %}
+                        <span class="status-badge badge-{{ entry.my_status.status }}">{{ entry.my_status.get_status_display }}</span>
+                        {% else %}
+                        <span class="status-badge badge-maybe">No response yet</span>
+                        {% endif %}
+                    {% endif %}
+                </div>
+
+                <hr class="card-divider">
+
+                <p class="attendance-title">Attendance</p>
+                <div class="attendance-grid">
+                    <div class="att-group">
+                        <div class="att-group-label att-going">Going ({{ entry.going|length }})</div>
+                        <div class="att-names">
+                            {% if entry.going %}{% for a in entry.going %}{{ a.player.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                            {% else %}<span class="att-empty">None yet</span>{% endif %}
+                        </div>
+                    </div>
+                    <div class="att-group">
+                        <div class="att-group-label att-maybe">Maybe ({{ entry.maybe|length }})</div>
+                        <div class="att-names">
+                            {% if entry.maybe %}{% for a in entry.maybe %}{{ a.player.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                            {% else %}<span class="att-empty">None yet</span>{% endif %}
+                        </div>
+                    </div>
+                    <div class="att-group">
+                        <div class="att-group-label att-not-going">Not Going ({{ entry.not_going|length }})</div>
+                        <div class="att-names">
+                            {% if entry.not_going %}{% for a in entry.not_going %}{{ a.player.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                            {% else %}<span class="att-empty">None yet</span>{% endif %}
+                        </div>
+                    </div>
+                    <div class="att-group">
+                        <div class="att-group-label att-injured">Injured ({{ entry.injured|length }})</div>
+                        <div class="att-names">
+                            {% if entry.injured %}{% for a in entry.injured %}{{ a.player.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                            {% else %}<span class="att-empty">None yet</span>{% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                {% if is_player %}
+                <form class="status-form" method="post" action="{% url 'scheduling:set_game_attendance' entry.game.pk %}">
+                    {% csrf_token %}
+                    <label for="status-{{ entry.game.pk }}">Your status:</label>
+                    <select class="status-select" id="status-{{ entry.game.pk }}" name="status">
+                        {% for value, label in attendance_choices %}
+                        <option value="{{ value }}"
+                            {% if entry.my_status and entry.my_status.status == value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <button class="save-btn" type="submit">Save</button>
+                </form>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">No upcoming games scheduled for your team yet.</div>
+        {% endif %}
+    </main>
+</div>
+{% include "scheduling/_notification_popups.html" %}
+</body>
+</html>

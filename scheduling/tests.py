@@ -6,9 +6,15 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import (
+    Announcement,
+    ChatGroup,
+    GroupMessage,
     Match,
+    Message,
     Notification,
     Player,
+    StaffTeamAssignment,
+    Team,
     PlayerAvailability,
     PlayerMatchStat,
     PlayerSorenessReport,
@@ -39,7 +45,11 @@ class SchedulingViewsTests(TestCase):
         defaults.update(overrides)
         return TrainingSession.objects.create(**defaults)
 
+    def make_team(self, name='Team Alpha'):
+        return Team.objects.create(name=name)
+
     def test_signup_creates_player_profile_and_logs_user_in(self):
+        team = self.make_team('Signups Team')
         response = self.client.post(
             reverse('scheduling:signup'),
             data={
@@ -47,6 +57,7 @@ class SchedulingViewsTests(TestCase):
                 'email': 'newplayer@example.com',
                 'password': 'strong-pass-123',
                 'role': 'player',
+                'team': team.id,
             },
         )
 
@@ -55,9 +66,11 @@ class SchedulingViewsTests(TestCase):
         player = Player.objects.get(email='newplayer@example.com')
         self.assertEqual(player.user, user)
         self.assertEqual(player.role, Player.Role.PLAYER)
+        self.assertEqual(player.team, team)
         self.assertEqual(self.client.session.get('_auth_user_id'), str(user.id))
 
     def test_signup_creates_staff_user_for_admin_role(self):
+        team = self.make_team('Admin Team')
         response = self.client.post(
             reverse('scheduling:signup'),
             data={
@@ -65,6 +78,7 @@ class SchedulingViewsTests(TestCase):
                 'email': 'admin@example.com',
                 'password': 'strong-pass-123',
                 'role': 'admin',
+                'team': team.id,
             },
         )
 
@@ -72,6 +86,7 @@ class SchedulingViewsTests(TestCase):
         user = User.objects.get(username='admin@example.com')
         self.assertTrue(user.is_staff)
         self.assertFalse(Player.objects.filter(email='admin@example.com').exists())
+        self.assertEqual(StaffTeamAssignment.objects.get(user=user).team, team)
 
     def test_login_view_authenticates_with_email(self):
         user = User.objects.create_user(
@@ -112,6 +127,7 @@ class SchedulingViewsTests(TestCase):
         self.assertContains(response, 'deactivated')
 
     def test_signup_rejects_duplicate_email(self):
+        team = self.make_team('Duplicates Team')
         User.objects.create_user(
             username='duplicate@example.com',
             email='duplicate@example.com',
@@ -125,6 +141,7 @@ class SchedulingViewsTests(TestCase):
                 'email': 'duplicate@example.com',
                 'password': 'strong-pass-123',
                 'role': 'coach',
+                'team': team.id,
             },
         )
 
@@ -163,6 +180,7 @@ class SchedulingViewsTests(TestCase):
         self.assertRedirects(response, f"{reverse('scheduling:login')}?next={reverse('scheduling:dashboard')}")
 
     def test_player_signup_redirects_to_player_home(self):
+        team = self.make_team('Player Home Team')
         response = self.client.post(
             reverse('scheduling:signup'),
             data={
@@ -170,6 +188,7 @@ class SchedulingViewsTests(TestCase):
                 'email': 'playerhome@example.com',
                 'password': 'strong-pass-123',
                 'role': 'player',
+                'team': team.id,
             },
         )
 
@@ -216,6 +235,7 @@ class SchedulingViewsTests(TestCase):
         self.assertRedirects(response, reverse('scheduling:dashboard'))
 
     def test_coach_signup_redirects_to_coach_home(self):
+        team = self.make_team('Coach Home Team')
         response = self.client.post(
             reverse('scheduling:signup'),
             data={
@@ -223,10 +243,135 @@ class SchedulingViewsTests(TestCase):
                 'email': 'coachhome@example.com',
                 'password': 'strong-pass-123',
                 'role': 'coach',
+                'team': team.id,
             },
         )
 
         self.assertRedirects(response, reverse('scheduling:coach_home'))
+
+    def test_league_system_handler_signup_redirects_to_handler_home(self):
+        response = self.client.post(
+            reverse('scheduling:signup'),
+            data={
+                'name': 'League Handler',
+                'email': 'leaguehandler@example.com',
+                'password': 'strong-pass-123',
+                'role': 'league_system_handler',
+            },
+        )
+
+        self.assertRedirects(response, reverse('scheduling:league_system_handler_home'))
+        handler = Player.objects.get(email='leaguehandler@example.com')
+        self.assertEqual(handler.role, Player.Role.LEAGUE_SYSTEM_HANDLER)
+        self.assertIsNone(handler.team)
+
+    def test_signup_ignores_team_for_league_system_handler(self):
+        team = self.make_team('Handler Must Not Join')
+
+        response = self.client.post(
+            reverse('scheduling:signup'),
+            data={
+                'name': 'League Handler Team Field',
+                'email': 'leaguehandlerteam@example.com',
+                'password': 'strong-pass-123',
+                'role': 'league_system_handler',
+                'team': team.id,
+            },
+        )
+
+        self.assertRedirects(response, reverse('scheduling:league_system_handler_home'))
+        handler = Player.objects.get(email='leaguehandlerteam@example.com')
+        self.assertEqual(handler.role, Player.Role.LEAGUE_SYSTEM_HANDLER)
+        self.assertIsNone(handler.team)
+
+    def test_league_system_handler_home_requires_logged_in_handler_and_shows_name(self):
+        user = User.objects.create_user(
+            username='handlerdashboard@example.com',
+            email='handlerdashboard@example.com',
+            password='strong-pass-123',
+            first_name='Handler View',
+        )
+        Player.objects.create(
+            user=user,
+            name='Handler View',
+            email='handlerdashboard@example.com',
+            role=Player.Role.LEAGUE_SYSTEM_HANDLER,
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:league_system_handler_home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Welcome, Handler View!')
+        self.assertContains(response, 'Record Player and Match Stats')
+        self.assertContains(response, 'Add Teams to League')
+        self.assertContains(response, reverse('scheduling:league_handler_manage_teams'))
+        self.assertContains(response, 'Log out')
+        self.assertContains(response, reverse('scheduling:record_match'))
+        self.assertNotContains(response, 'Add Team Goal')
+
+    def test_league_system_handler_can_add_team_from_manage_teams_page(self):
+        user = User.objects.create_user(
+            username='handlerteams@example.com',
+            email='handlerteams@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=user,
+            name='Team Handler',
+            email='handlerteams@example.com',
+            role=Player.Role.LEAGUE_SYSTEM_HANDLER,
+        )
+
+        self.client.force_login(user)
+        open_page = self.client.get(reverse('scheduling:league_handler_manage_teams'))
+        self.assertEqual(open_page.status_code, 200)
+
+        response = self.client.post(
+            reverse('scheduling:league_handler_manage_teams'),
+            data={
+                'name': 'Falcons',
+            },
+        )
+
+        self.assertRedirects(response, reverse('scheduling:league_handler_manage_teams'))
+        self.assertTrue(Team.objects.filter(name='Falcons').exists())
+
+    def test_non_handler_is_redirected_away_from_league_system_handler_home(self):
+        user = User.objects.create_user(
+            username='notahandler@example.com',
+            email='notahandler@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=user,
+            name='Regular Coach',
+            email='notahandler@example.com',
+            role=Player.Role.COACH,
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:league_system_handler_home'))
+
+        self.assertRedirects(response, reverse('scheduling:dashboard'))
+
+    def test_non_handler_is_redirected_away_from_league_handler_manage_teams(self):
+        user = User.objects.create_user(
+            username='notahandlerteams@example.com',
+            email='notahandlerteams@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=user,
+            name='Regular Player',
+            email='notahandlerteams@example.com',
+            role=Player.Role.PLAYER,
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:league_handler_manage_teams'))
+
+        self.assertRedirects(response, reverse('scheduling:dashboard'))
 
     def test_coach_home_requires_logged_in_coach_and_shows_name(self):
         user = User.objects.create_user(
@@ -270,6 +415,7 @@ class SchedulingViewsTests(TestCase):
         self.assertRedirects(response, reverse('scheduling:dashboard'))
 
     def test_admin_signup_redirects_to_admin_home(self):
+        team = self.make_team('Admin Home Team')
         response = self.client.post(
             reverse('scheduling:signup'),
             data={
@@ -277,10 +423,26 @@ class SchedulingViewsTests(TestCase):
                 'email': 'adminhome@example.com',
                 'password': 'strong-pass-123',
                 'role': 'admin',
+                'team': team.id,
             },
         )
 
         self.assertRedirects(response, reverse('scheduling:admin_home'))
+
+    def test_signup_requires_team_for_player_coach_and_admin(self):
+        for role in ['player', 'coach', 'admin']:
+            response = self.client.post(
+                reverse('scheduling:signup'),
+                data={
+                    'name': f'No Team {role}',
+                    'email': f'noteam-{role}@example.com',
+                    'password': 'strong-pass-123',
+                    'role': role,
+                },
+            )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, 'Please select the team you are registering to.')
 
     def test_admin_home_requires_staff_user_and_shows_name(self):
         user = User.objects.create_user(
@@ -827,6 +989,278 @@ class SchedulingViewsTests(TestCase):
         self.assertNotContains(response, 'Other')
         self.assertIsNotNone(Notification.objects.get(recipient=player, title='Mine').read_at)
 
+    def test_chatting_hub_header_shows_contact_name_and_role_only(self):
+        sender_user = User.objects.create_user(
+            username='chat-sender@example.com',
+            email='chat-sender@example.com',
+            password='strong-pass-123',
+        )
+        sender = Player.objects.create(
+            user=sender_user,
+            name='Chat Sender',
+            email='chat-sender@example.com',
+            role=Player.Role.PLAYER,
+        )
+        contact = Player.objects.create(
+            name='Chat Coach',
+            email='chat-coach@example.com',
+            role=Player.Role.COACH,
+        )
+
+        self.client.force_login(sender_user)
+        response = self.client.get(reverse('scheduling:chatting_hub'), {'selected': contact.id})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'<h1>{contact.name}</h1>', html=False)
+        self.assertContains(response, '<p>Coach</p>', html=False)
+        self.assertContains(response, '<span class="chat-list__meta">Coach</span>', html=False)
+        self.assertNotContains(response, contact.email)
+        self.assertNotContains(response, 'Chatting')
+        self.assertNotContains(response, 'Conversation with')
+
+    def test_chatting_hub_post_creates_notification_for_message_recipient(self):
+        sender_user = User.objects.create_user(
+            username='notif-sender@example.com',
+            email='notif-sender@example.com',
+            password='strong-pass-123',
+        )
+        sender = Player.objects.create(
+            user=sender_user,
+            name='Notify Sender',
+            email='notif-sender@example.com',
+            role=Player.Role.PLAYER,
+        )
+        recipient = Player.objects.create(
+            name='Notify Recipient',
+            email='notif-recipient@example.com',
+            role=Player.Role.COACH,
+        )
+
+        self.client.force_login(sender_user)
+        response = self.client.post(
+            reverse('scheduling:chatting_hub'),
+            data={
+                'selected_id': recipient.id,
+                'content': 'Hello from sender',
+            },
+        )
+
+        self.assertRedirects(response, f"{reverse('scheduling:chatting_hub')}?selected={recipient.id}")
+        self.assertTrue(
+            Message.objects.filter(
+                player=recipient,
+                sender=sender,
+                content='Hello from sender',
+            ).exists()
+        )
+
+        notification = Notification.objects.get(recipient=recipient)
+        self.assertEqual(notification.title, 'New message from Notify Sender')
+        self.assertIn('Hello from sender', notification.message)
+
+    def test_chatting_hub_can_create_group_with_selected_members(self):
+        creator_user = User.objects.create_user(
+            username='group-creator@example.com',
+            email='group-creator@example.com',
+            password='strong-pass-123',
+        )
+        creator = Player.objects.create(
+            user=creator_user,
+            name='Group Creator',
+            email='group-creator@example.com',
+            role=Player.Role.PLAYER,
+        )
+        member_one = Player.objects.create(name='Member One', email='member1@example.com', role=Player.Role.PLAYER)
+        member_two = Player.objects.create(name='Member Two', email='member2@example.com', role=Player.Role.COACH)
+
+        self.client.force_login(creator_user)
+        response = self.client.post(
+            reverse('scheduling:chatting_hub'),
+            data={
+                'chat_action': 'create_group',
+                'name': 'Team Sparks',
+                'members': [member_one.id, member_two.id],
+            },
+        )
+
+        group = ChatGroup.objects.get(name='Team Sparks')
+        self.assertRedirects(response, f"{reverse('scheduling:chatting_hub')}?group={group.id}")
+        self.assertTrue(group.members.filter(pk=creator.pk).exists())
+        self.assertTrue(group.members.filter(pk=member_one.pk).exists())
+        self.assertTrue(group.members.filter(pk=member_two.pk).exists())
+
+        hub_response = self.client.get(reverse('scheduling:chatting_hub'), {'group': group.id})
+        self.assertEqual(hub_response.status_code, 200)
+        self.assertContains(hub_response, '3 members')
+
+    def test_chatting_hub_group_message_creates_message_and_recipient_notification(self):
+        sender_user = User.objects.create_user(
+            username='group-sender@example.com',
+            email='group-sender@example.com',
+            password='strong-pass-123',
+        )
+        sender = Player.objects.create(
+            user=sender_user,
+            name='Group Sender',
+            email='group-sender@example.com',
+            role=Player.Role.PLAYER,
+        )
+        receiver = Player.objects.create(name='Group Receiver', email='group-receiver@example.com', role=Player.Role.COACH)
+        group = ChatGroup.objects.create(
+            name='Demo Group',
+            created_by_player=sender,
+            created_by_user=sender_user,
+        )
+        group.members.add(sender, receiver)
+
+        self.client.force_login(sender_user)
+        response = self.client.post(
+            reverse('scheduling:chatting_hub'),
+            data={
+                'chat_action': 'send_group',
+                'group_id': group.id,
+                'content': 'Hello group',
+            },
+        )
+
+        self.assertRedirects(response, f"{reverse('scheduling:chatting_hub')}?group={group.id}")
+        self.assertTrue(
+            GroupMessage.objects.filter(
+                group=group,
+                sender_player=sender,
+                content='Hello group',
+            ).exists()
+        )
+
+        self.assertFalse(Notification.objects.filter(recipient=sender, title=f'New group message: {group.name}').exists())
+        receiver_notification = Notification.objects.get(recipient=receiver, title=f'New group message: {group.name}')
+        self.assertIn('Hello group', receiver_notification.message)
+
+    def test_chatting_hub_sections_are_independently_scrollable(self):
+        viewer_user = User.objects.create_user(
+            username='scroll-viewer@example.com',
+            email='scroll-viewer@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=viewer_user,
+            name='Scroll Viewer',
+            email='scroll-viewer@example.com',
+            role=Player.Role.PLAYER,
+        )
+        Player.objects.create(name='Scroll Contact', email='scroll-contact@example.com', role=Player.Role.COACH)
+
+        self.client.force_login(viewer_user)
+        response = self.client.get(reverse('scheduling:chatting_hub'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="chat-section__body"', html=False)
+        self.assertContains(response, 'overflow-y: auto;', html=False)
+        self.assertContains(response, 'id="toggleGroupForm"', html=False)
+
+    def test_player_chatting_hub_shows_announcements_but_hides_create_controls(self):
+        player_user = User.objects.create_user(
+            username='player-announcements@example.com',
+            email='player-announcements@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=player_user,
+            name='Player Announcements',
+            email='player-announcements@example.com',
+            role=Player.Role.PLAYER,
+        )
+        coach_user = User.objects.create_user(
+            username='coach-feed@example.com',
+            email='coach-feed@example.com',
+            password='strong-pass-123',
+        )
+        coach = Player.objects.create(
+            user=coach_user,
+            name='Coach Feed',
+            email='coach-feed@example.com',
+            role=Player.Role.COACH,
+        )
+        Announcement.objects.create(
+            title='Team Notice',
+            content='Game review starts at 6 PM.',
+            created_by_player=coach,
+            created_by_user=coach_user,
+        )
+        Player.objects.create(name='Other Contact', email='other-contact@example.com', role=Player.Role.COACH)
+
+        self.client.force_login(player_user)
+        response = self.client.get(reverse('scheduling:chatting_hub'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Announcements')
+        self.assertContains(response, 'Team Notice')
+        self.assertContains(response, 'Game review starts at 6 PM.')
+        self.assertNotContains(response, 'id="toggleAnnouncementForm"', html=False)
+        self.assertNotContains(response, 'chat_action" value="create_announcement"', html=False)
+
+    def test_coach_and_admin_chatting_hub_show_announcements_section(self):
+        coach_user = User.objects.create_user(
+            username='coach-announcements@example.com',
+            email='coach-announcements@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=coach_user,
+            name='Coach Announcements',
+            email='coach-announcements@example.com',
+            role=Player.Role.COACH,
+        )
+        admin_user = User.objects.create_user(
+            username='admin-announcements@example.com',
+            email='admin-announcements@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+
+        self.client.force_login(coach_user)
+        coach_response = self.client.get(reverse('scheduling:chatting_hub'))
+        self.assertEqual(coach_response.status_code, 200)
+        self.assertContains(coach_response, 'id="toggleAnnouncementForm"', html=False)
+
+        self.client.force_login(admin_user)
+        admin_response = self.client.get(reverse('scheduling:chatting_hub'))
+        self.assertEqual(admin_response.status_code, 200)
+        self.assertContains(admin_response, 'id="toggleAnnouncementForm"', html=False)
+
+    def test_announcement_post_creates_notifications_for_all_active_players(self):
+        coach_user = User.objects.create_user(
+            username='coach-broadcast@example.com',
+            email='coach-broadcast@example.com',
+            password='strong-pass-123',
+        )
+        coach = Player.objects.create(
+            user=coach_user,
+            name='Coach Broadcaster',
+            email='coach-broadcast@example.com',
+            role=Player.Role.COACH,
+        )
+        first = Player.objects.create(name='First Active', email='first-active@example.com', role=Player.Role.PLAYER)
+        second = Player.objects.create(name='Second Active', email='second-active@example.com', role=Player.Role.COACH)
+
+        self.client.force_login(coach_user)
+        response = self.client.post(
+            reverse('scheduling:chatting_hub'),
+            data={
+                'chat_action': 'create_announcement',
+                'title': 'Practice Update',
+                'content': 'Practice starts at 7 PM today.',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        announcement = Announcement.objects.get(title='Practice Update')
+        self.assertEqual(announcement.created_by_player, coach)
+        self.assertEqual(Notification.objects.filter(title='Announcement: Practice Update').count(), 3)
+        self.assertTrue(Notification.objects.filter(recipient=coach, title='Announcement: Practice Update').exists())
+        self.assertTrue(Notification.objects.filter(recipient=first, title='Announcement: Practice Update').exists())
+        self.assertTrue(Notification.objects.filter(recipient=second, title='Announcement: Practice Update').exists())
+
     def test_admin_notification_inbox_can_see_all_notifications(self):
         admin = User.objects.create_user(
             username='notifyadmin@example.com',
@@ -1316,19 +1750,19 @@ class SchedulingViewsTests(TestCase):
         self.assertContains(response, 'Latest level: 4/10')
 
     def test_team_goal_form_persists_metric_and_target_value(self):
-        coach_user = User.objects.create_user(
-            username='goalcoach@example.com',
-            email='goalcoach@example.com',
+        handler_user = User.objects.create_user(
+            username='goalhandler@example.com',
+            email='goalhandler@example.com',
             password='strong-pass-123',
         )
         Player.objects.create(
-            user=coach_user,
-            name='Goal Coach',
-            email='goalcoach@example.com',
-            role=Player.Role.COACH,
+            user=handler_user,
+            name='Goal Handler',
+            email='goalhandler@example.com',
+            role=Player.Role.LEAGUE_SYSTEM_HANDLER,
         )
 
-        self.client.force_login(coach_user)
+        self.client.force_login(handler_user)
         response = self.client.post(
             reverse('scheduling:add_team_goal'),
             data={
@@ -1343,7 +1777,295 @@ class SchedulingViewsTests(TestCase):
         self.assertEqual(goal.metric, TeamGoal.Metric.ACES)
         self.assertEqual(goal.target_value, 12)
 
+    def test_coach_cannot_record_match_or_team_goal(self):
+        coach_user = User.objects.create_user(
+            username='blockedcoach@example.com',
+            email='blockedcoach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=coach_user,
+            name='Blocked Coach',
+            email='blockedcoach@example.com',
+            role=Player.Role.COACH,
+        )
+        player = Player.objects.create(
+            name='Blocked Stats Target',
+            email='blocked-stats-target@example.com',
+            role=Player.Role.PLAYER,
+        )
+        existing_match = Match.objects.create(
+            opponent='Existing Match',
+            date=timezone.now().date(),
+            goals_for=1,
+            goals_against=1,
+        )
+
+        self.client.force_login(coach_user)
+        match_response = self.client.post(
+            reverse('scheduling:record_match'),
+            data={
+                'opponent': 'Denied Team',
+                'date': timezone.now().date().isoformat(),
+                'goals_for': 2,
+                'goals_against': 1,
+                'result': Match.Result.WIN,
+            },
+        )
+        player_stats_response = self.client.post(
+            reverse('scheduling:record_player_stats', args=[existing_match.id]),
+            data={
+                'player': player.id,
+                'goals': 1,
+                'interceptions': 1,
+                'points': 2,
+                'blocks': 1,
+                'assists': 0,
+                'aces': 0,
+                'returns': 1,
+                'most_recent_injury': '',
+            },
+        )
+        goal_response = self.client.post(
+            reverse('scheduling:add_team_goal'),
+            data={
+                'description': 'Coach should not be allowed',
+                'metric': TeamGoal.Metric.POINTS,
+                'target_value': 40,
+            },
+        )
+
+        self.assertRedirects(match_response, reverse('scheduling:coach_home'))
+        self.assertRedirects(player_stats_response, reverse('scheduling:coach_home'))
+        self.assertRedirects(goal_response, reverse('scheduling:coach_home'))
+        self.assertEqual(Match.objects.count(), 1)
+        self.assertFalse(PlayerMatchStat.objects.filter(match=existing_match, player=player).exists())
+        self.assertEqual(TeamGoal.objects.count(), 0)
+
+    def test_admin_cannot_record_match_or_player_stats_or_team_goal(self):
+        admin_user = User.objects.create_user(
+            username='blockedadminstats@example.com',
+            email='blockedadminstats@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+        player = Player.objects.create(
+            name='Admin Block Target',
+            email='admin-block-target@example.com',
+            role=Player.Role.PLAYER,
+        )
+        existing_match = Match.objects.create(
+            opponent='Admin Existing Match',
+            date=timezone.now().date(),
+            goals_for=0,
+            goals_against=0,
+        )
+
+        self.client.force_login(admin_user)
+        match_response = self.client.post(
+            reverse('scheduling:record_match'),
+            data={
+                'opponent': 'Admin Denied Team',
+                'date': timezone.now().date().isoformat(),
+                'goals_for': 5,
+                'goals_against': 1,
+            },
+        )
+        player_stats_response = self.client.post(
+            reverse('scheduling:record_player_stats', args=[existing_match.id]),
+            data={
+                'player': player.id,
+                'goals': 1,
+                'interceptions': 1,
+                'points': 2,
+                'blocks': 1,
+                'assists': 0,
+                'aces': 0,
+                'returns': 1,
+                'most_recent_injury': '',
+            },
+        )
+        goal_response = self.client.post(
+            reverse('scheduling:add_team_goal'),
+            data={
+                'description': 'Admin should not be allowed',
+                'metric': TeamGoal.Metric.POINTS,
+                'target_value': 60,
+            },
+        )
+
+        self.assertRedirects(match_response, reverse('scheduling:admin_home'))
+        self.assertRedirects(player_stats_response, reverse('scheduling:admin_home'))
+        self.assertRedirects(goal_response, reverse('scheduling:admin_home'))
+        self.assertEqual(Match.objects.count(), 1)
+        self.assertFalse(PlayerMatchStat.objects.filter(match=existing_match, player=player).exists())
+        self.assertEqual(TeamGoal.objects.count(), 0)
+
+    def test_league_handler_can_record_match_and_player_stats(self):
+        team = self.make_team('Handler Stats Team')
+        handler_user = User.objects.create_user(
+            username='matchhandler@example.com',
+            email='matchhandler@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=handler_user,
+            name='Match Handler',
+            email='matchhandler@example.com',
+            role=Player.Role.LEAGUE_SYSTEM_HANDLER,
+        )
+        player = Player.objects.create(
+            name='Stats Target',
+            email='statstarget@example.com',
+            role=Player.Role.PLAYER,
+            team=team,
+        )
+
+        self.client.force_login(handler_user)
+        match_response = self.client.post(
+            reverse('scheduling:record_match'),
+            data={
+                'team': team.id,
+                'opponent': 'Data Team',
+                'date': timezone.now().date().isoformat(),
+                'goals_for': 3,
+                'goals_against': 0,
+                'result': Match.Result.WIN,
+            },
+        )
+
+        self.assertEqual(match_response.status_code, 302)
+        match = Match.objects.get(opponent='Data Team')
+
+        stats_response = self.client.post(
+            reverse('scheduling:record_player_stats', args=[match.id]),
+            data={
+                'player': player.id,
+                'goals': 1,
+                'interceptions': 2,
+                'points': 8,
+                'blocks': 3,
+                'assists': 4,
+                'aces': 2,
+                'returns': 5,
+                'most_recent_injury': '',
+            },
+        )
+
+        self.assertEqual(stats_response.status_code, 302)
+        self.assertTrue(PlayerMatchStat.objects.filter(match=match, player=player).exists())
+
+    def test_handler_recorded_stats_show_on_coach_and_player_dashboards(self):
+        team = self.make_team('Visibility Team')
+        handler_user = User.objects.create_user(
+            username='dashboardhandler@example.com',
+            email='dashboardhandler@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=handler_user,
+            name='Dashboard Handler',
+            email='dashboardhandler@example.com',
+            role=Player.Role.LEAGUE_SYSTEM_HANDLER,
+        )
+
+        coach_user = User.objects.create_user(
+            username='visibilitycoach@example.com',
+            email='visibilitycoach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=coach_user,
+            name='Visibility Coach',
+            email='visibilitycoach@example.com',
+            role=Player.Role.COACH,
+            team=team,
+        )
+
+        player_user = User.objects.create_user(
+            username='visibilityplayer@example.com',
+            email='visibilityplayer@example.com',
+            password='strong-pass-123',
+        )
+        player_profile = Player.objects.create(
+            user=player_user,
+            name='Visibility Player',
+            email='visibilityplayer@example.com',
+            role=Player.Role.PLAYER,
+            team=team,
+        )
+
+        self.client.force_login(handler_user)
+        match_response = self.client.post(
+            reverse('scheduling:record_match'),
+            data={
+                'team': team.id,
+                'opponent': 'Visibility Rivals',
+                'date': timezone.now().date().isoformat(),
+                'goals_for': 3,
+                'goals_against': 1,
+            },
+        )
+        self.assertEqual(match_response.status_code, 302)
+        match = Match.objects.get(opponent='Visibility Rivals')
+
+        stats_response = self.client.post(
+            reverse('scheduling:record_player_stats', args=[match.id]),
+            data={
+                'player': player_profile.id,
+                'goals': 2,
+                'interceptions': 1,
+                'points': 11,
+                'blocks': 3,
+                'assists': 2,
+                'aces': 1,
+                'returns': 4,
+                'most_recent_injury': '',
+            },
+        )
+        self.assertEqual(stats_response.status_code, 302)
+
+        self.client.force_login(coach_user)
+        coach_dashboard_response = self.client.get(reverse('scheduling:team_stats'))
+        self.assertEqual(coach_dashboard_response.status_code, 200)
+        self.assertTrue(
+            any(
+                item['player__name'] == player_profile.name and item['total_goals'] == 2
+                for item in coach_dashboard_response.context['top_scorers']
+            )
+        )
+
+        self.client.force_login(player_user)
+        player_dashboard_response = self.client.get(
+            reverse('scheduling:player_stats_detail', args=[player_profile.id])
+        )
+        self.assertEqual(player_dashboard_response.status_code, 200)
+        self.assertEqual(player_dashboard_response.context['totals']['total_goals'], 2)
+        self.assertEqual(player_dashboard_response.context['totals']['total_points'], 11)
+        self.assertContains(player_dashboard_response, 'Per-Match Averages')
+
+    def test_team_stats_hides_record_actions_for_coach(self):
+        coach_user = User.objects.create_user(
+            username='viewcoach@example.com',
+            email='viewcoach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=coach_user,
+            name='View Coach',
+            email='viewcoach@example.com',
+            role=Player.Role.COACH,
+        )
+
+        self.client.force_login(coach_user)
+        response = self.client.get(reverse('scheduling:team_stats'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse('scheduling:record_match'))
+        self.assertNotContains(response, reverse('scheduling:add_team_goal'))
+
     def test_team_stats_computes_goal_progress_and_shows_latest_soreness(self):
+        team = self.make_team('Coach Scope Team')
         coach_user = User.objects.create_user(
             username='statscoach@example.com',
             email='statscoach@example.com',
@@ -1354,13 +2076,15 @@ class SchedulingViewsTests(TestCase):
             name='Stats Coach',
             email='statscoach@example.com',
             role=Player.Role.COACH,
+            team=team,
         )
         player = Player.objects.create(
             name='Tracked Player',
             email='tracked@example.com',
             role=Player.Role.PLAYER,
+            team=team,
         )
-        match = Match.objects.create(opponent='Rivals', date=timezone.now().date(), goals_for=3, goals_against=1)
+        match = Match.objects.create(opponent='Rivals', team=team, date=timezone.now().date(), goals_for=3, goals_against=1)
         PlayerMatchStat.objects.create(match=match, player=player, points=10, aces=2, assists=1)
         TeamGoal.objects.create(description='Reach point target', metric=TeamGoal.Metric.POINTS, target_value=20)
         PlayerSorenessReport.objects.create(player=player, soreness_level=6, notes='Normal soreness')
@@ -1374,6 +2098,7 @@ class SchedulingViewsTests(TestCase):
         self.assertContains(response, 'Latest Soreness Levels')
 
     def test_team_stats_rankings_respect_selected_metric(self):
+        team = self.make_team('Ranking Team')
         coach_user = User.objects.create_user(
             username='rankingcoach@example.com',
             email='rankingcoach@example.com',
@@ -1384,10 +2109,11 @@ class SchedulingViewsTests(TestCase):
             name='Ranking Coach',
             email='rankingcoach@example.com',
             role=Player.Role.COACH,
+            team=team,
         )
-        first = Player.objects.create(name='First Player', email='firstmetric@example.com', role=Player.Role.PLAYER)
-        second = Player.objects.create(name='Second Player', email='secondmetric@example.com', role=Player.Role.PLAYER)
-        match = Match.objects.create(opponent='Ranking Match', date=timezone.now().date(), goals_for=2, goals_against=2)
+        first = Player.objects.create(name='First Player', email='firstmetric@example.com', role=Player.Role.PLAYER, team=team)
+        second = Player.objects.create(name='Second Player', email='secondmetric@example.com', role=Player.Role.PLAYER, team=team)
+        match = Match.objects.create(opponent='Ranking Match', team=team, date=timezone.now().date(), goals_for=2, goals_against=2)
         PlayerMatchStat.objects.create(match=match, player=first, assists=1, points=20)
         PlayerMatchStat.objects.create(match=match, player=second, assists=5, points=3)
 
@@ -1399,7 +2125,81 @@ class SchedulingViewsTests(TestCase):
         self.assertEqual(response.context['top_players'][0].name, 'Second Player')
         self.assertEqual(response.context['weak_players'][0].name, 'First Player')
 
+    def test_coach_team_stats_are_limited_to_own_team_games_and_players(self):
+        team_a = self.make_team('Team A Scope')
+        team_b = self.make_team('Team B Scope')
+
+        coach_user = User.objects.create_user(
+            username='scopedcoach@example.com',
+            email='scopedcoach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=coach_user,
+            name='Scoped Coach',
+            email='scopedcoach@example.com',
+            role=Player.Role.COACH,
+            team=team_a,
+        )
+
+        player_a = Player.objects.create(
+            name='Scoped Player A',
+            email='scoped-player-a@example.com',
+            role=Player.Role.PLAYER,
+            team=team_a,
+        )
+        player_b = Player.objects.create(
+            name='Scoped Player B',
+            email='scoped-player-b@example.com',
+            role=Player.Role.PLAYER,
+            team=team_b,
+        )
+
+        match_a = Match.objects.create(opponent='Rivals A', team=team_a, date=timezone.now().date(), goals_for=3, goals_against=1)
+        match_b = Match.objects.create(opponent='Rivals B', team=team_b, date=timezone.now().date(), goals_for=2, goals_against=2)
+        PlayerMatchStat.objects.create(match=match_a, player=player_a, goals=2, points=9)
+        PlayerMatchStat.objects.create(match=match_b, player=player_b, goals=4, points=11)
+
+        self.client.force_login(coach_user)
+        response = self.client.get(reverse('scheduling:team_stats'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['match_count'], 1)
+        self.assertEqual(response.context['players'].count(), 1)
+        self.assertEqual(response.context['players'][0].id, player_a.id)
+        self.assertTrue(any(item['player__name'] == player_a.name for item in response.context['top_scorers']))
+        self.assertFalse(any(item['player__name'] == player_b.name for item in response.context['top_scorers']))
+
+    def test_coach_cannot_open_player_stats_of_other_team(self):
+        team_a = self.make_team('Detail Team A')
+        team_b = self.make_team('Detail Team B')
+
+        coach_user = User.objects.create_user(
+            username='detailcoach@example.com',
+            email='detailcoach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=coach_user,
+            name='Detail Coach',
+            email='detailcoach@example.com',
+            role=Player.Role.COACH,
+            team=team_a,
+        )
+        other_team_player = Player.objects.create(
+            name='Other Team Player',
+            email='other-team-player@example.com',
+            role=Player.Role.PLAYER,
+            team=team_b,
+        )
+
+        self.client.force_login(coach_user)
+        response = self.client.get(reverse('scheduling:player_stats_detail', args=[other_team_player.id]))
+
+        self.assertRedirects(response, reverse('scheduling:team_stats'))
+
     def test_player_stats_detail_includes_average_summary(self):
+        team = self.make_team('Average Team')
         coach_user = User.objects.create_user(
             username='averagecoach@example.com',
             email='averagecoach@example.com',
@@ -1410,14 +2210,16 @@ class SchedulingViewsTests(TestCase):
             name='Average Coach',
             email='averagecoach@example.com',
             role=Player.Role.COACH,
+            team=team,
         )
         player = Player.objects.create(
             name='Average Player',
             email='averageplayer@example.com',
             role=Player.Role.PLAYER,
+            team=team,
         )
-        first_match = Match.objects.create(opponent='One', date=timezone.now().date(), goals_for=1, goals_against=0)
-        second_match = Match.objects.create(opponent='Two', date=timezone.now().date() + timedelta(days=1), goals_for=2, goals_against=1)
+        first_match = Match.objects.create(opponent='One', team=team, date=timezone.now().date(), goals_for=1, goals_against=0)
+        second_match = Match.objects.create(opponent='Two', team=team, date=timezone.now().date() + timedelta(days=1), goals_for=2, goals_against=1)
         PlayerMatchStat.objects.create(match=first_match, player=player, points=6, blocks=2, aces=1)
         PlayerMatchStat.objects.create(match=second_match, player=player, points=4, blocks=4, aces=3)
 

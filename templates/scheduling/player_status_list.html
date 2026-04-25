@@ -135,6 +135,47 @@
             font-size: 0.93rem;
         }
         .manage-link:hover { background: #f0f0f0; }
+        .pending-section {
+            margin-bottom: 36px;
+        }
+        .pending-section-label {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #f0f4f1;
+            margin: 0 0 14px;
+            letter-spacing: 0.01em;
+        }
+        .pending-table-card {
+            background: var(--paper);
+            border-radius: 18px;
+            padding: 18px;
+            box-shadow: var(--shadow);
+            overflow-x: auto;
+        }
+        .pending-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 999px;
+            background: #fff3cd;
+            border: 1px solid #d4a017;
+            color: #7a5200;
+            font-size: 0.83rem;
+            font-weight: 600;
+        }
+        .action-btn {
+            display: inline-block;
+            padding: 6px 13px;
+            border-radius: 8px;
+            border: none;
+            font-family: inherit;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .approve-btn { background: #2e6b3e; color: #fff; margin-right: 6px; }
+        .approve-btn:hover { background: #245532; }
+        .reject-btn { background: #8a3030; color: #fff; }
+        .reject-btn:hover { background: #6b2020; }
+        .pending-actions-form { display: inline; }
         .empty-state {
             background: var(--paper);
             border-radius: 18px;
@@ -164,6 +205,63 @@
         </header>
 
         <main class="page-content">
+            {% if pending_players or pending_coaches %}
+            <div class="pending-section">
+                <h2 class="pending-section-label">Pending Registrations</h2>
+                <div class="pending-table-card">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for person in pending_players %}
+                            <tr>
+                                <td>{{ person.name }}</td>
+                                <td>Player</td>
+                                <td><span class="pending-badge">Pending</span></td>
+                                <td>
+                                    <form class="pending-actions-form" method="post" action="{% url 'scheduling:approve_member' person.id %}">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="next" value="scheduling:player_status_list">
+                                        <button class="action-btn approve-btn" type="submit">Approve</button>
+                                    </form>
+                                    <form class="pending-actions-form" method="post" action="{% url 'scheduling:reject_member' person.id %}">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="next" value="scheduling:player_status_list">
+                                        <button class="action-btn reject-btn" type="submit">Reject</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% for person in pending_coaches %}
+                            <tr>
+                                <td>{{ person.name }}</td>
+                                <td>Coach</td>
+                                <td><span class="pending-badge">Pending</span></td>
+                                <td>
+                                    <form class="pending-actions-form" method="post" action="{% url 'scheduling:approve_member' person.id %}">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="next" value="scheduling:player_status_list">
+                                        <button class="action-btn approve-btn" type="submit">Approve</button>
+                                    </form>
+                                    <form class="pending-actions-form" method="post" action="{% url 'scheduling:reject_member' person.id %}">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="next" value="scheduling:player_status_list">
+                                        <button class="action-btn reject-btn" type="submit">Reject</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
             <div class="status-grid">
                 <!-- Players -->
                 <div>

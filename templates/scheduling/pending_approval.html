@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pending Approval | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #496951;
+            --mint: #b5d0b1;
+            --paper: #d9d9d9;
+            --ink: #151318;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            background: radial-gradient(circle at top, #5a8063 0%, var(--forest) 56%);
+            font-family: 'Josefin Sans', sans-serif;
+            color: var(--ink);
+        }
+        .card {
+            width: min(100%, 480px);
+            background: var(--paper);
+            border-radius: 24px;
+            padding: 48px 36px 40px;
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
+            text-align: center;
+        }
+        .icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 18px;
+            background: var(--mint);
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+        }
+        .icon svg {
+            width: 34px;
+            height: 34px;
+            color: #2f5738;
+        }
+        h1 {
+            margin: 0 0 14px;
+            font-size: 1.8rem;
+            font-weight: 600;
+        }
+        p {
+            margin: 0 0 10px;
+            font-size: 1rem;
+            color: #374151;
+            line-height: 1.5;
+        }
+        .team-badge {
+            display: inline-block;
+            margin: 12px 0 24px;
+            padding: 6px 16px;
+            background: #fff;
+            border: 1px solid #aaa;
+            border-radius: 999px;
+            font-size: 0.92rem;
+            font-weight: 600;
+        }
+        .logout-btn {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 11px 28px;
+            background: #111;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .logout-btn:hover { background: #333; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+        </div>
+        <h1>Registration Pending</h1>
+        {% if is_staff_pending %}
+            <p>Your <strong>Team Admin</strong> registration has been submitted.</p>
+            <p>The league system handler needs to approve your account before you can access the app.</p>
+            {% if team %}
+                <span class="team-badge">{{ team.name }}</span>
+            {% endif %}
+        {% else %}
+            <p>Hi <strong>{{ profile.name }}</strong>, your registration has been submitted.</p>
+            <p>A club admin needs to approve your account before you can access the app.</p>
+            {% if profile.team %}
+                <span class="team-badge">{{ profile.team.name }}</span>
+            {% endif %}
+        {% endif %}
+        <br>
+        <form method="post" action="{% url 'scheduling:logout' %}">
+            {% csrf_token %}
+            <button class="logout-btn" type="submit">Sign out</button>
+        </form>
+    </div>
+</body>
+</html>

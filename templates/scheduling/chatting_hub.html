@@ -98,7 +98,11 @@
         }
         .chat-sidebar {
             display: grid;
-            gap: 20px;
+            grid-template-rows: auto;
+            grid-auto-rows: minmax(0, 1fr);
+            gap: 16px;
+            height: clamp(700px, 78vh, 880px);
+            overflow: hidden;
         }
         .chat-sidebar__top {
             display: grid;
@@ -117,12 +121,34 @@
             color: var(--ink);
             background: white;
         }
+        .chat-section {
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr);
+            gap: 10px;
+            min-height: 0;
+            overflow: hidden;
+        }
+        .chat-section__header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
         .chat-section h3 {
             margin: 0 0 10px;
             font-size: 0.95rem;
             text-transform: uppercase;
             letter-spacing: 0.08em;
             color: var(--muted);
+        }
+        .chat-section__body {
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+            padding-right: 4px;
+            display: grid;
+            gap: 10px;
         }
         .chat-list {
             list-style: none;
@@ -171,6 +197,186 @@
         .chat-list__meta {
             font-size: 0.92rem;
             color: #5e6a5b;
+        }
+        .chat-section-action {
+            border: none;
+            background: transparent;
+            color: #36553f;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+            padding: 0;
+        }
+        .group-create-form {
+            display: none;
+            gap: 10px;
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: #f7faf4;
+        }
+        .group-create-form.is-open {
+            display: grid;
+        }
+        .announcement-create-form {
+            display: none;
+            gap: 10px;
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: #f7faf4;
+        }
+        .announcement-create-form.is-open {
+            display: grid;
+        }
+        .group-create-form input[type="text"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            font: inherit;
+        }
+        .announcement-create-form input[type="text"],
+        .announcement-create-form textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            font: inherit;
+            resize: vertical;
+            background: white;
+        }
+        .group-members {
+            max-height: 140px;
+            overflow-y: auto;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: white;
+            padding: 8px;
+            display: grid;
+            gap: 6px;
+        }
+        .group-member-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.95rem;
+            color: #2f3d2c;
+        }
+        .group-form-error {
+            margin: 0;
+            color: #a1262d;
+            font-size: 0.9rem;
+        }
+        .announcement-item {
+            display: grid;
+            gap: 5px;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: #ffffff;
+        }
+        .announcement-item h4 {
+            margin: 0;
+            font-size: 1rem;
+        }
+        .announcement-item p {
+            margin: 0;
+            color: #41503f;
+            font-size: 0.94rem;
+        }
+        .announcement-item time {
+            color: #6a7768;
+            font-size: 0.84rem;
+        }
+        .announcement-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .reply-toggle-btn {
+            background: none;
+            border: 1px solid #81918a;
+            border-radius: 8px;
+            padding: 4px 10px;
+            font: inherit;
+            font-size: 0.82rem;
+            color: var(--forest);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .reply-toggle-btn:hover {
+            background: #eef3ed;
+        }
+        .announcement-reply-form {
+            display: none;
+            gap: 8px;
+            margin-top: 6px;
+        }
+        .announcement-reply-form.is-open {
+            display: grid;
+        }
+        .announcement-reply-form textarea {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            font: inherit;
+            font-size: 0.9rem;
+            resize: vertical;
+            background: white;
+        }
+        .announcement-reply-form .btn-send-reply {
+            justify-self: start;
+            background: var(--forest);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 6px 14px;
+            font: inherit;
+            font-size: 0.88rem;
+            cursor: pointer;
+        }
+        .announcement-reply-form .btn-send-reply:hover {
+            background: #3a5542;
+        }
+        .announcement-replies {
+            margin-top: 8px;
+            border-top: 1px solid var(--line);
+            padding-top: 8px;
+            display: grid;
+            gap: 8px;
+        }
+        .announcement-replies__label {
+            margin: 0;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #41503f;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .announcement-reply {
+            background: #f0f4ef;
+            border-radius: 8px;
+            padding: 8px 10px;
+            display: grid;
+            gap: 3px;
+        }
+        .announcement-reply__author {
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: var(--forest);
+        }
+        .announcement-reply p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: #2c3b2a;
+        }
+        .announcement-reply time {
+            font-size: 0.8rem;
+            color: #6a7768;
         }
         .chat-main {
             display: grid;
@@ -283,6 +489,13 @@
             .chat-layout {
                 grid-template-columns: 1fr;
             }
+            .chat-sidebar {
+                height: auto;
+                overflow: visible;
+            }
+            .chat-section {
+                max-height: 260px;
+            }
         }
     </style>
 </head>
@@ -315,91 +528,183 @@
                     </div>
 
                     <div class="chat-section">
-                        <h3>Individuals</h3>
-                        {% if contacts %}
-                            <ul class="chat-list">
-                                {% for contact in contacts %}
-                                    <li class="chat-list__item {% if selected_user and contact.id == selected_user.id %}active{% endif %}" data-contact-id="{{ contact.id }}">
-                                        <a href="?selected={{ contact.id }}{% if search_query %}&search={{ search_query|urlencode }}{% endif %}">
-                                            <span class="chat-list__name">
-                                                {{ contact.name }}
-                                                {% if contact.id in unread_contact_ids %}
-                                                    <span class="chat-unread-dot"></span>
-                                                {% endif %}
-                                            </span>
-                                            <span class="chat-list__meta">{{ contact.email }}</span>
-                                        </a>
-                                    </li>
+                        <div class="chat-section__header">
+                            <h3>Individuals</h3>
+                        </div>
+                        <div class="chat-section__body">
+                            {% if contacts %}
+                                <ul class="chat-list">
+                                    {% for contact in contacts %}
+                                        <li class="chat-list__item {% if selected_user and contact.id == selected_user.id %}active{% endif %}" data-contact-id="{{ contact.id }}">
+                                            <a href="?selected={{ contact.id }}{% if search_query %}&search={{ search_query|urlencode }}{% endif %}">
+                                                <span class="chat-list__name">
+                                                    {{ contact.name }}
+                                                    {% if contact.id in unread_contact_ids %}
+                                                        <span class="chat-unread-dot"></span>
+                                                    {% endif %}
+                                                </span>
+                                                <span class="chat-list__meta">{{ contact.chat_status|title }}</span>
+                                            </a>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <p class="muted">No contacts found.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="chat-section">
+                        <div class="chat-section__header">
+                            <h3>Groups</h3>
+                            <button type="button" class="chat-section-action" id="toggleGroupForm">+ New group</button>
+                        </div>
+                        <div class="chat-section__body">
+                            <form method="post" class="group-create-form {% if show_group_form %}is-open{% endif %}" id="groupCreateForm">
+                                {% csrf_token %}
+                                <input type="hidden" name="chat_action" value="create_group" />
+                                {{ group_form.name }}
+                                <div class="group-members">
+                                    {% for checkbox in group_form.members %}
+                                        <label class="group-member-option">{{ checkbox.tag }} <span>{{ checkbox.choice_label }}</span></label>
+                                    {% empty %}
+                                        <p class="muted">No members available for this group.</p>
+                                    {% endfor %}
+                                </div>
+                                {% if group_form.non_field_errors %}
+                                    {% for error in group_form.non_field_errors %}
+                                        <p class="group-form-error">{{ error }}</p>
+                                    {% endfor %}
+                                {% endif %}
+                                {% for error in group_form.name.errors %}
+                                    <p class="group-form-error">{{ error }}</p>
                                 {% endfor %}
-                            </ul>
-                        {% else %}
-                            <p class="muted">No contacts found.</p>
-                        {% endif %}
+                                {% for error in group_form.members.errors %}
+                                    <p class="group-form-error">{{ error }}</p>
+                                {% endfor %}
+                                <button type="submit" class="button">Create group</button>
+                            </form>
+
+                            {% if groups %}
+                                <ul class="chat-list">
+                                    {% for group in groups %}
+                                        <li class="chat-list__item {% if selected_group and group.id == selected_group.id %}active{% endif %}">
+                                            <a href="?group={{ group.id }}{% if search_query %}&search={{ search_query|urlencode }}{% endif %}">
+                                                <span class="chat-list__name">{{ group.name }}</span>
+                                                <span class="chat-list__meta">{{ group.member_count }} members</span>
+                                            </a>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <p class="muted">No groups yet. Create one to start chatting.</p>
+                            {% endif %}
+                        </div>
                     </div>
 
                     <div class="chat-section">
-                        <h3>Groups</h3>
-                        <ul class="chat-list chat-list--muted">
-                            <li class="chat-list__item"><div>Team A (Main)</div></li>
-                            <li class="chat-list__item"><div>Team A (players only)</div></li>
-                        </ul>
-                    </div>
+                        <div class="chat-section__header">
+                            <h3>Announcements</h3>
+                            {% if can_manage_announcements %}
+                                <button type="button" class="chat-section-action" id="toggleAnnouncementForm">+ New announcement</button>
+                            {% endif %}
+                        </div>
+                        <div class="chat-section__body">
+                            {% if can_manage_announcements %}
+                                <form method="post" class="announcement-create-form {% if show_announcement_form %}is-open{% endif %}" id="announcementCreateForm">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="chat_action" value="create_announcement" />
+                                    {{ announcement_form.title }}
+                                    {{ announcement_form.content }}
+                                    {% for error in announcement_form.non_field_errors %}
+                                        <p class="group-form-error">{{ error }}</p>
+                                    {% endfor %}
+                                    {% for error in announcement_form.title.errors %}
+                                        <p class="group-form-error">{{ error }}</p>
+                                    {% endfor %}
+                                    {% for error in announcement_form.content.errors %}
+                                        <p class="group-form-error">{{ error }}</p>
+                                    {% endfor %}
+                                    <button type="submit" class="button">Send announcement</button>
+                                </form>
+                            {% endif %}
 
-                    <div class="chat-section">
-                        <h3>Announcements</h3>
-                        <ul class="chat-list chat-list--muted">
-                            <li class="chat-list__item"><div>Team announcements</div></li>
-                            <li class="chat-list__item"><div>System notices</div></li>
-                        </ul>
+                            {% if announcements %}
+                                <div class="chat-list">
+                                    {% for announcement in announcements %}
+                                        <article class="announcement-item">
+                                            <h4>{{ announcement.title }}</h4>
+                                            <p>{{ announcement.content }}</p>
+                                            <div class="announcement-footer">
+                                                <time>{{ announcement.created_at|date:"M d, Y - H:i" }}</time>
+                                                {% if player_can_reply and announcement.created_by_player or player_can_reply and announcement.created_by_user %}
+                                                    <button type="button" class="reply-toggle-btn" data-ann="{{ announcement.id }}">Reply privately</button>
+                                                {% endif %}
+                                            </div>
+                                            {% if player_can_reply %}
+                                                <form method="post" class="announcement-reply-form" id="replyForm{{ announcement.id }}">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="chat_action" value="reply_announcement" />
+                                                    <input type="hidden" name="announcement_id" value="{{ announcement.id }}" />
+                                                    <textarea name="reply_content" placeholder="Write your private reply..." rows="2" required></textarea>
+                                                    <button type="submit" class="btn-send-reply">Send reply</button>
+                                                </form>
+                                            {% endif %}
+                                            {% if announcement.my_replies %}
+                                                <div class="announcement-replies">
+                                                    <p class="announcement-replies__label">Private replies</p>
+                                                    {% for reply in announcement.my_replies %}
+                                                        <div class="announcement-reply">
+                                                            <span class="announcement-reply__author">{{ reply.sender.name }}</span>
+                                                            <p>{{ reply.content }}</p>
+                                                            <time>{{ reply.created_at|date:"M d, Y - H:i" }}</time>
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+                                        </article>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <p class="muted">No announcements yet.</p>
+                            {% endif %}
+                        </div>
                     </div>
                 </section>
 
                 <section class="chat-main">
                     <div class="chat-window panel">
                         <div class="chat-window__header">
-                            <h1>Chatting</h1>
-                            {% if selected_user %}
-                                <p>Conversation with <strong>{{ selected_user.name }}</strong> — {{ selected_user.email }}</p>
+                            {% if selected_group %}
+                                <h1>{{ selected_group.name }}</h1>
+                                <p>Group • {{ selected_group.member_count }} members</p>
+                            {% elif selected_user %}
+                                <h1>{{ selected_user.name }}</h1>
+                                <p>{{ selected_user_status|title }}</p>
                             {% else %}
+                                <h1>No contact selected</h1>
                                 <p>Select a contact on the left to start a conversation.</p>
                             {% endif %}
                         </div>
 
-                        {% if selected_user %}
-                            <div class="messages-scroll" id="messagesContainer" data-selected-id="{{ selected_user.id }}">
+                        {% if selected_group or selected_user %}
+                            <div
+                                class="messages-scroll"
+                                id="messagesContainer"
+                                data-selected-id="{% if selected_group %}{{ selected_group.id }}{% else %}{{ selected_user.id }}{% endif %}"
+                                data-selected-type="{% if selected_group %}group{% else %}individual{% endif %}"
+                            >
                                 {% if conversation_messages %}
                                     {% for message in conversation_messages %}
-                                        {% if is_admin and message.sender_is_admin %}
-                                            <article class="message message-sent">
-                                                <div class="message-bubble">
-                                                    <div class="message-meta">
-                                                        <span class="message-author">You</span>
-                                                        <time>{{ message.created_at|date:"M d, Y - H:i" }}</time>
-                                                    </div>
-                                                    <p>{{ message.content }}</p>
+                                        <article class="message {% if message.sent_by_current_user %}message-sent{% else %}message-received{% endif %}">
+                                            <div class="message-bubble">
+                                                <div class="message-meta">
+                                                    <span class="message-author">{{ message.author }}</span>
+                                                    <time>{{ message.created_at }}</time>
                                                 </div>
-                                            </article>
-                                        {% elif message.player.id == selected_user.id %}
-                                            <article class="message message-sent">
-                                                <div class="message-bubble">
-                                                    <div class="message-meta">
-                                                        <span class="message-author">You</span>
-                                                        <time>{{ message.created_at|date:"M d, Y - H:i" }}</time>
-                                                    </div>
-                                                    <p>{{ message.content }}</p>
-                                                </div>
-                                            </article>
-                                        {% else %}
-                                            <article class="message message-received">
-                                                <div class="message-bubble">
-                                                    <div class="message-meta">
-                                                        <span class="message-author">{{ selected_user.name }}</span>
-                                                        <time>{{ message.created_at|date:"M d, Y - H:i" }}</time>
-                                                    </div>
-                                                    <p>{{ message.content }}</p>
-                                                </div>
-                                            </article>
-                                        {% endif %}
+                                                <p>{{ message.content }}</p>
+                                            </div>
+                                        </article>
                                     {% endfor %}
                                 {% endif %}
                             </div>
@@ -410,10 +715,16 @@
                         {% endif %}
                     </div>
 
-                    {% if selected_user %}
+                    {% if selected_group or selected_user %}
                         <form method="post" class="chat-compose panel">
                             {% csrf_token %}
-                            <input type="hidden" name="selected_id" value="{{ selected_user.id }}" />
+                            {% if selected_group %}
+                                <input type="hidden" name="chat_action" value="send_group" />
+                                <input type="hidden" name="group_id" value="{{ selected_group.id }}" />
+                            {% else %}
+                                <input type="hidden" name="chat_action" value="send_individual" />
+                                <input type="hidden" name="selected_id" value="{{ selected_user.id }}" />
+                            {% endif %}
                             {{ form.content }}
                             <button type="submit" class="button">Send message</button>
                         </form>
@@ -425,12 +736,57 @@
 
     <script>
         (function() {
+            const toggleGroupForm = document.getElementById('toggleGroupForm');
+            const groupCreateForm = document.getElementById('groupCreateForm');
+            const toggleAnnouncementForm = document.getElementById('toggleAnnouncementForm');
+            const announcementCreateForm = document.getElementById('announcementCreateForm');
+
+            if (toggleGroupForm && groupCreateForm) {
+                const syncToggleLabel = () => {
+                    toggleGroupForm.textContent = groupCreateForm.classList.contains('is-open')
+                        ? 'Hide form'
+                        : '+ New group';
+                };
+
+                syncToggleLabel();
+                toggleGroupForm.addEventListener('click', () => {
+                    groupCreateForm.classList.toggle('is-open');
+                    syncToggleLabel();
+                });
+            }
+
+            if (toggleAnnouncementForm && announcementCreateForm) {
+                const syncAnnouncementLabel = () => {
+                    toggleAnnouncementForm.textContent = announcementCreateForm.classList.contains('is-open')
+                        ? 'Hide form'
+                        : '+ New announcement';
+                };
+
+                syncAnnouncementLabel();
+                toggleAnnouncementForm.addEventListener('click', () => {
+                    announcementCreateForm.classList.toggle('is-open');
+                    syncAnnouncementLabel();
+                });
+            }
+
+            // Reply-privately toggle buttons
+            document.querySelectorAll('.reply-toggle-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var annId = btn.dataset.ann;
+                    var form = document.getElementById('replyForm' + annId);
+                    if (!form) return;
+                    form.classList.toggle('is-open');
+                    btn.textContent = form.classList.contains('is-open') ? 'Cancel reply' : 'Reply privately';
+                });
+            });
+
             const container = document.getElementById('messagesContainer');
             if (!container) {
                 return;
             }
 
             const selectedId = container.dataset.selectedId;
+            const selectedType = container.dataset.selectedType || 'individual';
             if (!selectedId) {
                 return;
             }
@@ -464,7 +820,8 @@
 
             async function fetchMessages() {
                 try {
-                    const response = await fetch(`${messagesEndpoint}?selected=${encodeURIComponent(selectedId)}`);
+                    const queryKey = selectedType === 'group' ? 'group' : 'selected';
+                    const response = await fetch(`${messagesEndpoint}?${queryKey}=${encodeURIComponent(selectedId)}`);
                     if (!response.ok) {
                         return;
                     }

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Home | Volley Project</title>
+    <title>League System Handler Home | Volley Project</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -22,17 +22,17 @@
         body {
             margin: 0;
             min-height: 100vh;
-            font-family: 'Josefin Sans', sans-serif;
-            color: var(--ink);
             background: var(--forest);
+            color: var(--ink);
+            font-family: 'Josefin Sans', sans-serif;
         }
         a { color: inherit; text-decoration: none; }
-        .admin-shell {
+        .handler-shell {
             min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
-        .admin-header {
+        .handler-header {
             background: linear-gradient(90deg, var(--header-left) 0%, var(--header-right) 100%);
             padding: 48px 34px 44px;
             display: flex;
@@ -40,7 +40,7 @@
             justify-content: space-between;
             gap: 20px;
         }
-        .admin-title {
+        .handler-title {
             margin: 0;
             font-size: clamp(2rem, 2vw + 1.4rem, 3.3rem);
             font-weight: 600;
@@ -48,7 +48,7 @@
             display: inline-block;
             padding-bottom: 14px;
         }
-        .admin-title::after {
+        .handler-title::after {
             content: '';
             position: absolute;
             left: 0;
@@ -58,21 +58,22 @@
             background: var(--accent);
             box-shadow: 0 0 8px rgba(255, 255, 255, 0.25);
         }
-        .admin-header-meta {
+        .handler-header-meta {
             display: flex;
             align-items: center;
             gap: 12px;
             margin-top: 10px;
         }
-        .admin-role {
-            min-width: 110px;
+        .handler-role {
+            min-width: 206px;
             padding: 8px 12px;
             border: 1px solid var(--chip-border);
             border-radius: 4px;
             background: rgba(255, 255, 255, 0.12);
             font-size: 1rem;
+            text-align: center;
         }
-        .admin-avatar {
+        .handler-avatar {
             width: 42px;
             height: 42px;
             border-radius: 50%;
@@ -81,25 +82,23 @@
             place-items: center;
             overflow: hidden;
         }
-        .admin-avatar svg {
+        .handler-avatar svg {
             width: 28px;
             height: 28px;
             color: #2f2b2a;
         }
-        .admin-content {
+        .handler-content {
             flex: 1;
             padding: 62px 48px 70px;
         }
         .card-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(220px, 1fr));
-            gap: 30px 90px;
+            gap: 30px 36px;
             max-width: 1240px;
             margin: 0 auto;
         }
-        .hub-card,
-        .logout-card,
-        .dashboard-card {
+        .hub-card {
             min-height: 192px;
             border-radius: 18px;
             background: var(--paper);
@@ -112,23 +111,17 @@
             padding: 22px 18px 18px;
             transition: transform 0.16s ease, box-shadow 0.16s ease;
         }
-        .hub-card:hover,
-        .logout-card:hover,
-        .dashboard-card:hover {
+        .hub-card:hover {
             transform: translateY(-3px);
             box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18);
         }
-        .hub-card h2,
-        .logout-card h2,
-        .dashboard-card h2 {
+        .hub-card h2 {
             margin: 0;
             font-size: clamp(1.45rem, 1vw + 1rem, 2rem);
             font-weight: 600;
             line-height: 1.05;
         }
-        .hub-card p,
-        .logout-card p,
-        .dashboard-card p {
+        .hub-card p {
             margin: 8px 0 0;
             min-height: 20px;
             font-size: 0.92rem;
@@ -140,7 +133,26 @@
             margin-top: 18px;
             color: #000000;
         }
+        .card-link-button {
+            width: 100%;
+            margin-top: 12px;
+            padding: 10px 12px;
+            border: none;
+            border-radius: 10px;
+            background: #111;
+            color: #fff;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+        }
+        .card-link-button:hover {
+            background: #333;
+        }
         .logout-form {
+            width: 100%;
             margin: 0;
         }
         .logout-button {
@@ -152,33 +164,47 @@
             color: inherit;
             cursor: pointer;
         }
-        .dashboard-row {
+        .teams-panel {
+            max-width: 1240px;
+            margin: 34px auto 0;
+            background: var(--paper);
+            border-radius: 18px;
+            box-shadow: var(--shadow);
+            padding: 24px;
+        }
+        .teams-panel h2 {
+            margin: 0 0 10px;
+            font-size: clamp(1.35rem, 1vw + 1rem, 1.9rem);
+        }
+        .teams-panel p {
+            margin: 0;
+            color: #374151;
+        }
+        .team-list {
+            margin: 14px 0 0;
+            padding: 0;
+            list-style: none;
             display: flex;
-            justify-content: center;
-            margin-top: 56px;
+            flex-wrap: wrap;
+            gap: 10px;
         }
-        .dashboard-card {
-            width: min(100%, 664px);
-        }
-        @media (max-width: 1024px) {
-            .card-grid {
-                grid-template-columns: repeat(2, minmax(220px, 1fr));
-                gap: 28px;
-            }
-            .dashboard-card {
-                width: 100%;
-            }
+        .team-list li {
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: #f5f5f5;
+            border: 1px solid #c8c8c8;
+            font-size: 0.92rem;
         }
         @media (max-width: 680px) {
-            .admin-header {
+            .handler-header {
                 padding: 26px 18px 28px;
                 flex-direction: column;
                 align-items: stretch;
             }
-            .admin-header-meta {
+            .handler-header-meta {
                 justify-content: flex-end;
             }
-            .admin-content {
+            .handler-content {
                 padding: 28px 18px 40px;
             }
             .card-grid {
@@ -188,14 +214,14 @@
     </style>
 </head>
 <body>
-    <div class="admin-shell">
-        <header class="admin-header">
+    <div class="handler-shell">
+        <header class="handler-header">
             <div>
-                <h1 class="admin-title">Welcome, {{ welcome_name }}!</h1>
+                <h1 class="handler-title">Welcome, {{ welcome_name }}!</h1>
             </div>
-            <div class="admin-header-meta">
-                <div class="admin-role">Admin</div>
-                <div class="admin-avatar" aria-hidden="true">
+            <div class="handler-header-meta">
+                <div class="handler-role">League System Handler</div>
+                <div class="handler-avatar" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="currentColor">
                         <circle cx="12" cy="8" r="4"></circle>
                         <path d="M4.5 21a7.5 7.5 0 0115 0"></path>
@@ -204,50 +230,37 @@
             </div>
         </header>
 
-        <main class="admin-content">
-            <section class="card-grid" aria-label="Admin quick actions">
-                <a class="hub-card" href="{% url 'scheduling:player_status_list' %}">
-                    <h2>User management</h2>
-                    <p>Active players: {{ active_players }} | Coaches: {{ coach_count }}</p>
+        <main class="handler-content">
+            {% if messages %}
+                <ul style="list-style:none;padding:0;margin:0 auto 20px;max-width:1240px;">
+                    {% for message in messages %}
+                        <li style="background:#fff;border-radius:8px;padding:10px 14px;margin-bottom:6px;">{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            <section class="card-grid" aria-label="League system handler quick actions">
+                <a class="hub-card" href="{% url 'scheduling:record_match' %}">
+                    <h2>Record Player and Match Stats</h2>
+                    <p>Start with a new match, then enter each player's game stats.</p>
                     <svg class="hub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <circle cx="9" cy="7" r="3"></circle>
-                        <path d="M3.5 19c1.2-3 3.4-4.8 5.5-4.8S13.3 16 14.5 19"></path>
-                        <circle cx="17" cy="9" r="2.5"></circle>
-                        <path d="M15.3 18c.6-1.8 2-3.1 4.2-3.7"></path>
+                        <path d="M4 20h16"></path>
+                        <path d="M7 16v-5"></path>
+                        <path d="M12 16V8"></path>
+                        <path d="M17 16v-9"></path>
+                        <path d="M6.5 6.5l3-2 2.5 1.5L17.5 3"></path>
                     </svg>
                 </a>
 
-                <a class="hub-card" href="{% url 'scheduling:pending_members' %}">
-                    <h2>Pending Registrations</h2>
-                    <p>{% if pending_count %}{{ pending_count }} awaiting approval{% else %}No pending registrations{% endif %}</p>
-                    <svg class="hub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <circle cx="12" cy="8" r="4"></circle>
-                        <path d="M3 20a9 9 0 0118 0"></path>
-                        <line x1="12" y1="14" x2="12" y2="18"></line>
-                        <line x1="10" y1="16" x2="14" y2="16"></line>
-                    </svg>
-                </a>
+                <div class="hub-card">
+                    <h2>Add Teams to League</h2>
+                    <p>Open team management to create and review league teams.</p>
+                    <a class="card-link-button" href="{% url 'scheduling:league_handler_manage_teams' %}">Manage Teams</a>
+                </div>
 
-                <a class="hub-card" href="{% url 'scheduling:notification_inbox' %}">
-                    <h2>Notifications</h2>
-                    <p>Total notifications: {{ notification_count }}</p>
-                    <svg class="hub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5"></path>
-                        <path d="M10 19a2 2 0 004 0"></path>
-                    </svg>
-                </a>
-
-                <a class="hub-card" href="{% url 'scheduling:chatting_hub' %}">
-                    <h2>Chatting</h2>
-                    <p>Start a private conversation with a coach or player</p>
-                    <svg class="hub-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                        <path d="M4 5h16a2 2 0 012 2v7a2 2 0 01-2 2h-4.6L11 20v-4H4a2 2 0 01-2-2V7a2 2 0 012-2z"></path>
-                    </svg>
-                </a>
-
-                <a class="hub-card" href="{% url 'scheduling:upcoming_games' %}">
+                <a class="hub-card" href="{% url 'scheduling:league_handler_upcoming_games' %}">
                     <h2>Upcoming Games</h2>
-                    <p>See your team's next matches</p>
+                    <p>Schedule matches between teams in the league</p>
                     <svg class="hub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <circle cx="12" cy="12" r="10"></circle>
                         <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"></path>
@@ -255,10 +268,20 @@
                     </svg>
                 </a>
 
+                <a class="hub-card" href="{% url 'scheduling:pending_admins' %}">
+                    <h2>Pending Admins</h2>
+                    <p>Awaiting approval: {{ pending_admin_count }}</p>
+                    <svg class="hub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <polyline points="16 11 18 13 22 9"></polyline>
+                    </svg>
+                </a>
+
                 <form class="logout-form" method="post" action="{% url 'scheduling:logout' %}">
                     {% csrf_token %}
                     <button class="logout-button" type="submit">
-                        <div class="logout-card">
+                        <div class="hub-card">
                             <h2>Log out</h2>
                             <p>Back to the sign-in screen</p>
                             <svg class="hub-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -270,20 +293,18 @@
                 </form>
             </section>
 
-            <div class="dashboard-row">
-                <a class="dashboard-card" href="{% url 'scheduling:team_stats' %}">
-                    <h2>Team Stats Dashboard</h2>
-                    <p>Wins, losses, top scorers &amp; more</p>
-                    <svg class="hub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M4 20h16"></path>
-                        <path d="M7 16v-5"></path>
-                        <path d="M12 16V8"></path>
-                        <path d="M17 16v-9"></path>
-                        <path d="M6.5 6.5l3-2 2.5 1.5L17.5 3"></path>
-                    </svg>
-                </a>
-            </div>
-
+            <section class="teams-panel" aria-label="League teams overview">
+                <h2>League Teams ({{ team_count }})</h2>
+                {% if teams %}
+                    <ul class="team-list">
+                        {% for team in teams %}
+                            <li>{{ team.name }}</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>No teams yet. Use Manage Teams to add your first team.</p>
+                {% endif %}
+            </section>
         </main>
     </div>
 {% include "scheduling/_notification_popups.html" %}

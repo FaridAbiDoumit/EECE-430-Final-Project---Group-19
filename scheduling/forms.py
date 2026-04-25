@@ -5,6 +5,8 @@ from django.utils import timezone
 
 from .models import (
     Player,
+    Team,
+    StaffTeamAssignment,
     PlayerAvailability,
     PlayerSorenessReport,
     PersonalSessionNote,
@@ -17,10 +19,13 @@ from .models import (
     TryoutSession,
     TrainingSession,
     Message,
+    ChatGroup,
+    Announcement,
     SupportTicket,
     Match,
     PlayerMatchStat,
     TeamGoal,
+    UpcomingGame,
 )
 
 
@@ -182,6 +187,76 @@ class ChatMessageForm(forms.ModelForm):
         }
 
 
+class ChatGroupCreateForm(forms.Form):
+    name = forms.CharField(
+        max_length=120,
+        widget=forms.TextInput(attrs={'placeholder': 'Group name', 'class': 'form-input'}),
+    )
+    members = forms.ModelMultipleChoiceField(
+        queryset=Player.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+
+    def __init__(self, *args, member_queryset=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if member_queryset is None:
+            member_queryset = Player.objects.filter(is_active=True)
+        self.fields['members'].queryset = member_queryset.order_by('name')
+
+    def clean_name(self):
+        name = self.cleaned_data['name'].strip()
+        if ChatGroup.objects.filter(name__iexact=name, is_active=True).exists():
+            raise forms.ValidationError('A group with this name already exists.')
+        return name
+
+    def clean(self):
+        cleaned_data = super().clean()
+        members = cleaned_data.get('members')
+        if not members:
+            raise forms.ValidationError('Select at least one member for the group.')
+        return cleaned_data
+
+
+class AnnouncementCreateForm(forms.ModelForm):
+    class Meta:
+        model = Announcement
+        fields = ['title', 'content']
+        widgets = {
+            'title': forms.TextInput(attrs={'placeholder': 'Announcement title', 'class': 'form-input'}),
+            'content': forms.Textarea(
+                attrs={
+                    'placeholder': 'Write your announcement...',
+                    'class': 'form-textarea',
+                    'rows': 3,
+                }
+            ),
+        }
+
+    def clean_title(self):
+        return self.cleaned_data['title'].strip()
+
+
+class TeamCreateForm(forms.ModelForm):
+    class Meta:
+        model = Team
+        fields = ['name']
+        widgets = {
+            'name': forms.TextInput(
+                attrs={
+                    'placeholder': 'Team name',
+                    'class': 'form-input',
+                }
+            ),
+        }
+
+    def clean_name(self):
+        name = self.cleaned_data['name'].strip()
+        if Team.objects.filter(name__iexact=name).exists():
+            raise forms.ValidationError('A team with this name already exists.')
+        return name
+
+
 class SupportTicketForm(forms.ModelForm):
     class Meta:
         model = SupportTicket
@@ -196,11 +271,16 @@ class SupportTicketForm(forms.ModelForm):
 class MatchForm(forms.ModelForm):
     class Meta:
         model = Match
-        fields = ['opponent', 'date', 'goals_for', 'goals_against', 'notes']
+        fields = ['team', 'opponent', 'date', 'goals_for', 'goals_against', 'notes']
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date'}),
             'notes': forms.Textarea(attrs={'rows': 3}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['team'].queryset = Team.objects.filter(is_active=True).order_by('name')
+        self.fields['team'].required = True
 
 
 class PlayerMatchStatForm(forms.ModelForm):
@@ -208,9 +288,12 @@ class PlayerMatchStatForm(forms.ModelForm):
         model = PlayerMatchStat
         fields = ['player', 'goals', 'interceptions', 'points', 'blocks', 'assists', 'aces', 'returns', 'most_recent_injury']
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, team=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['player'].queryset = Player.objects.filter(role=Player.Role.PLAYER)
+        queryset = Player.objects.filter(role=Player.Role.PLAYER, is_active=True)
+        if team is not None:
+            queryset = queryset.filter(team=team)
+        self.fields['player'].queryset = queryset
 
 
 class TeamGoalForm(forms.ModelForm):
@@ -243,13 +326,15 @@ class SignUpForm(forms.Form):
     ROLE_CHOICES = [
         ('player', 'Player'),
         ('coach', 'Coach'),
-        ('admin', 'Admin'),
+        ('club_admin', 'Team Admin'),
+        ('league_system_handler', 'League System Handler'),
     ]
 
     name = forms.CharField(max_length=100)
     email = forms.EmailField()
     password = forms.CharField(widget=forms.PasswordInput(render_value=True))
     role = forms.ChoiceField(choices=ROLE_CHOICES, widget=forms.RadioSelect)
+    team = forms.ModelChoiceField(queryset=Team.objects.none(), empty_label='Select a team', required=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -266,6 +351,8 @@ class SignUpForm(forms.Form):
                 'id': 'id_signup_password',
             }
         )
+        self.fields['team'].queryset = Team.objects.filter(is_active=True).order_by('name')
+        self.fields['team'].widget.attrs.update({'class': input_class})
 
     def clean_email(self):
         email = self.cleaned_data['email'].strip().lower()
@@ -277,11 +364,40 @@ class SignUpForm(forms.Form):
             raise forms.ValidationError('This email is already assigned to a player profile.')
         return email
 
+    def clean(self):
+        cleaned_data = super().clean()
+        role = cleaned_data.get('role')
+        team = cleaned_data.get('team')
+
+        if role == 'league_system_handler':
+            cleaned_data['team'] = None
+            return cleaned_data
+
+        if role in {'player', 'coach', 'club_admin'} and team is None:
+            self.add_error('team', 'Please select the team you are registering to.')
+
+        if role in {'player', 'coach', 'club_admin'} and not Team.objects.filter(is_active=True).exists():
+            self.add_error('team', 'No teams are available yet. Please ask the league system handler to add teams first.')
+
+        return cleaned_data
+
     def save(self):
         name = self.cleaned_data['name'].strip()
         email = self.cleaned_data['email']
         password = self.cleaned_data['password']
         role = self.cleaned_data['role']
+        team = self.cleaned_data.get('team')
+
+        if role == 'club_admin':
+            user = User.objects.create_user(
+                username=email,
+                email=email,
+                password=password,
+                first_name=name,
+                is_staff=True,
+            )
+            StaffTeamAssignment.objects.create(user=user, team=team, is_approved=False)
+            return user
 
         user = User.objects.create_user(
             username=email,
@@ -290,13 +406,55 @@ class SignUpForm(forms.Form):
             first_name=name,
         )
 
-        if role == 'admin':
-            user.is_staff = True
-            user.save(update_fields=['is_staff'])
+        if role == 'coach':
+            player_role = Player.Role.COACH
+        elif role == 'league_system_handler':
+            player_role = Player.Role.LEAGUE_SYSTEM_HANDLER
         else:
-            player_role = Player.Role.COACH if role == 'coach' else Player.Role.PLAYER
-            Player.objects.create(user=user, name=name, email=email, role=player_role)
+            player_role = Player.Role.PLAYER
+        assigned_team = team if role in {'player', 'coach'} else None
+        # League system handlers are auto-approved — they are the top of the hierarchy with no one to approve them.
+        auto_approved = role == 'league_system_handler'
+        Player.objects.create(user=user, name=name, email=email, role=player_role, team=assigned_team, is_approved=auto_approved)
 
+        return user
+
+
+class ClubAdminCreateForm(forms.Form):
+    name = forms.CharField(max_length=100)
+    email = forms.EmailField()
+    password = forms.CharField(widget=forms.PasswordInput(render_value=False))
+    team = forms.ModelChoiceField(queryset=Team.objects.none(), empty_label='Select a team')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        input_class = 'auth-input'
+        self.fields['name'].widget.attrs.update({'class': input_class, 'placeholder': 'Full name'})
+        self.fields['email'].widget.attrs.update({'class': input_class, 'placeholder': 'Email'})
+        self.fields['password'].widget.attrs.update({'class': input_class, 'placeholder': 'Password'})
+        self.fields['team'].queryset = Team.objects.filter(is_active=True).order_by('name')
+        self.fields['team'].widget.attrs.update({'class': input_class})
+
+    def clean_email(self):
+        email = self.cleaned_data['email'].strip().lower()
+        if User.objects.filter(username__iexact=email).exists() or User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError('An account with this email already exists.')
+        return email
+
+    def save(self):
+        name = self.cleaned_data['name'].strip()
+        email = self.cleaned_data['email']
+        password = self.cleaned_data['password']
+        team = self.cleaned_data['team']
+
+        user = User.objects.create_user(
+            username=email,
+            email=email,
+            password=password,
+            first_name=name,
+            is_staff=True,
+        )
+        StaffTeamAssignment.objects.create(user=user, team=team)
         return user
 
 
@@ -322,3 +480,35 @@ class EmailAuthenticationForm(AuthenticationForm):
         if not user.is_active:
             raise forms.ValidationError('This account has been deactivated. Please contact an admin.')
         super().confirm_login_allowed(user)
+
+
+class UpcomingGameForm(forms.ModelForm):
+    class Meta:
+        model = UpcomingGame
+        fields = ['home_team', 'away_team', 'scheduled_at', 'venue', 'notes']
+        widgets = {
+            'scheduled_at': forms.DateTimeInput(
+                attrs={'type': 'datetime-local'},
+                format='%Y-%m-%dT%H:%M',
+            ),
+            'venue': forms.TextInput(
+                attrs={'placeholder': 'Stadium / venue name (optional)'}
+            ),
+            'notes': forms.Textarea(
+                attrs={'rows': 3, 'placeholder': 'Additional notes (optional)'}
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        active_teams = Team.objects.filter(is_active=True).order_by('name')
+        self.fields['home_team'].queryset = active_teams
+        self.fields['away_team'].queryset = active_teams
+
+    def clean(self):
+        cleaned_data = super().clean()
+        home = cleaned_data.get('home_team')
+        away = cleaned_data.get('away_team')
+        if home and away and home == away:
+            raise forms.ValidationError('Home team and away team must be different.')
+        return cleaned_data

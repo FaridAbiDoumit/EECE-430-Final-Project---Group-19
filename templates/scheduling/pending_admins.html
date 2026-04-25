@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pending Admin Registrations | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #46674f;
+            --paper: #dedede;
+            --header-left: #eceeed;
+            --header-right: #b7c9b4;
+            --ink: #111111;
+            --accent: #0df2dc;
+            --chip-border: #81918a;
+            --shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--forest);
+            color: var(--ink);
+            font-family: 'Josefin Sans', sans-serif;
+        }
+        a { color: inherit; text-decoration: none; }
+        .page-shell {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .page-header {
+            background: linear-gradient(90deg, var(--header-left) 0%, var(--header-right) 100%);
+            padding: 40px 34px 38px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+        }
+        .page-title {
+            margin: 0;
+            font-size: clamp(1.8rem, 2vw + 1rem, 2.8rem);
+            font-weight: 600;
+            position: relative;
+            display: inline-block;
+            padding-bottom: 12px;
+        }
+        .page-title::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: min(100%, 240px);
+            height: 3px;
+            background: var(--accent);
+        }
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 8px;
+            padding: 8px 16px;
+            background: rgba(0,0,0,0.08);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .back-link:hover { background: rgba(0,0,0,0.15); }
+        .page-content {
+            flex: 1;
+            padding: 48px 40px 60px;
+        }
+        .table-card {
+            max-width: 960px;
+            margin: 0 auto;
+            background: var(--paper);
+            border-radius: 18px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+        .table-card-header {
+            padding: 22px 28px 16px;
+            border-bottom: 1px solid #c5c5c5;
+        }
+        .table-card-header h2 {
+            margin: 0;
+            font-size: 1.4rem;
+            font-weight: 600;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+        thead th {
+            background: #c8c8c8;
+            padding: 12px 20px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        tbody tr {
+            border-bottom: 1px solid #ccc;
+        }
+        tbody tr:last-child { border-bottom: none; }
+        tbody tr:hover { background: #e8e8e8; }
+        td {
+            padding: 14px 20px;
+            vertical-align: middle;
+        }
+        .admin-name {
+            font-weight: 600;
+        }
+        .admin-email {
+            font-size: 0.88rem;
+            color: #555;
+        }
+        .team-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #fff;
+            border: 1px solid #aaa;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .date-text {
+            font-size: 0.88rem;
+            color: #555;
+        }
+        .action-cell {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .btn-approve, .btn-reject {
+            padding: 8px 18px;
+            border: none;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-approve {
+            background: #2f7a4b;
+            color: #fff;
+        }
+        .btn-approve:hover { background: #245d39; }
+        .btn-reject {
+            background: #c0392b;
+            color: #fff;
+        }
+        .btn-reject:hover { background: #922b21; }
+        .empty-state {
+            padding: 48px 28px;
+            text-align: center;
+            color: #555;
+            font-size: 1rem;
+        }
+        .messages-list {
+            max-width: 960px;
+            margin: 0 auto 20px;
+            padding: 0;
+            list-style: none;
+        }
+        .messages-list li {
+            padding: 12px 18px;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            margin-bottom: 8px;
+        }
+        .messages-list .success { background: #d4edda; color: #155724; }
+        .messages-list .error   { background: #f8d7da; color: #721c24; }
+        .messages-list .info    { background: #d1ecf1; color: #0c5460; }
+        @media (max-width: 680px) {
+            .page-header { padding: 22px 16px 24px; flex-direction: column; }
+            .page-content { padding: 24px 14px 40px; }
+            thead th, td { padding: 10px 12px; }
+            .action-cell { flex-direction: column; gap: 6px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-shell">
+        <header class="page-header">
+            <div>
+                <h1 class="page-title">Pending Admin Registrations</h1>
+            </div>
+            <a class="back-link" href="{% url 'scheduling:league_system_handler_home' %}">
+                ← Back to Home
+            </a>
+        </header>
+
+        <main class="page-content">
+            {% if messages %}
+                <ul class="messages-list">
+                    {% for message in messages %}
+                        <li class="{{ message.tags }}">{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            <div class="table-card">
+                <div class="table-card-header">
+                    <h2>Awaiting Approval ({{ pending|length }})</h2>
+                </div>
+                {% if pending %}
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name / Email</th>
+                                <th>Team</th>
+                                <th>Requested</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for assignment in pending %}
+                                <tr>
+                                    <td>
+                                        <div class="admin-name">{{ assignment.user.get_full_name|default:assignment.user.username }}</div>
+                                        <div class="admin-email">{{ assignment.user.email }}</div>
+                                    </td>
+                                    <td>
+                                        {% if assignment.team %}
+                                            <span class="team-badge">{{ assignment.team.name }}</span>
+                                        {% else %}
+                                            <span class="date-text">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="date-text">{{ assignment.created_at|date:"M j, Y" }}</span>
+                                    </td>
+                                    <td>
+                                        <div class="action-cell">
+                                            <form method="post" action="{% url 'scheduling:approve_admin' assignment.pk %}">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn-approve">Approve</button>
+                                            </form>
+                                            <form method="post" action="{% url 'scheduling:reject_admin' assignment.pk %}"
+                                                  onsubmit="return confirm('Reject and permanently delete this admin registration?')">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn-reject">Reject</button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="empty-state">
+                        No pending admin registrations at this time.
+                    </div>
+                {% endif %}
+            </div>
+        </main>
+    </div>
+</body>
+</html>

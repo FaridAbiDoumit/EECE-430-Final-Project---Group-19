@@ -245,8 +245,10 @@
         <header class="stats-header">
             <h1 class="stats-title">Team Stats Dashboard</h1>
             <div class="stats-actions">
-                <a class="stats-btn" href="{% url 'scheduling:record_match' %}">Record Match</a>
-                <a class="stats-btn" href="{% url 'scheduling:add_team_goal' %}">Add Team Goal</a>
+                {% if can_manage_stats %}
+                    <a class="stats-btn" href="{% url 'scheduling:record_match' %}">Record Match</a>
+                    <a class="stats-btn" href="{% url 'scheduling:add_team_goal' %}">Add Team Goal</a>
+                {% endif %}
                 <a class="stats-btn" href="{% url home_url %}">Home</a>
             </div>
         </header>
@@ -440,7 +442,11 @@
                         {% endfor %}
                     </div>
                 {% else %}
-                    <p style="color:#666;">No team goals set yet. <a href="{% url 'scheduling:add_team_goal' %}" style="text-decoration:underline;">Add one</a>.</p>
+                    {% if can_manage_stats %}
+                        <p style="color:#666;">No team goals set yet. <a href="{% url 'scheduling:add_team_goal' %}" style="text-decoration:underline;">Add one</a>.</p>
+                    {% else %}
+                        <p style="color:#666;">No team goals set yet.</p>
+                    {% endif %}
                 {% endif %}
             </div>
 

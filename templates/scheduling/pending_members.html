@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pending Registrations | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #46674f;
+            --paper: #dedede;
+            --header-left: #eceeed;
+            --header-right: #b7c9b4;
+            --ink: #111111;
+            --accent: #0df2dc;
+            --shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--forest);
+            color: var(--ink);
+            font-family: 'Josefin Sans', sans-serif;
+        }
+        a { color: inherit; text-decoration: none; }
+        .page-shell { min-height: 100vh; display: flex; flex-direction: column; }
+        .page-header {
+            background: linear-gradient(90deg, var(--header-left) 0%, var(--header-right) 100%);
+            padding: 42px 34px 34px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .page-title {
+            margin: 0;
+            font-size: clamp(1.8rem, 2vw + 1rem, 2.8rem);
+            font-weight: 600;
+            position: relative;
+            display: inline-block;
+            padding-bottom: 12px;
+        }
+        .page-title::after {
+            content: '';
+            position: absolute;
+            left: 0; bottom: 0;
+            width: min(100%, 250px);
+            height: 3px;
+            background: var(--accent);
+        }
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            padding: 10px 14px;
+            border-radius: 10px;
+            background: #111;
+            color: #fff;
+            font-weight: 600;
+            align-self: flex-end;
+        }
+        .back-link:hover { background: #333; }
+        .page-content {
+            flex: 1;
+            padding: 40px 28px 52px;
+            max-width: 960px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        .panel {
+            background: var(--paper);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            padding: 24px;
+        }
+        .panel h2 { margin: 0 0 18px; font-size: 1.3rem; }
+        .empty-msg { color: #374151; margin: 0; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+        thead th {
+            text-align: left;
+            padding: 8px 12px;
+            border-bottom: 2px solid #bbb;
+            font-weight: 600;
+        }
+        tbody tr + tr { border-top: 1px solid #ccc; }
+        tbody td { padding: 10px 12px; vertical-align: middle; }
+        .role-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            background: #e8e8e8;
+            border: 1px solid #aaa;
+            text-transform: capitalize;
+        }
+        .action-cell { display: flex; gap: 8px; }
+        .btn-approve, .btn-reject {
+            padding: 7px 14px;
+            border: none;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-approve { background: #2a7d50; color: #fff; }
+        .btn-approve:hover { background: #1e5f3a; }
+        .btn-reject { background: #9c2f2f; color: #fff; }
+        .btn-reject:hover { background: #7a2020; }
+        .flash-list { list-style: none; padding: 0; margin: 0 0 18px; }
+        .flash-list li {
+            background: #fff;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 6px;
+        }
+        @media (max-width: 680px) {
+            .page-header { padding: 26px 18px 26px; }
+            .page-content { padding: 24px 16px 36px; }
+            .panel { padding: 18px; }
+            table, thead, tbody, th, td, tr { display: block; }
+            thead tr { display: none; }
+            tbody td { padding: 6px 0; }
+            tbody td::before {
+                content: attr(data-label) ': ';
+                font-weight: 600;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-shell">
+        <header class="page-header">
+            <h1 class="page-title">Pending Registrations{% if admin_team %} — {{ admin_team.name }}{% endif %}</h1>
+            <a class="back-link" href="{% url 'scheduling:admin_home' %}">Back to Home</a>
+        </header>
+
+        <main class="page-content">
+            {% if messages %}
+                <ul class="flash-list">
+                    {% for message in messages %}
+                        <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            <section class="panel">
+                <h2>Awaiting Approval ({{ pending|length }})</h2>
+                {% if pending %}
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for player in pending %}
+                                <tr>
+                                    <td data-label="Name">{{ player.name }}</td>
+                                    <td data-label="Email">{{ player.email }}</td>
+                                    <td data-label="Role"><span class="role-badge">{{ player.get_role_display }}</span></td>
+                                    <td data-label="Actions">
+                                        <div class="action-cell">
+                                            <form method="post" action="{% url 'scheduling:approve_member' player.id %}">
+                                                {% csrf_token %}
+                                                <button class="btn-approve" type="submit">Approve</button>
+                                            </form>
+                                            <form method="post" action="{% url 'scheduling:reject_member' player.id %}"
+                                                  onsubmit="return confirm('Reject and permanently delete {{ player.name }}\'s registration?')">
+                                                {% csrf_token %}
+                                                <button class="btn-reject" type="submit">Reject</button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p class="empty-msg">No pending registrations for your club.</p>
+                {% endif %}
+            </section>
+        </main>
+    </div>
+</body>
+</html>

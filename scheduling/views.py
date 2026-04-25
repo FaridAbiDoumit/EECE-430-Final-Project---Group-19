@@ -30,14 +30,21 @@ from .forms import (
     TryoutSessionForm,
     MessageForm,
     ChatMessageForm,
+    ChatGroupCreateForm,
+    AnnouncementCreateForm,
     SupportTicketForm,
     MatchForm,
     PlayerMatchStatForm,
     TeamGoalForm,
+    TeamCreateForm,
+    UpcomingGameForm,
 )
 from .models import (
     Notification,
     Player,
+    Team,
+    ChatGroup,
+    Announcement,
     PlayerAvailability,
     PersonalSessionNote,
     SessionRSVP,
@@ -49,12 +56,17 @@ from .models import (
     TryoutSession,
     TrainingSession,
     Message,
+    GroupMessage,
     SupportTicket,
     Match,
     PlayerMatchStat,
     PlayerSorenessReport,
     TeamGoal,
     PersonalCalendarEvent,
+    AnnouncementReply,
+    UpcomingGame,
+    GameAttendance,
+    StaffTeamAssignment,
 )
 
 
@@ -76,6 +88,8 @@ def _post_login_route_for(user):
             return 'scheduling:player_home'
         if player.role == Player.Role.COACH:
             return 'scheduling:coach_home'
+        if player.role == Player.Role.LEAGUE_SYSTEM_HANDLER:
+            return 'scheduling:league_system_handler_home'
     if user.is_staff:
         return 'scheduling:admin_home'
     return 'scheduling:dashboard'
@@ -86,6 +100,10 @@ def _can_manage_training_sessions(user):
     return user.is_authenticated and (
         user.is_staff or (profile is not None and profile.role == Player.Role.COACH)
     )
+
+
+def _can_manage_stats_entries(profile):
+    return profile is not None and profile.role == Player.Role.LEAGUE_SYSTEM_HANDLER
 
 
 def _logout_user_sessions(user):
@@ -158,18 +176,27 @@ def _notify_coaches_of_player_rsvp(player, session, rsvp_status):
     )
 
 
-def _player_metric_rankings(metric_key, descending=True, limit=5):
+def _player_metric_rankings(metric_key, descending=True, limit=5, team=None):
     metric_key = metric_key if metric_key in TEAM_STAT_METRICS else 'points'
     order_prefix = '-' if descending else ''
+    queryset = Player.objects.filter(role=Player.Role.PLAYER, is_active=True)
+    metric_sum = Sum(f'match_stats__{metric_key}')
+    if team is not None:
+        queryset = queryset.filter(team=team)
+        metric_sum = Sum(f'match_stats__{metric_key}', filter=Q(match_stats__match__team=team))
+
     return list(
-        Player.objects.filter(role=Player.Role.PLAYER, is_active=True)
-        .annotate(metric_total=Coalesce(Sum(f'match_stats__{metric_key}'), Value(0)))
+        queryset
+        .annotate(metric_total=Coalesce(metric_sum, Value(0)))
         .order_by(f'{order_prefix}metric_total', 'name')[:limit]
     )
 
 
-def _season_metric_totals():
-    totals = PlayerMatchStat.objects.aggregate(
+def _season_metric_totals(stats_queryset=None):
+    if stats_queryset is None:
+        stats_queryset = PlayerMatchStat.objects.all()
+
+    totals = stats_queryset.aggregate(
         total_goals=Coalesce(Sum('goals'), Value(0)),
         total_points=Coalesce(Sum('points'), Value(0)),
         total_assists=Coalesce(Sum('assists'), Value(0)),
@@ -203,6 +230,11 @@ def signup(request):
         form = SignUpForm(request.POST)
         if form.is_valid():
             user = form.save()
+            profile = getattr(user, 'player_profile', None)
+            if profile is not None and not profile.is_approved:
+                auth_login(request, user)
+                messages.success(request, 'Registration submitted! Waiting for your club admin to approve your account.')
+                return redirect('scheduling:pending_approval')
             auth_login(request, user)
             messages.success(request, 'Account created successfully.')
             return redirect(_post_login_route_for(user))
@@ -210,6 +242,24 @@ def signup(request):
         form = SignUpForm(initial={'role': 'player'})
 
     return render(request, 'scheduling/signup.html', {'form': form})
+
+
+@login_required(login_url='scheduling:login')
+def pending_approval(request):
+    # Staff (club admin) pending case
+    if request.user.is_staff:
+        assignment = getattr(request.user, 'staff_team_assignment', None)
+        if assignment is None or assignment.is_approved:
+            return redirect(_post_login_route_for(request.user))
+        return render(request, 'scheduling/pending_approval.html', {
+            'is_staff_pending': True,
+            'team': assignment.team,
+        })
+    # Player/Coach pending case
+    profile = getattr(request.user, 'player_profile', None)
+    if profile is None or profile.is_approved:
+        return redirect(_post_login_route_for(request.user))
+    return render(request, 'scheduling/pending_approval.html', {'profile': profile})
 
 
 def login_view(request):
@@ -223,6 +273,9 @@ def login_view(request):
             profile = getattr(user, 'player_profile', None)
             if profile is not None and not profile.is_active:
                 form.add_error(None, 'This account has been deactivated. Please contact an admin.')
+            elif profile is not None and not profile.is_approved:
+                auth_login(request, user)
+                return redirect('scheduling:pending_approval')
             else:
                 auth_login(request, user)
                 messages.success(request, 'Signed in successfully.')
@@ -350,6 +403,60 @@ def coach_home(request):
 
 
 @login_required(login_url='scheduling:login')
+def league_system_handler_home(request):
+    handler = getattr(request.user, 'player_profile', None)
+    if handler is None or handler.role != Player.Role.LEAGUE_SYSTEM_HANDLER:
+        messages.info(request, 'This page is currently available only for league system handler accounts.')
+        return redirect('scheduling:dashboard')
+
+    teams = Team.objects.filter(is_active=True).order_by('name')
+
+    context = {
+        'handler': handler,
+        'welcome_name': handler.name,
+        'unread_notifications': handler.notifications.filter(read_at__isnull=True).count(),
+        'match_count': Match.objects.count(),
+        'team_goal_count': TeamGoal.objects.count(),
+        'team_count': teams.count(),
+        'teams': teams,
+        'pending_admin_count': StaffTeamAssignment.objects.filter(is_approved=False).count(),
+    }
+    return render(request, 'scheduling/league_system_handler_home.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def league_handler_manage_teams(request):
+    handler = getattr(request.user, 'player_profile', None)
+    if handler is None or handler.role != Player.Role.LEAGUE_SYSTEM_HANDLER:
+        messages.info(request, 'This page is currently available only for league system handler accounts.')
+        return redirect('scheduling:dashboard')
+
+    teams = Team.objects.filter(is_active=True).order_by('name')
+
+    if request.method == 'POST':
+        team_form = TeamCreateForm(request.POST)
+        if team_form.is_valid():
+            team = team_form.save()
+            messages.success(request, f'Team "{team.name}" added to the league.')
+            return redirect('scheduling:league_handler_manage_teams')
+        messages.error(request, 'Could not add team. Please fix the form errors below.')
+    else:
+        team_form = TeamCreateForm()
+
+    return render(
+        request,
+        'scheduling/league_handler_manage_teams.html',
+        {
+            'handler': handler,
+            'team_form': team_form,
+            'teams': teams,
+            'team_count': teams.count(),
+            'home_url': reverse('scheduling:league_system_handler_home'),
+        },
+    )
+
+
+@login_required(login_url='scheduling:login')
 def tryout_list(request):
     if request.user.is_staff:
         messages.info(request, 'Tryouts are not available for admin accounts.')
@@ -453,17 +560,110 @@ def admin_home(request):
         messages.info(request, 'This page is currently available only for admin accounts.')
         return redirect('scheduling:dashboard')
 
+    admin_team = None
+    assignment = getattr(request.user, 'staff_team_assignment', None)
+    if assignment is not None:
+        admin_team = assignment.team
+
     welcome_name = request.user.first_name or request.user.username
     context = {
         'welcome_name': welcome_name,
-        'active_players': Player.objects.filter(role=Player.Role.PLAYER, is_active=True).count(),
-        'coach_count': Player.objects.filter(role=Player.Role.COACH, is_active=True).count(),
+        'active_players': Player.objects.filter(role=Player.Role.PLAYER, is_active=True, team=admin_team).count(),
+        'coach_count': Player.objects.filter(role=Player.Role.COACH, is_active=True, team=admin_team).count(),
         'open_tryouts': TryoutSession.objects.filter(registration_open=True).count(),
         'session_count': TrainingSession.objects.count(),
         'notification_count': Notification.objects.count(),
         'poll_count': SessionVotePoll.objects.count(),
+        'pending_count': Player.objects.filter(team=admin_team, is_approved=False).count(),
     }
     return render(request, 'scheduling/admin_home.html', context)
+
+
+def _get_admin_team(user):
+    """Return the Team for a staff user, or None."""
+    assignment = getattr(user, 'staff_team_assignment', None)
+    return assignment.team if assignment is not None else None
+
+
+@login_required(login_url='scheduling:login')
+def pending_members(request):
+    if not request.user.is_staff:
+        messages.info(request, 'This page is currently available only for admin accounts.')
+        return redirect('scheduling:dashboard')
+
+    admin_team = _get_admin_team(request.user)
+    pending = Player.objects.filter(team=admin_team, is_approved=False).order_by('name')
+    return render(request, 'scheduling/pending_members.html', {
+        'pending': pending,
+        'admin_team': admin_team,
+    })
+
+
+@login_required(login_url='scheduling:login')
+def approve_member(request, player_id):
+    if not request.user.is_staff:
+        messages.info(request, 'This page is currently available only for admin accounts.')
+        return redirect('scheduling:dashboard')
+    if request.method != 'POST':
+        return redirect('scheduling:pending_members')
+
+    admin_team = _get_admin_team(request.user)
+    player = get_object_or_404(Player, pk=player_id, team=admin_team, is_approved=False)
+    player.is_approved = True
+    player.save(update_fields=['is_approved'])
+    Notification.objects.create(
+        recipient=player,
+        title='Registration approved',
+        message=f'Your registration to {admin_team.name if admin_team else "the club"} has been approved. Welcome!',
+        notification_type='general',
+    )
+    messages.success(request, f'{player.name} has been approved.')
+    next_url = request.POST.get('next', '')
+    if next_url not in ('scheduling:pending_members', 'scheduling:player_status_list'):
+        next_url = 'scheduling:pending_members'
+    return redirect(next_url)
+
+
+@login_required(login_url='scheduling:login')
+def reject_member(request, player_id):
+    if not request.user.is_staff:
+        messages.info(request, 'This page is currently available only for admin accounts.')
+        return redirect('scheduling:dashboard')
+    if request.method != 'POST':
+        return redirect('scheduling:pending_members')
+
+    admin_team = _get_admin_team(request.user)
+    player = get_object_or_404(Player, pk=player_id, team=admin_team, is_approved=False)
+    player_name = player.name
+    linked_user = player.user
+    player.delete()
+    if linked_user is not None:
+        linked_user.delete()
+    messages.success(request, f'Registration for {player_name} has been rejected and removed.')
+    next_url = request.POST.get('next', '')
+    if next_url not in ('scheduling:pending_members', 'scheduling:player_status_list'):
+        next_url = 'scheduling:pending_members'
+    return redirect(next_url)
+
+
+@login_required(login_url='scheduling:login')
+def create_club_admin(request):
+    handler = getattr(request.user, 'player_profile', None)
+    if handler is None or handler.role != Player.Role.LEAGUE_SYSTEM_HANDLER:
+        messages.info(request, 'This page is currently available only for league system handler accounts.')
+        return redirect('scheduling:dashboard')
+
+    from .forms import ClubAdminCreateForm
+    if request.method == 'POST':
+        form = ClubAdminCreateForm(request.POST)
+        if form.is_valid():
+            admin_user = form.save()
+            messages.success(request, f'Club admin account for {admin_user.first_name} created successfully.')
+            return redirect('scheduling:league_handler_manage_teams')
+    else:
+        form = ClubAdminCreateForm()
+
+    return render(request, 'scheduling/create_club_admin.html', {'form': form, 'handler': handler})
 
 
 @login_required(login_url='scheduling:login')
@@ -497,126 +697,56 @@ def _role_label_for(user):
     return 'Member'
 
 
-@login_required(login_url='scheduling:login')
-def chatting_hub(request):
-    user_profile = getattr(request.user, 'player_profile', None)
-    is_admin = request.user.is_staff
-
-    contacts = Player.objects.filter(is_active=True)
-    if user_profile is not None:
-        contacts = contacts.exclude(pk=user_profile.pk)
-
-    search_query = request.GET.get('search', '').strip()
-    if search_query:
-        contacts = contacts.filter(
-            Q(name__icontains=search_query) | Q(email__icontains=search_query)
-        )
-
-    contacts = contacts.order_by('name')
-
-    unread_contact_ids = []
-    if user_profile is not None:
-        unread_contact_ids = list(
-            Message.objects.filter(
-                player=user_profile,
-                sender__in=contacts,
-                is_read=False,
-            )
-            .values_list('sender_id', flat=True)
-            .distinct()
-        )
-
-    selected_id = request.GET.get('selected')
-    selected_user = None
-    if selected_id:
-        selected_user = contacts.filter(pk=selected_id).first()
-
-    if selected_user is None and contacts.exists():
-        selected_user = contacts.first()
-
-    if selected_user is not None and user_profile is not None:
-        Message.objects.filter(
-            player=user_profile,
-            sender=selected_user,
-            is_read=False,
-        ).update(is_read=True)
-
-    conversation_messages = []
-    if selected_user is not None:
-        if user_profile is not None:
-            conversation_messages = Message.objects.filter(
-                Q(player=selected_user, sender=user_profile)
-                | Q(player=user_profile, sender=selected_user)
-            ).order_by('created_at')
-        elif is_admin:
-            conversation_messages = Message.objects.filter(
-                player=selected_user,
-                sender_is_admin=True,
-            ).order_by('created_at')
-        else:
-            conversation_messages = Message.objects.filter(player=selected_user).order_by('created_at')
-
-    if request.method == 'POST':
-        selected_id = request.POST.get('selected_id')
-        selected_user = Player.objects.filter(pk=selected_id, is_active=True).first()
-        form = ChatMessageForm(request.POST)
-        if selected_user is None:
-            messages.error(request, 'Please select a contact to send your message.')
-        elif form.is_valid():
-            message = form.save(commit=False)
-            message.player = selected_user
-            message.subject = f'Chat with {selected_user.name}'
-            message.sender_is_admin = is_admin
-            message.sender = user_profile if user_profile is not None else None
-            message.save()
-            params = {'selected': selected_user.id}
-            if search_query:
-                params['search'] = search_query
-            return redirect(f"{reverse('scheduling:chatting_hub')}?{urlencode(params)}")
-    else:
-        form = ChatMessageForm()
-
-    context = {
-        'home_url': reverse(_post_login_route_for(request.user)),
-        'role_label': _role_label_for(request.user),
-        'contacts': contacts,
-        'selected_user': selected_user,
-        'conversation_messages': conversation_messages,
-        'search_query': search_query,
-        'form': form,
-        'is_admin': is_admin,
-        'unread_contact_ids': unread_contact_ids,
-    }
-    return render(request, 'scheduling/chatting_hub.html', context)
+def _chat_contact_status(contact):
+    linked_user = getattr(contact, 'user', None)
+    if linked_user is not None and linked_user.is_staff:
+        return 'admin'
+    if contact.role == Player.Role.LEAGUE_SYSTEM_HANDLER:
+        return 'league system handler'
+    if contact.role == Player.Role.COACH:
+        return 'coach'
+    return 'player'
 
 
-@login_required(login_url='scheduling:login')
-def chatting_messages(request):
-    user_profile = getattr(request.user, 'player_profile', None)
-    selected_id = request.GET.get('selected')
-    selected_user = None
-    if selected_id:
-        selected_user = Player.objects.filter(pk=selected_id, is_active=True).first()
+def _chat_sender_name(user, profile=None):
+    if profile is not None:
+        return profile.name
+    return user.get_full_name().strip() or user.username or 'Admin'
 
-    if selected_user is None:
-        return JsonResponse({'messages': []})
 
-    if user_profile is not None:
-        conversation_messages = Message.objects.filter(
-            Q(player=selected_user, sender=user_profile)
-            | Q(player=user_profile, sender=selected_user)
-        ).order_by('created_at')
-    elif request.user.is_staff:
-        conversation_messages = Message.objects.filter(
-            player=selected_user,
-            sender_is_admin=True,
-        ).order_by('created_at')
-    else:
-        conversation_messages = Message.objects.filter(player=selected_user).order_by('created_at')
+def _create_chat_notification(recipient, sender_name, content):
+    preview = ' '.join((content or '').split())
+    if len(preview) > 120:
+        preview = f'{preview[:117]}...'
 
+    message_body = f'{sender_name} sent you a new message.'
+    if preview:
+        message_body = f'{message_body} "{preview}"'
+
+    Notification.objects.create(
+        recipient=recipient,
+        title=f'New message from {sender_name}',
+        message=message_body,
+        notification_type=Notification.Type.GENERAL,
+    )
+
+
+def _chat_groups_for_user(user, profile):
+    groups = ChatGroup.objects.filter(is_active=True)
+    if profile is not None:
+        return groups.filter(members=profile).distinct()
+    if user.is_staff:
+        return groups.filter(created_by_user=user).distinct()
+    return groups.none()
+
+
+def _serialize_direct_messages(conversation_messages, selected_user, user_profile, is_admin):
     messages_data = []
     for message in conversation_messages:
-        is_sent = user_profile is not None and message.player_id == selected_user.id
+        is_sent = (
+            (user_profile is not None and message.sender_id == user_profile.id)
+            or (is_admin and message.sender_is_admin)
+        )
         if is_sent:
             author = 'You'
         elif message.sender is not None:
@@ -631,6 +761,414 @@ def chatting_messages(request):
             'created_at': message.created_at.strftime('%b %d, %Y - %H:%M'),
             'sent_by_current_user': is_sent,
         })
+    return messages_data
+
+
+def _serialize_group_messages(group_messages, user, profile):
+    messages_data = []
+    for message in group_messages:
+        is_sent = (
+            (profile is not None and message.sender_player_id == profile.id)
+            or (profile is None and message.sender_user_id == user.id)
+        )
+        messages_data.append({
+            'id': message.id,
+            'author': 'You' if is_sent else message.sender_name,
+            'content': message.content,
+            'created_at': message.created_at.strftime('%b %d, %Y - %H:%M'),
+            'sent_by_current_user': is_sent,
+        })
+    return messages_data
+
+
+def _create_group_chat_notifications(group, sender_profile, sender_name, content):
+    preview = ' '.join((content or '').split())
+    if len(preview) > 120:
+        preview = f'{preview[:117]}...'
+
+    recipients = group.members.filter(is_active=True)
+    if sender_profile is not None:
+        recipients = recipients.exclude(pk=sender_profile.pk)
+
+    notifications = []
+    for recipient in recipients:
+        body = f'New message in {group.name} from {sender_name}.'
+        if preview:
+            body = f'{body} "{preview}"'
+        notifications.append(
+            Notification(
+                recipient=recipient,
+                title=f'New group message: {group.name}',
+                message=body,
+                notification_type=Notification.Type.GENERAL,
+            )
+        )
+
+    if notifications:
+        Notification.objects.bulk_create(notifications)
+
+
+def _can_manage_announcements(user, profile):
+    return user.is_staff or (profile is not None and profile.role == Player.Role.COACH)
+
+
+def _create_announcement_notifications(announcement, sender_name):
+    recipients = Player.objects.filter(is_active=True)
+    notifications = [
+        Notification(
+            recipient=recipient,
+            title=f'Announcement: {announcement.title}',
+            message=f'{sender_name}: {announcement.content}',
+            notification_type=Notification.Type.GENERAL,
+        )
+        for recipient in recipients
+    ]
+    if notifications:
+        Notification.objects.bulk_create(notifications)
+
+
+@login_required(login_url='scheduling:login')
+def chatting_hub(request):
+    user_profile = getattr(request.user, 'player_profile', None)
+    is_admin = request.user.is_staff
+    can_manage_announcements = _can_manage_announcements(request.user, user_profile)
+
+    all_contacts = Player.objects.filter(is_active=True)
+    if user_profile is not None:
+        all_contacts = all_contacts.exclude(pk=user_profile.pk)
+
+    search_query = request.GET.get('search', '').strip()
+    contacts = all_contacts
+    if search_query:
+        contacts = contacts.filter(
+            Q(name__icontains=search_query) | Q(email__icontains=search_query)
+        )
+
+    contacts = contacts.order_by('name')
+    group_member_queryset = all_contacts.order_by('name')
+
+    accessible_groups = _chat_groups_for_user(request.user, user_profile).prefetch_related('members').order_by('name')
+    groups = accessible_groups
+    if search_query:
+        groups = groups.filter(name__icontains=search_query)
+
+    unread_contact_ids = []
+    if user_profile is not None:
+        unread_contact_ids = list(
+            Message.objects.filter(
+                player=user_profile,
+                sender__in=all_contacts,
+                is_read=False,
+            )
+            .values_list('sender_id', flat=True)
+            .distinct()
+        )
+
+    message_form = ChatMessageForm()
+    group_form = ChatGroupCreateForm(member_queryset=group_member_queryset)
+    show_group_form = False
+    announcement_form = AnnouncementCreateForm()
+    show_announcement_form = False
+    announcements = list(
+        Announcement.objects.select_related('created_by_player', 'created_by_user').prefetch_related('replies__sender').all()[:60]
+    )
+
+    # Determine reply permissions
+    player_can_reply = not can_manage_announcements and user_profile is not None
+
+    # For announcement authors: attach their incoming replies to each announcement object
+    if can_manage_announcements:
+        for ann in announcements:
+            if user_profile is not None and ann.created_by_player == user_profile:
+                ann.my_replies = list(ann.replies.select_related('sender').order_by('created_at'))
+            elif request.user.is_staff and ann.created_by_user_id == request.user.pk and ann.created_by_player is None:
+                ann.my_replies = list(ann.replies.select_related('sender').order_by('created_at'))
+            else:
+                ann.my_replies = []
+        # Mark unread replies as read
+        if user_profile is not None:
+            AnnouncementReply.objects.filter(
+                announcement__created_by_player=user_profile, is_read=False
+            ).update(is_read=True)
+        elif request.user.is_staff:
+            AnnouncementReply.objects.filter(
+                announcement__created_by_user=request.user,
+                announcement__created_by_player=None,
+                is_read=False,
+            ).update(is_read=True)
+    else:
+        for ann in announcements:
+            ann.my_replies = []
+
+    selected_group_id = request.GET.get('group')
+    selected_group = None
+    if selected_group_id:
+        selected_group = accessible_groups.filter(pk=selected_group_id).first()
+        if selected_group is not None:
+            selected_group.member_count = selected_group.members.count()
+
+    selected_id = request.GET.get('selected')
+    selected_user = None
+    if selected_group is None and selected_id:
+        selected_user = contacts.filter(pk=selected_id).first()
+
+    if selected_group is None and selected_user is None and contacts.exists():
+        selected_user = contacts.first()
+
+    if request.method == 'POST':
+        action = request.POST.get('chat_action', 'send_individual')
+        if action == 'reply_announcement':
+            if user_profile is None:
+                messages.error(request, 'Only players can reply to announcements.')
+            else:
+                ann_id = request.POST.get('announcement_id')
+                announcement_obj = Announcement.objects.filter(pk=ann_id).first()
+                if announcement_obj is None:
+                    messages.error(request, 'Announcement not found.')
+                else:
+                    reply_content = request.POST.get('reply_content', '').strip()
+                    if not reply_content:
+                        messages.error(request, 'Reply cannot be empty.')
+                    else:
+                        AnnouncementReply.objects.create(
+                            announcement=announcement_obj,
+                            sender=user_profile,
+                            content=reply_content,
+                        )
+                        author = announcement_obj.created_by_player
+                        if author is not None and author != user_profile:
+                            Notification.objects.create(
+                                recipient=author,
+                                title='Private reply to your announcement',
+                                message=f'{user_profile.name} replied to "{announcement_obj.title}": {reply_content[:100]}',
+                                notification_type=Notification.Type.GENERAL,
+                            )
+                        messages.success(request, 'Your private reply was sent.')
+
+                params = {}
+                if selected_group is not None:
+                    params['group'] = selected_group.id
+                elif selected_user is not None:
+                    params['selected'] = selected_user.id
+                if search_query:
+                    params['search'] = search_query
+                target = reverse('scheduling:chatting_hub')
+                if params:
+                    target = f"{target}?{urlencode(params)}"
+                return redirect(target)
+
+        elif action == 'create_announcement':
+            if not can_manage_announcements:
+                messages.error(request, 'Only coaches and admins can post announcements.')
+            else:
+                show_announcement_form = True
+                announcement_form = AnnouncementCreateForm(request.POST)
+                if announcement_form.is_valid():
+                    announcement = announcement_form.save(commit=False)
+                    announcement.created_by_player = user_profile
+                    announcement.created_by_user = request.user
+                    announcement.save()
+                    sender_name = _chat_sender_name(request.user, user_profile)
+                    _create_announcement_notifications(announcement, sender_name)
+                    messages.success(request, 'Announcement sent and notifications delivered.')
+
+                    params = {}
+                    if selected_group is not None:
+                        params['group'] = selected_group.id
+                    elif selected_user is not None:
+                        params['selected'] = selected_user.id
+                    if search_query:
+                        params['search'] = search_query
+
+                    target = reverse('scheduling:chatting_hub')
+                    if params:
+                        target = f"{target}?{urlencode(params)}"
+                    return redirect(target)
+
+        elif action == 'create_group':
+            show_group_form = True
+            group_form = ChatGroupCreateForm(request.POST, member_queryset=group_member_queryset)
+            if group_form.is_valid():
+                new_group = ChatGroup.objects.create(
+                    name=group_form.cleaned_data['name'],
+                    created_by_player=user_profile,
+                    created_by_user=request.user,
+                )
+                members = list(group_form.cleaned_data['members'])
+                if user_profile is not None and user_profile not in members:
+                    members.append(user_profile)
+
+                if not members:
+                    new_group.delete()
+                    group_form.add_error('members', 'Select at least one member for the group.')
+                else:
+                    new_group.members.add(*members)
+                    messages.success(request, f'Group "{new_group.name}" created.')
+                    params = {'group': new_group.id}
+                    if search_query:
+                        params['search'] = search_query
+                    return redirect(f"{reverse('scheduling:chatting_hub')}?{urlencode(params)}")
+
+        elif action == 'send_group':
+            selected_group_id = request.POST.get('group_id')
+            selected_group = accessible_groups.filter(pk=selected_group_id).first()
+            message_form = ChatMessageForm(request.POST)
+            if selected_group is None:
+                messages.error(request, 'Please select a group to send your message.')
+            elif message_form.is_valid():
+                sender_name = _chat_sender_name(request.user, user_profile)
+                group_message = GroupMessage.objects.create(
+                    group=selected_group,
+                    sender_player=user_profile,
+                    sender_user=request.user if user_profile is None else None,
+                    sender_name=sender_name,
+                    content=message_form.cleaned_data['content'],
+                )
+                _create_group_chat_notifications(
+                    group=selected_group,
+                    sender_profile=user_profile,
+                    sender_name=sender_name,
+                    content=group_message.content,
+                )
+                params = {'group': selected_group.id}
+                if search_query:
+                    params['search'] = search_query
+                return redirect(f"{reverse('scheduling:chatting_hub')}?{urlencode(params)}")
+
+        else:
+            selected_id = request.POST.get('selected_id')
+            selected_user = all_contacts.filter(pk=selected_id).first()
+            message_form = ChatMessageForm(request.POST)
+            if selected_user is None:
+                messages.error(request, 'Please select a contact to send your message.')
+            elif message_form.is_valid():
+                message = message_form.save(commit=False)
+                message.player = selected_user
+                message.subject = f'Chat with {selected_user.name}'
+                message.sender_is_admin = is_admin
+                message.sender = user_profile if user_profile is not None else None
+                message.save()
+
+                if user_profile is None or selected_user.pk != user_profile.pk:
+                    _create_chat_notification(
+                        recipient=selected_user,
+                        sender_name=_chat_sender_name(request.user, user_profile),
+                        content=message.content,
+                    )
+
+                params = {'selected': selected_user.id}
+                if search_query:
+                    params['search'] = search_query
+                return redirect(f"{reverse('scheduling:chatting_hub')}?{urlencode(params)}")
+
+    if selected_group is None and selected_user is not None and user_profile is not None:
+        Message.objects.filter(
+            player=user_profile,
+            sender=selected_user,
+            is_read=False,
+        ).update(is_read=True)
+
+    conversation_messages = []
+    if selected_group is not None:
+        group_messages = GroupMessage.objects.filter(group=selected_group).order_by('created_at')
+        conversation_messages = _serialize_group_messages(group_messages, request.user, user_profile)
+    elif selected_user is not None:
+        if user_profile is not None:
+            direct_messages = Message.objects.filter(
+                Q(player=selected_user, sender=user_profile)
+                | Q(player=user_profile, sender=selected_user)
+            ).order_by('created_at')
+        elif is_admin:
+            direct_messages = Message.objects.filter(
+                player=selected_user,
+                sender_is_admin=True,
+            ).order_by('created_at')
+        else:
+            direct_messages = Message.objects.filter(player=selected_user).order_by('created_at')
+        conversation_messages = _serialize_direct_messages(
+            conversation_messages=direct_messages,
+            selected_user=selected_user,
+            user_profile=user_profile,
+            is_admin=is_admin,
+        )
+
+    contact_list = list(contacts)
+    for contact in contact_list:
+        contact.chat_status = _chat_contact_status(contact)
+
+    group_list = list(groups)
+    for group in group_list:
+        group.member_count = group.members.count()
+
+    if selected_group is not None and not hasattr(selected_group, 'member_count'):
+        selected_group.member_count = selected_group.members.count()
+
+    context = {
+        'home_url': reverse(_post_login_route_for(request.user)),
+        'role_label': _role_label_for(request.user),
+        'contacts': contact_list,
+        'groups': group_list,
+        'selected_user': selected_user,
+        'selected_group': selected_group,
+        'selected_user_status': _chat_contact_status(selected_user) if selected_user is not None else None,
+        'conversation_messages': conversation_messages,
+        'search_query': search_query,
+        'form': message_form,
+        'group_form': group_form,
+        'show_group_form': show_group_form,
+        'announcements': announcements,
+        'announcement_form': announcement_form,
+        'show_announcement_form': show_announcement_form,
+        'can_manage_announcements': can_manage_announcements,
+        'player_can_reply': player_can_reply,
+        'is_admin': is_admin,
+        'unread_contact_ids': unread_contact_ids,
+    }
+    return render(request, 'scheduling/chatting_hub.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def chatting_messages(request):
+    user_profile = getattr(request.user, 'player_profile', None)
+    is_admin = request.user.is_staff
+
+    group_id = request.GET.get('group')
+    if group_id:
+        selected_group = _chat_groups_for_user(request.user, user_profile).filter(pk=group_id).first()
+        if selected_group is None:
+            return JsonResponse({'messages': []})
+
+        group_messages = GroupMessage.objects.filter(group=selected_group).order_by('created_at')
+        messages_data = _serialize_group_messages(group_messages, request.user, user_profile)
+        return JsonResponse({'messages': messages_data})
+
+    selected_id = request.GET.get('selected')
+    selected_user = None
+    if selected_id:
+        selected_user = Player.objects.filter(pk=selected_id, is_active=True).first()
+
+    if selected_user is None:
+        return JsonResponse({'messages': []})
+
+    if user_profile is not None:
+        direct_messages = Message.objects.filter(
+            Q(player=selected_user, sender=user_profile)
+            | Q(player=user_profile, sender=selected_user)
+        ).order_by('created_at')
+    elif is_admin:
+        direct_messages = Message.objects.filter(
+            player=selected_user,
+            sender_is_admin=True,
+        ).order_by('created_at')
+    else:
+        direct_messages = Message.objects.filter(player=selected_user).order_by('created_at')
+
+    messages_data = _serialize_direct_messages(
+        conversation_messages=direct_messages,
+        selected_user=selected_user,
+        user_profile=user_profile,
+        is_admin=is_admin,
+    )
 
     return JsonResponse({'messages': messages_data})
 
@@ -1565,7 +2103,7 @@ def notification_inbox(request):
     if profile is not None:
         notifications = notifications.filter(recipient=profile)
         role_label = profile.get_role_display()
-        home_url = 'scheduling:player_home' if profile.role == Player.Role.PLAYER else 'scheduling:coach_home'
+        home_url = _post_login_route_for(request.user)
     else:
         role_label = 'Admin' if request.user.is_staff else 'Member'
         home_url = 'scheduling:admin_home' if request.user.is_staff else 'scheduling:landing'
@@ -1744,9 +2282,21 @@ def player_status_list(request):
         messages.info(request, 'This page is currently available only for admin accounts.')
         return redirect('scheduling:dashboard')
 
-    players = Player.objects.filter(role=Player.Role.PLAYER)
-    coaches = Player.objects.filter(role=Player.Role.COACH)
-    return render(request, 'scheduling/player_status_list.html', {'players': players, 'coaches': coaches})
+    admin_team = _get_admin_team(request.user)
+    players = Player.objects.filter(role=Player.Role.PLAYER, is_approved=True)
+    coaches = Player.objects.filter(role=Player.Role.COACH, is_approved=True)
+    if admin_team is not None:
+        pending_players = Player.objects.filter(role=Player.Role.PLAYER, team=admin_team, is_approved=False).order_by('name')
+        pending_coaches = Player.objects.filter(role=Player.Role.COACH, team=admin_team, is_approved=False).order_by('name')
+    else:
+        pending_players = Player.objects.none()
+        pending_coaches = Player.objects.none()
+    return render(request, 'scheduling/player_status_list.html', {
+        'players': players,
+        'coaches': coaches,
+        'pending_players': pending_players,
+        'pending_coaches': pending_coaches,
+    })
 
 
 def eligible_players(request):
@@ -1862,6 +2412,11 @@ def chat_with_player(request, player_id):
             message.player = player
             message.sender_is_admin = True
             message.save()
+            _create_chat_notification(
+                recipient=player,
+                sender_name=_chat_sender_name(request.user),
+                content=message.content,
+            )
             messages.success(request, 'Message sent successfully.')
             return redirect('scheduling:chat_with_player', player_id=player_id)
     else:
@@ -1950,6 +2505,11 @@ def chat_with_coach(request, coach_id):
             message.player = coach
             message.sender_is_admin = True
             message.save()
+            _create_chat_notification(
+                recipient=coach,
+                sender_name=_chat_sender_name(request.user),
+                content=message.content,
+            )
             messages.success(request, 'Message sent successfully.')
             return redirect('scheduling:chat_with_coach', coach_id=coach_id)
     else:
@@ -2000,29 +2560,48 @@ def coach_support(request, coach_id):
 def team_stats_dashboard(request):
     profile = getattr(request.user, 'player_profile', None)
     is_coach = profile is not None and profile.role == Player.Role.COACH
-    if not request.user.is_staff and not is_coach:
-        return redirect('scheduling:player_home')
+    is_league_handler = _can_manage_stats_entries(profile)
+    is_admin = request.user.is_staff
+    if not is_admin and not is_coach and not is_league_handler:
+        return redirect(_post_login_route_for(request.user))
 
+    coach_team = profile.team if is_coach else None
     matches = Match.objects.all()
+    players = Player.objects.filter(role=Player.Role.PLAYER, is_active=True)
+    player_stats_queryset = PlayerMatchStat.objects.all()
+
+    if is_coach:
+        if coach_team is None:
+            matches = Match.objects.none()
+            players = Player.objects.none()
+            player_stats_queryset = PlayerMatchStat.objects.none()
+        else:
+            matches = matches.filter(team=coach_team)
+            players = players.filter(team=coach_team)
+            player_stats_queryset = player_stats_queryset.filter(
+                match__team=coach_team,
+                player__team=coach_team,
+            )
+
     total_wins = sum(1 for m in matches if m.result == Match.Result.WIN)
     total_losses = sum(1 for m in matches if m.result == Match.Result.LOSS)
     total_draws = sum(1 for m in matches if m.result == Match.Result.DRAW)
 
-    total_players = Player.objects.filter(role=Player.Role.PLAYER).count()
-    recovering_players = Player.objects.filter(role=Player.Role.PLAYER, status=Player.Status.RECOVERING).count()
-    injured_players = Player.objects.filter(role=Player.Role.PLAYER, status=Player.Status.INJURED).count()
+    total_players = players.count()
+    recovering_players = players.filter(status=Player.Status.RECOVERING).count()
+    injured_players = players.filter(status=Player.Status.INJURED).count()
     non_eligible = recovering_players + injured_players
     recovery_pct = round(((total_players - non_eligible) / total_players) * 100) if total_players else 0
 
     top_scorers = (
-        PlayerMatchStat.objects
+        player_stats_queryset
         .values('player__id', 'player__name')
         .annotate(total_goals=Sum('goals'))
         .filter(total_goals__gt=0)
         .order_by('-total_goals')[:5]
     )
     top_defenders = (
-        PlayerMatchStat.objects
+        player_stats_queryset
         .values('player__id', 'player__name')
         .annotate(total_interceptions=Sum('interceptions'))
         .filter(total_interceptions__gt=0)
@@ -2030,17 +2609,21 @@ def team_stats_dashboard(request):
     )
 
     goals_per_game = list(
-        Match.objects.order_by('date').values_list('opponent', 'goals_for')
+        matches.order_by('date').values_list('opponent', 'goals_for')
     )
 
     metric_key = request.GET.get('metric', 'points')
     if metric_key not in TEAM_STAT_METRICS:
         metric_key = 'points'
     ranking_metric_label = TEAM_STAT_METRICS[metric_key]
-    top_players = _player_metric_rankings(metric_key, descending=True)
-    weak_players = _player_metric_rankings(metric_key, descending=False)
+    ranking_team = coach_team if is_coach else None
+    top_players = _player_metric_rankings(metric_key, descending=True, team=ranking_team)
+    weak_players = _player_metric_rankings(metric_key, descending=False, team=ranking_team)
+    if is_coach and coach_team is None:
+        top_players = []
+        weak_players = []
 
-    season_totals = _season_metric_totals()
+    season_totals = _season_metric_totals(stats_queryset=player_stats_queryset)
     season_total_sum = sum(season_totals.values())
     season_percentages = [
         {
@@ -2063,7 +2646,6 @@ def team_stats_dashboard(request):
             }
         )
 
-    players = Player.objects.filter(role=Player.Role.PLAYER, is_active=True)
     soreness_overview = []
     for player in players:
         latest_report = player.soreness_reports.first()
@@ -2101,6 +2683,7 @@ def team_stats_dashboard(request):
         'chart_data': chart_data,
         'match_count': matches.count(),
         'players': players,
+        'can_manage_stats': is_league_handler,
         'home_url': _post_login_route_for(request.user),
     }
     return render(request, 'scheduling/team_stats.html', context)
@@ -2110,17 +2693,30 @@ def team_stats_dashboard(request):
 def player_stats_detail(request, player_id):
     profile = getattr(request.user, 'player_profile', None)
     is_coach = profile is not None and profile.role == Player.Role.COACH
+    is_league_handler = _can_manage_stats_entries(profile)
     is_player = profile is not None and profile.role == Player.Role.PLAYER
 
-    if request.user.is_staff or is_coach:
+    if request.user.is_staff or is_league_handler:
         player = get_object_or_404(Player, pk=player_id)
+        stats_queryset = PlayerMatchStat.objects.filter(player=player)
+    elif is_coach:
+        if profile.team is None:
+            messages.error(request, 'Your coach account is not linked to a team.')
+            return redirect('scheduling:team_stats')
+
+        player = get_object_or_404(Player, pk=player_id)
+        if player.team_id != profile.team_id:
+            messages.error(request, 'You can only view stats for players on your team.')
+            return redirect('scheduling:team_stats')
+        stats_queryset = PlayerMatchStat.objects.filter(player=player, match__team=profile.team)
     elif is_player and profile.id == player_id:
         player = profile
+        stats_queryset = PlayerMatchStat.objects.filter(player=player)
     else:
         messages.error(request, 'You can only view your own stats page.')
         return redirect('scheduling:player_home' if is_player else 'scheduling:dashboard')
 
-    stats = PlayerMatchStat.objects.filter(player=player).select_related('match').order_by('-match__date')
+    stats = stats_queryset.select_related('match').order_by('-match__date')
 
     totals = stats.aggregate(
         total_goals=Sum('goals'),
@@ -2153,8 +2749,7 @@ def player_stats_detail(request, player_id):
             break
 
     stats_by_game = list(
-        PlayerMatchStat.objects
-        .filter(player=player)
+        stats_queryset
         .select_related('match')
         .order_by('match__date', 'match__id')
     )
@@ -2190,7 +2785,7 @@ def player_stats_detail(request, player_id):
         'averages': averages,
         'latest_injury': latest_injury,
         'matches_played': stats.count(),
-        'can_view_team_dashboard': request.user.is_staff or is_coach,
+        'can_view_team_dashboard': request.user.is_staff or is_coach or is_league_handler,
         'game_labels': game_labels,
         'aces_series': aces_series,
         'returns_series': returns_series,
@@ -2207,15 +2802,16 @@ def player_stats_detail(request, player_id):
 @login_required(login_url='scheduling:login')
 def record_match(request):
     profile = getattr(request.user, 'player_profile', None)
-    is_coach = profile is not None and profile.role == Player.Role.COACH
-    if not request.user.is_staff and not is_coach:
-        return redirect('scheduling:player_home')
+    if not _can_manage_stats_entries(profile):
+        return redirect(_post_login_route_for(request.user))
 
     if request.method == 'POST':
         form = MatchForm(request.POST)
         if form.is_valid():
             match = form.save()
             qs = Player.objects.filter(is_active=True)
+            if match.team_id is not None:
+                qs = qs.filter(team=match.team)
             if profile:
                 qs = qs.exclude(pk=profile.pk)
             Notification.objects.bulk_create([
@@ -2241,15 +2837,14 @@ def record_match(request):
 @login_required(login_url='scheduling:login')
 def record_player_stats(request, match_id):
     profile = getattr(request.user, 'player_profile', None)
-    is_coach = profile is not None and profile.role == Player.Role.COACH
-    if not request.user.is_staff and not is_coach:
-        return redirect('scheduling:player_home')
+    if not _can_manage_stats_entries(profile):
+        return redirect(_post_login_route_for(request.user))
 
     match = get_object_or_404(Match, pk=match_id)
     existing_stats = list(match.player_stats.select_related('player'))
 
     if request.method == 'POST':
-        form = PlayerMatchStatForm(request.POST)
+        form = PlayerMatchStatForm(request.POST, team=match.team)
         if form.is_valid():
             stat = form.save(commit=False)
             stat.match = match
@@ -2257,7 +2852,7 @@ def record_player_stats(request, match_id):
             messages.success(request, f'Stats for {stat.player.name} saved.')
             return redirect('scheduling:record_player_stats', match_id=match.id)
     else:
-        form = PlayerMatchStatForm()
+        form = PlayerMatchStatForm(team=match.team)
 
     return render(request, 'scheduling/record_player_stats.html', {
         'form': form,
@@ -2269,9 +2864,8 @@ def record_player_stats(request, match_id):
 @login_required(login_url='scheduling:login')
 def add_team_goal(request):
     profile = getattr(request.user, 'player_profile', None)
-    is_coach = profile is not None and profile.role == Player.Role.COACH
-    if not request.user.is_staff and not is_coach:
-        return redirect('scheduling:player_home')
+    if not _can_manage_stats_entries(profile):
+        return redirect(_post_login_route_for(request.user))
 
     if request.method == 'POST':
         form = TeamGoalForm(request.POST)
@@ -2294,3 +2888,212 @@ def add_team_goal(request):
     else:
         form = TeamGoalForm()
     return render(request, 'scheduling/add_team_goal.html', {'form': form})
+
+
+# ── Upcoming Games ──────────────────────────────────────────────────────────
+
+def _get_player_or_admin_team(request):
+    """Return (team, player_profile) for players/coaches and admin users."""
+    profile = getattr(request.user, 'player_profile', None)
+    if profile is not None:
+        return profile.team, profile
+    if request.user.is_staff:
+        assignment = (
+            StaffTeamAssignment.objects
+            .filter(user=request.user)
+            .select_related('team')
+            .first()
+        )
+        if assignment is not None:
+            return assignment.team, None
+    return None, None
+
+
+@login_required(login_url='scheduling:login')
+def upcoming_games(request):
+    profile = getattr(request.user, 'player_profile', None)
+
+    # League system handlers have their own dedicated page.
+    if profile is not None and profile.role == Player.Role.LEAGUE_SYSTEM_HANDLER:
+        return redirect('scheduling:league_handler_upcoming_games')
+
+    team, player_profile = _get_player_or_admin_team(request)
+    if team is None:
+        messages.info(request, 'You are not assigned to a team.')
+        return redirect('scheduling:dashboard')
+
+    # Show games scheduled from 12 hours ago onwards (so just-passed games still appear briefly).
+    cutoff = timezone.now() - timedelta(hours=12)
+    games = (
+        UpcomingGame.objects
+        .filter(Q(home_team=team) | Q(away_team=team), scheduled_at__gte=cutoff)
+        .select_related('home_team', 'away_team')
+        .order_by('scheduled_at')
+    )
+    game_ids = [g.pk for g in games]
+
+    # Pre-fetch all attendances for these games.
+    all_attendances = (
+        GameAttendance.objects
+        .filter(game_id__in=game_ids)
+        .select_related('player')
+    )
+
+    from collections import defaultdict
+    att_by_game: dict = defaultdict(list)
+    for att in all_attendances:
+        att_by_game[att.game_id].append(att)
+
+    # Current player's own attendance records (players only).
+    is_player = player_profile is not None and player_profile.role == Player.Role.PLAYER
+    my_attendance: dict = {}
+    if is_player:
+        my_attendance = {
+            a.game_id: a
+            for a in GameAttendance.objects.filter(game_id__in=game_ids, player=player_profile)
+        }
+
+    enriched_games = []
+    for game in games:
+        atts = att_by_game[game.pk]
+        enriched_games.append({
+            'game': game,
+            'going': [a for a in atts if a.status == GameAttendance.Status.GOING],
+            'not_going': [a for a in atts if a.status == GameAttendance.Status.NOT_GOING],
+            'injured': [a for a in atts if a.status == GameAttendance.Status.INJURED],
+            'maybe': [a for a in atts if a.status == GameAttendance.Status.MAYBE],
+            'my_status': my_attendance.get(game.pk),
+            'is_home': game.home_team_id == team.pk,
+            'opponent': game.away_team if game.home_team_id == team.pk else game.home_team,
+        })
+
+    context = {
+        'team': team,
+        'enriched_games': enriched_games,
+        'is_player': is_player,
+        'attendance_choices': GameAttendance.Status.choices,
+    }
+    return render(request, 'scheduling/upcoming_games.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def set_game_attendance(request, game_id):
+    if request.method != 'POST':
+        return redirect('scheduling:upcoming_games')
+
+    profile = getattr(request.user, 'player_profile', None)
+    if profile is None or profile.role != Player.Role.PLAYER:
+        messages.error(request, 'Only players can set their game attendance.')
+        return redirect('scheduling:upcoming_games')
+
+    game = get_object_or_404(UpcomingGame, pk=game_id)
+    # Ensure the game actually involves the player's team.
+    if profile.team_id not in (game.home_team_id, game.away_team_id):
+        messages.error(request, 'This game is not for your team.')
+        return redirect('scheduling:upcoming_games')
+
+    valid_statuses = {c[0] for c in GameAttendance.Status.choices}
+    status = request.POST.get('status', '')
+    if status not in valid_statuses:
+        messages.error(request, 'Invalid attendance status.')
+        return redirect('scheduling:upcoming_games')
+
+    GameAttendance.objects.update_or_create(
+        game=game,
+        player=profile,
+        defaults={'status': status},
+    )
+    messages.success(request, 'Your attendance status has been updated.')
+    return redirect('scheduling:upcoming_games')
+
+
+@login_required(login_url='scheduling:login')
+def league_handler_upcoming_games(request):
+    handler = getattr(request.user, 'player_profile', None)
+    if handler is None or handler.role != Player.Role.LEAGUE_SYSTEM_HANDLER:
+        messages.info(request, 'This page is only available to the league system handler.')
+        return redirect('scheduling:dashboard')
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'delete':
+            game = get_object_or_404(UpcomingGame, pk=request.POST.get('game_id'))
+            game.delete()
+            messages.success(request, 'Game removed.')
+            return redirect('scheduling:league_handler_upcoming_games')
+        form = UpcomingGameForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Upcoming game scheduled.')
+            return redirect('scheduling:league_handler_upcoming_games')
+    else:
+        form = UpcomingGameForm()
+
+    all_games = (
+        UpcomingGame.objects
+        .select_related('home_team', 'away_team')
+        .order_by('scheduled_at')
+    )
+    context = {
+        'handler': handler,
+        'form': form,
+        'games': all_games,
+    }
+    return render(request, 'scheduling/league_handler_upcoming_games.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def pending_admins(request):
+    handler = getattr(request.user, 'player_profile', None)
+    if handler is None or handler.role != Player.Role.LEAGUE_SYSTEM_HANDLER:
+        messages.info(request, 'This page is only available to the league system handler.')
+        return redirect('scheduling:dashboard')
+    pending = (
+        StaffTeamAssignment.objects
+        .filter(is_approved=False)
+        .select_related('user', 'team')
+        .order_by('created_at')
+    )
+    return render(request, 'scheduling/pending_admins.html', {'handler': handler, 'pending': pending})
+
+
+@login_required(login_url='scheduling:login')
+def approve_admin(request, assignment_id):
+    handler = getattr(request.user, 'player_profile', None)
+    if handler is None or handler.role != Player.Role.LEAGUE_SYSTEM_HANDLER:
+        return redirect('scheduling:dashboard')
+    if request.method == 'POST':
+        assignment = get_object_or_404(StaffTeamAssignment, pk=assignment_id, is_approved=False)
+        assignment.is_approved = True
+        assignment.save()
+        messages.success(request, f'Admin account for {assignment.user.get_full_name() or assignment.user.username} has been approved.')
+    return redirect('scheduling:pending_admins')
+
+
+@login_required(login_url='scheduling:login')
+def reject_admin(request, assignment_id):
+    handler = getattr(request.user, 'player_profile', None)
+    if handler is None or handler.role != Player.Role.LEAGUE_SYSTEM_HANDLER:
+        return redirect('scheduling:dashboard')
+    if request.method == 'POST':
+        assignment = get_object_or_404(StaffTeamAssignment, pk=assignment_id, is_approved=False)
+        admin_name = assignment.user.get_full_name() or assignment.user.username
+        assignment.user.delete()  # cascades to assignment
+        messages.success(request, f'Admin registration for {admin_name} has been rejected and removed.')
+    return redirect('scheduling:pending_admins')
+
+
+@login_required(login_url='scheduling:login')
+def notifications_popup_data(request):
+    """Return unread notifications as JSON for the real-time popup system."""
+    profile = getattr(request.user, 'player_profile', None)
+    if profile is None:
+        return JsonResponse({'notifications': []})
+    notifs = (
+        Notification.objects
+        .filter(recipient=profile, read_at__isnull=True)
+        .order_by('-created_at')[:20]
+    )
+    data = [{'id': n.pk, 'title': n.title, 'message': n.message} for n in notifs]
+    return JsonResponse({'notifications': data})
+

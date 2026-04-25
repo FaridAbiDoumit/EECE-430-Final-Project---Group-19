@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Club Admin | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #46674f;
+            --paper: #dedede;
+            --header-left: #eceeed;
+            --header-right: #b7c9b4;
+            --ink: #111111;
+            --accent: #0df2dc;
+            --shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--forest);
+            color: var(--ink);
+            font-family: 'Josefin Sans', sans-serif;
+        }
+        a { color: inherit; text-decoration: none; }
+        .page-shell { min-height: 100vh; display: flex; flex-direction: column; }
+        .page-header {
+            background: linear-gradient(90deg, var(--header-left) 0%, var(--header-right) 100%);
+            padding: 42px 34px 34px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .page-title {
+            margin: 0;
+            font-size: clamp(1.8rem, 2vw + 1rem, 2.8rem);
+            font-weight: 600;
+            position: relative;
+            display: inline-block;
+            padding-bottom: 12px;
+        }
+        .page-title::after {
+            content: '';
+            position: absolute;
+            left: 0; bottom: 0;
+            width: min(100%, 250px);
+            height: 3px;
+            background: var(--accent);
+        }
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            padding: 10px 14px;
+            border-radius: 10px;
+            background: #111;
+            color: #fff;
+            font-weight: 600;
+            align-self: flex-end;
+        }
+        .back-link:hover { background: #333; }
+        .page-content {
+            flex: 1;
+            padding: 40px 28px 52px;
+            max-width: 560px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        .panel {
+            background: var(--paper);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            padding: 28px 24px;
+        }
+        .panel h2 { margin: 0 0 22px; font-size: 1.3rem; }
+        .field { margin-bottom: 16px; }
+        .field label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.92rem; }
+        .auth-input {
+            width: 100%;
+            border: 1px solid #7a7a7a;
+            background: #f9f9f9;
+            height: 46px;
+            font: inherit;
+            font-size: 1rem;
+            padding: 10px 14px;
+            border-radius: 6px;
+        }
+        .auth-input:focus { outline: 2px solid var(--forest); outline-offset: 2px; }
+        .field-errors {
+            margin: 6px 0 0;
+            padding: 0;
+            list-style: none;
+            color: #9c2f2f;
+            font-size: 0.88rem;
+        }
+        .non-field-errors {
+            margin: 0 0 16px;
+            padding: 10px 14px;
+            background: #f9dede;
+            border-radius: 8px;
+            list-style: none;
+            color: #9c2f2f;
+            font-size: 0.92rem;
+        }
+        .submit-btn {
+            width: 100%;
+            padding: 12px;
+            background: #111;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        .submit-btn:hover { background: #333; }
+        .flash-list { list-style: none; padding: 0; margin: 0 0 18px; }
+        .flash-list li {
+            background: #fff;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 6px;
+        }
+        @media (max-width: 680px) {
+            .page-header { padding: 26px 18px 26px; }
+            .page-content { padding: 24px 16px 36px; }
+            .panel { padding: 18px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-shell">
+        <header class="page-header">
+            <h1 class="page-title">Create Club Admin</h1>
+            <a class="back-link" href="{% url 'scheduling:league_handler_manage_teams' %}">Back to Teams</a>
+        </header>
+
+        <main class="page-content">
+            {% if messages %}
+                <ul class="flash-list">
+                    {% for message in messages %}
+                        <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            <section class="panel">
+                <h2>New Admin Account</h2>
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                        <ul class="non-field-errors">
+                            {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+                        </ul>
+                    {% endif %}
+
+                    <div class="field">
+                        <label for="{{ form.name.id_for_label }}">Full Name</label>
+                        {{ form.name }}
+                        {% if form.name.errors %}
+                            <ul class="field-errors">{% for e in form.name.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                        {% endif %}
+                    </div>
+
+                    <div class="field">
+                        <label for="{{ form.email.id_for_label }}">Email</label>
+                        {{ form.email }}
+                        {% if form.email.errors %}
+                            <ul class="field-errors">{% for e in form.email.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                        {% endif %}
+                    </div>
+
+                    <div class="field">
+                        <label for="{{ form.password.id_for_label }}">Password</label>
+                        {{ form.password }}
+                        {% if form.password.errors %}
+                            <ul class="field-errors">{% for e in form.password.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                        {% endif %}
+                    </div>
+
+                    <div class="field">
+                        <label for="{{ form.team.id_for_label }}">Club (Team)</label>
+                        {{ form.team }}
+                        {% if form.team.errors %}
+                            <ul class="field-errors">{% for e in form.team.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                        {% endif %}
+                    </div>
+
+                    <button class="submit-btn" type="submit">Create Admin Account</button>
+                </form>
+            </section>
+        </main>
+    </div>
+</body>
+</html>

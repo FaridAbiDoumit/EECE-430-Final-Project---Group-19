@@ -4,9 +4,22 @@ from django.db import models
 from django.utils import timezone
 
 
+class Team(models.Model):
+    name = models.CharField(max_length=120, unique=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name', 'id']
+
+    def __str__(self):
+        return self.name
+
+
 class Player(models.Model):
     class Role(models.TextChoices):
         COACH = 'coach', 'Coach'
+        LEAGUE_SYSTEM_HANDLER = 'league_system_handler', 'League System Handler'
         PLAYER = 'player', 'Player'
 
     class Status(models.TextChoices):
@@ -23,9 +36,17 @@ class Player(models.Model):
         null=True,
         blank=True,
     )
-    role = models.CharField(max_length=20, choices=Role.choices, default=Role.PLAYER)
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.SET_NULL,
+        related_name='members',
+        null=True,
+        blank=True,
+    )
+    role = models.CharField(max_length=32, choices=Role.choices, default=Role.PLAYER)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ELIGIBLE)
     is_active = models.BooleanField(default=True)
+    is_approved = models.BooleanField(default=False)
     medical_certification_expiry = models.DateField(null=True, blank=True)
     contract_expiry = models.DateField(null=True, blank=True)
 
@@ -34,6 +55,31 @@ class Player(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class StaffTeamAssignment(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='staff_team_assignment',
+    )
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.SET_NULL,
+        related_name='staff_assignments',
+        null=True,
+        blank=True,
+    )
+    # True for admins created directly by the league handler; False for self-registered admins awaiting approval.
+    is_approved = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['user__username']
+
+    def __str__(self):
+        team_name = self.team.name if self.team is not None else 'No Team'
+        return f'{self.user.username} - {team_name}'
 
 
 class TrainingSession(models.Model):
@@ -286,6 +332,108 @@ class Message(models.Model):
         return f'{self.player} - {self.subject}'
 
 
+class ChatGroup(models.Model):
+    name = models.CharField(max_length=120)
+    members = models.ManyToManyField(Player, related_name='chat_groups', blank=True)
+    created_by_player = models.ForeignKey(
+        Player,
+        on_delete=models.SET_NULL,
+        related_name='created_chat_groups',
+        null=True,
+        blank=True,
+    )
+    created_by_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='created_chat_groups',
+        null=True,
+        blank=True,
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name', 'id']
+
+    def __str__(self):
+        return self.name
+
+
+class GroupMessage(models.Model):
+    group = models.ForeignKey(ChatGroup, on_delete=models.CASCADE, related_name='messages')
+    sender_player = models.ForeignKey(
+        Player,
+        on_delete=models.SET_NULL,
+        related_name='group_messages_sent',
+        null=True,
+        blank=True,
+    )
+    sender_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='group_messages_sent',
+        null=True,
+        blank=True,
+    )
+    sender_name = models.CharField(max_length=100)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+
+    def __str__(self):
+        return f'{self.group} - {self.sender_name}'
+
+
+class Announcement(models.Model):
+    title = models.CharField(max_length=120)
+    content = models.TextField()
+    created_by_player = models.ForeignKey(
+        Player,
+        on_delete=models.SET_NULL,
+        related_name='announcements_created',
+        null=True,
+        blank=True,
+    )
+    created_by_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='announcements_created',
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+    def __str__(self):
+        return self.title
+
+
+class AnnouncementReply(models.Model):
+    announcement = models.ForeignKey(
+        Announcement,
+        on_delete=models.CASCADE,
+        related_name='replies',
+    )
+    sender = models.ForeignKey(
+        Player,
+        on_delete=models.CASCADE,
+        related_name='announcement_replies',
+    )
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+
+    def __str__(self):
+        return f'Reply to "{self.announcement}" by {self.sender}'
+
+
 class SupportTicket(models.Model):
     class Status(models.TextChoices):
         OPEN = 'open', 'Open'
@@ -313,6 +461,74 @@ class SupportTicket(models.Model):
         return f'{self.player} - {self.subject}'
 
 
+class UpcomingGame(models.Model):
+    home_team = models.ForeignKey(
+        Team,
+        on_delete=models.CASCADE,
+        related_name='home_games',
+    )
+    away_team = models.ForeignKey(
+        Team,
+        on_delete=models.CASCADE,
+        related_name='away_games',
+    )
+    scheduled_at = models.DateTimeField()
+    venue = models.CharField(max_length=200, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['scheduled_at', 'id']
+
+    def __str__(self):
+        return f'{self.home_team} vs {self.away_team} ({self.scheduled_at:%Y-%m-%d %H:%M})'
+
+    def clean(self):
+        if (
+            self.home_team_id
+            and self.away_team_id
+            and self.home_team_id == self.away_team_id
+        ):
+            raise ValidationError('Home team and away team must be different.')
+
+
+class GameAttendance(models.Model):
+    class Status(models.TextChoices):
+        GOING = 'going', 'Going'
+        NOT_GOING = 'not_going', 'Not Going'
+        INJURED = 'injured', 'Injured'
+        MAYBE = 'maybe', 'Maybe'
+
+    game = models.ForeignKey(
+        UpcomingGame,
+        on_delete=models.CASCADE,
+        related_name='attendances',
+    )
+    player = models.ForeignKey(
+        Player,
+        on_delete=models.CASCADE,
+        related_name='game_attendances',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.MAYBE,
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['game', 'player'],
+                name='unique_game_player_attendance',
+            )
+        ]
+        ordering = ['player__name']
+
+    def __str__(self):
+        return f'{self.player} – {self.game} – {self.get_status_display()}'
+
+
 class Match(models.Model):
     class Result(models.TextChoices):
         WIN = 'win', 'Win'
@@ -320,6 +536,13 @@ class Match(models.Model):
         DRAW = 'draw', 'Draw'
 
     opponent = models.CharField(max_length=120)
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.SET_NULL,
+        related_name='matches',
+        null=True,
+        blank=True,
+    )
     date = models.DateField()
     goals_for = models.PositiveIntegerField(default=0)
     goals_against = models.PositiveIntegerField(default=0)
@@ -330,6 +553,8 @@ class Match(models.Model):
         ordering = ['-date', '-id']
 
     def __str__(self):
+        if self.team is not None:
+            return f'{self.team.name} vs {self.opponent} ({self.date})'
         return f'{self.opponent} ({self.date})'
 
     @property
