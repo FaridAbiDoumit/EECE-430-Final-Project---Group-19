@@ -100,6 +100,10 @@
             flex-wrap: wrap;
             align-items: center;
         }
+        .summary-card.registered {
+            background: #eef6ee;
+            border: 1px solid #8eb38a;
+        }
         .summary-card p {
             margin: 0;
             font-size: 0.98rem;
@@ -156,6 +160,16 @@
             border: 1px solid #8ea698;
             font: inherit;
             cursor: pointer;
+            text-align: center;
+        }
+        .action-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .action-cell form {
+            margin: 0;
         }
         .details-link:disabled {
             opacity: 0.6;
@@ -223,6 +237,18 @@
                 <p><strong>Total listed:</strong> {{ tryouts|length }}</p>
             </section>
 
+            {% if registered_tryout_id and registered_tryout_status != 'converted' %}
+                <section class="summary-card registered" aria-label="Current registration">
+                    <p><strong>You already have an active tryout registration.</strong></p>
+                    <p>Use the cancel button below if you want to switch to another open tryout.</p>
+                </section>
+            {% elif registered_tryout_status == 'converted' %}
+                <section class="summary-card registered" aria-label="Accepted registration">
+                    <p><strong>Your tryout application has been accepted.</strong></p>
+                    <p>You are already approved for the selected session.</p>
+                </section>
+            {% endif %}
+
             {% if tryouts %}
                 <section class="table-card" aria-label="Tryout sessions list">
                     <table>
@@ -247,25 +273,32 @@
                                         </span>
                                     </td>
                                     <td>
-                                        {% if registered_tryout_id == tryout.id %}
-                                            {% if registered_tryout_status == 'converted' %}
-                                                <span class="details-link accepted">Accepted</span>
+                                        <div class="action-cell">
+                                            {% if registered_tryout_id == tryout.id %}
+                                                {% if registered_tryout_status == 'converted' %}
+                                                    <span class="details-link accepted">Accepted</span>
+                                                {% else %}
+                                                    <span class="details-link submitted">Registered</span>
+                                                    <form method="post" action="{% url 'scheduling:player_tryout_registration_toggle' tryout.id %}">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="action" value="cancel">
+                                                        <button type="submit" class="details-link cancel">Cancel Registration</button>
+                                                    </form>
+                                                {% endif %}
+                                            {% elif tryout.registration_open %}
+                                                {% if registered_tryout_id %}
+                                                    <span class="details-link submitted">Already registered</span>
+                                                {% else %}
+                                                    <form method="post" action="{% url 'scheduling:player_tryout_registration_toggle' tryout.id %}">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="action" value="register">
+                                                        <button type="submit" class="details-link">Register</button>
+                                                    </form>
+                                                {% endif %}
                                             {% else %}
-                                                <span class="details-link submitted">Submitted</span>
+                                                <button type="button" class="details-link" disabled>Closed</button>
                                             {% endif %}
-                                        {% elif tryout.registration_open %}
-                                            {% if registered_tryout_id %}
-                                                <button type="button" class="details-link" disabled>Register</button>
-                                            {% else %}
-                                                <form method="post" action="{% url 'scheduling:player_tryout_registration_toggle' tryout.id %}">
-                                                    {% csrf_token %}
-                                                    <input type="hidden" name="action" value="register">
-                                                    <button type="submit" class="details-link">Register</button>
-                                                </form>
-                                            {% endif %}
-                                        {% else %}
-                                            <button type="button" class="details-link" disabled>Closed</button>
-                                        {% endif %}
+                                        </div>
                                     </td>
                                 </tr>
                             {% endfor %}

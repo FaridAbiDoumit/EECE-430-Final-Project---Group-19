@@ -717,6 +717,36 @@ class SchedulingViewsTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(TryoutCandidate.objects.count(), 1)
 
+    def test_player_tryout_list_shows_clean_registered_state(self):
+        user = User.objects.create_user(
+            username='registeredplayer@example.com',
+            email='registeredplayer@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(
+            user=user,
+            name='Registered Player',
+            email='registeredplayer@example.com',
+            role=Player.Role.PLAYER,
+        )
+        tryout = TryoutSession.objects.create(
+            title='Open Tryout',
+            starts_at=timezone.now() + timedelta(days=5),
+            location='Court C',
+        )
+        TryoutCandidate.objects.create(
+            tryout_session=tryout,
+            name=player.name,
+            email=player.email,
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:player_tryout_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'You already have an active tryout registration.')
+        self.assertContains(response, 'Cancel Registration')
+
     def test_convert_tryout_candidate_creates_player(self):
         tryout = TryoutSession.objects.create(
             title='Open Tryout',
