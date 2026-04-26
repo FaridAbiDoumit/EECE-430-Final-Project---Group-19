@@ -34,6 +34,22 @@ User = get_user_model()
 
 
 class SchedulingViewsTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._original_player_create = Player.objects.create
+
+        def create_player_with_approval(*args, **kwargs):
+            kwargs.setdefault('is_approved', True)
+            return cls._original_player_create(*args, **kwargs)
+
+        Player.objects.create = create_player_with_approval
+
+    @classmethod
+    def tearDownClass(cls):
+        Player.objects.create = cls._original_player_create
+        super().tearDownClass()
+
     def make_session(self, **overrides):
         starts_at = overrides.pop('starts_at', timezone.now() + timedelta(days=1))
         defaults = {
@@ -77,7 +93,7 @@ class SchedulingViewsTests(TestCase):
                 'name': 'Admin User',
                 'email': 'admin@example.com',
                 'password': 'strong-pass-123',
-                'role': 'admin',
+                'role': 'club_admin',
                 'team': team.id,
             },
         )
@@ -192,7 +208,7 @@ class SchedulingViewsTests(TestCase):
             },
         )
 
-        self.assertRedirects(response, reverse('scheduling:player_home'))
+        self.assertRedirects(response, reverse('scheduling:pending_approval'))
 
     def test_player_home_requires_logged_in_player_and_shows_name(self):
         user = User.objects.create_user(
@@ -247,7 +263,7 @@ class SchedulingViewsTests(TestCase):
             },
         )
 
-        self.assertRedirects(response, reverse('scheduling:coach_home'))
+        self.assertRedirects(response, reverse('scheduling:pending_approval'))
 
     def test_league_system_handler_signup_redirects_to_handler_home(self):
         response = self.client.post(
@@ -422,15 +438,19 @@ class SchedulingViewsTests(TestCase):
                 'name': 'Admin Home',
                 'email': 'adminhome@example.com',
                 'password': 'strong-pass-123',
-                'role': 'admin',
+                'role': 'club_admin',
                 'team': team.id,
             },
         )
 
-        self.assertRedirects(response, reverse('scheduling:admin_home'))
+        self.assertRedirects(
+            response,
+            reverse('scheduling:admin_home'),
+            target_status_code=302,
+        )
 
     def test_signup_requires_team_for_player_coach_and_admin(self):
-        for role in ['player', 'coach', 'admin']:
+        for role in ['player', 'coach', 'club_admin']:
             response = self.client.post(
                 reverse('scheduling:signup'),
                 data={
