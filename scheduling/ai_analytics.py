@@ -1,10 +1,12 @@
 import logging
 import os
+from datetime import timedelta
 
 from django.db.models import Q, Sum, Value
 from django.db.models.functions import Coalesce
+from django.utils import timezone
 
-from .models import Match, Player, PlayerMatchStat
+from .models import GameAttendance, Match, Player, PlayerMatchStat, UpcomingGame
 
 
 logger = logging.getLogger(__name__)
@@ -54,6 +56,8 @@ def _build_generic_context():
         ],
         'snapshot_items': [],
         'is_ai_enabled': bool(os.getenv('OPENAI_API_KEY')),
+        'strategy_section_title': '',
+        'strategy_items': [],
     }
 
 
@@ -157,6 +161,12 @@ def _build_player_context(player):
             {'label': 'Latest soreness', 'value': _format_soreness_value(latest_soreness)},
         ],
         'is_ai_enabled': summary['is_ai_enabled'],
+        'strategy_section_title': 'Readiness Focus',
+        'strategy_items': _player_readiness_items(
+            focus_metric=focus_metric,
+            latest_soreness=latest_soreness,
+            latest_injury=latest_injury,
+        ),
     }
 
 
@@ -190,6 +200,7 @@ def _build_coach_context(coach):
         latest_report = player.soreness_reports.first()
         if latest_report is not None and latest_report.soreness_level >= HIGH_SORENESS_LEVEL:
             soreness_watch.append((player, latest_report))
+    upcoming_brief = _coach_upcoming_brief(team, focus_metric, soreness_watch) if team is not None else None
 
     if team is None:
         fallback_summary = (
@@ -274,6 +285,8 @@ def _build_coach_context(coach):
             {'label': 'Recovery watch', 'value': str(len(soreness_watch))},
         ],
         'is_ai_enabled': summary['is_ai_enabled'],
+        'strategy_section_title': 'Upcoming Opponent Brief',
+        'strategy_items': upcoming_brief or [],
     }
 
 
@@ -333,6 +346,87 @@ def _coach_action_items(focus_metric, soreness_watch, latest_match):
         watched_names = ', '.join(player.name for player, _ in soreness_watch[:3])
         items.append(f'Check workload and recovery for {watched_names}.')
     return items
+
+
+def _player_readiness_items(focus_metric, latest_soreness, latest_injury):
+    items = [
+        f'Build your next self-review around creating more {AI_METRIC_LABELS[focus_metric].lower()}.',
+    ]
+    if latest_soreness is not None and latest_soreness.soreness_level >= HIGH_SORENESS_LEVEL:
+        items.append('Recovery is elevated right now, so reduce unnecessary load before adding more volume.')
+    if latest_injury:
+        items.append(f'Keep the latest injury note in mind during training: {latest_injury}.')
+    else:
+        items.append('No recent injury note is logged, so focus on consistent execution and recovery tracking.')
+    return items
+
+
+def _coach_upcoming_brief(team, focus_metric, soreness_watch):
+    cutoff = timezone.now() - timedelta(hours=12)
+    next_game = (
+        UpcomingGame.objects
+        .filter(Q(home_team=team) | Q(away_team=team), scheduled_at__gte=cutoff)
+        .select_related('home_team', 'away_team')
+        .order_by('scheduled_at', 'id')
+        .first()
+    )
+    if next_game is None:
+        return [
+            'No upcoming game is scheduled yet, so the coach brief will expand once the next opponent is posted.',
+            f'In the meantime, keep practice centered on improving {AI_METRIC_LABELS[focus_metric].lower()}.',
+        ]
+
+    opponent = next_game.away_team if next_game.home_team_id == team.id else next_game.home_team
+    past_meetings = Match.objects.filter(team=team, opponent=opponent.name).order_by('-date', '-id')
+    confirmed_attendance = GameAttendance.objects.filter(
+        game=next_game,
+        player__team=team,
+        status=GameAttendance.Status.GOING,
+    ).count()
+    injured_attendance = GameAttendance.objects.filter(
+        game=next_game,
+        player__team=team,
+        status=GameAttendance.Status.INJURED,
+    ).count()
+
+    brief_items = [
+        f'Next opponent: {opponent.name} on {next_game.scheduled_at:%b %d, %Y at %H:%M}.',
+    ]
+    if next_game.venue:
+        brief_items.append(f'Venue: {next_game.venue}.')
+
+    if past_meetings.exists():
+        wins = sum(1 for match in past_meetings if match.result == Match.Result.WIN)
+        losses = sum(1 for match in past_meetings if match.result == Match.Result.LOSS)
+        draws = sum(1 for match in past_meetings if match.result == Match.Result.DRAW)
+        latest_meeting = past_meetings.first()
+        brief_items.append(
+            f'Past record vs {opponent.name}: {wins}W-{losses}L-{draws}D across {past_meetings.count()} logged meeting'
+            f'{"s" if past_meetings.count() != 1 else ""}.'
+        )
+        brief_items.append(
+            f'Latest meeting finished {latest_meeting.goals_for}-{latest_meeting.goals_against} '
+            f'({latest_meeting.result.upper()}).'
+        )
+    else:
+        brief_items.append(
+            f'No prior logged match exists against {opponent.name}, so preparation should lean on your own team trends first.'
+        )
+
+    brief_items.append(
+        f'Primary tactical focus: raise team {AI_METRIC_LABELS[focus_metric].lower()} output before this match.'
+    )
+    brief_items.append(
+        f'Confirmed availability is {confirmed_attendance} player{"s" if confirmed_attendance != 1 else ""}'
+        f' with {injured_attendance} marked injured.'
+    )
+    if soreness_watch:
+        watched_names = ', '.join(player.name for player, _ in soreness_watch[:3])
+        brief_items.append(f'High-soreness watch list before kickoff: {watched_names}.')
+    else:
+        brief_items.append('No high-soreness watch list is currently active from the latest reports.')
+
+    return brief_items
 
 
 def _player_recovery_sentence(latest_soreness, latest_injury):

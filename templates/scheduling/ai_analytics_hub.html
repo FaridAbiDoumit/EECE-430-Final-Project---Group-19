@@ -164,6 +164,19 @@
         .action-item {
             line-height: 1.55;
         }
+        .strategy-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: grid;
+            gap: 10px;
+        }
+        .strategy-item {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 12px 14px;
+            line-height: 1.55;
+        }
         @media (max-width: 960px) {
             .grid,
             .cards {
@@ -233,6 +246,17 @@
                 {% endfor %}
             </ul>
         </section>
+
+        {% if strategy_items %}
+            <section class="panel">
+                <h2>{{ strategy_section_title }}</h2>
+                <ul class="strategy-list">
+                    {% for item in strategy_items %}
+                        <li class="strategy-item">{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+        {% endif %}
     </main>
 </body>
 </html>

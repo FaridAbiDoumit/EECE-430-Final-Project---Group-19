@@ -9,6 +9,7 @@ from django.utils import timezone
 from .models import (
     Announcement,
     ChatGroup,
+    GameAttendance,
     GroupMessage,
     Match,
     Message,
@@ -28,6 +29,7 @@ from .models import (
     TryoutCandidate,
     TryoutSession,
     TrainingSession,
+    UpcomingGame,
 )
 
 
@@ -618,6 +620,62 @@ class SchedulingViewsTests(TestCase):
         self.assertContains(response, 'Primary focus')
         self.assertContains(response, 'Recovery watch')
         self.assertContains(response, coach.team.name)
+
+    @patch.dict('os.environ', {}, clear=True)
+    def test_coach_ai_hub_includes_upcoming_opponent_brief(self):
+        team = Team.objects.create(name='Preview Team')
+        opponent_team = Team.objects.create(name='Rivals')
+        user = User.objects.create_user(
+            username='previewcoach@example.com',
+            email='previewcoach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=user,
+            name='Preview Coach',
+            email='previewcoach@example.com',
+            role=Player.Role.COACH,
+            team=team,
+        )
+        player = Player.objects.create(
+            name='Ready Player',
+            email='readyplayer@example.com',
+            role=Player.Role.PLAYER,
+            team=team,
+        )
+        match = Match.objects.create(
+            opponent='Rivals',
+            team=team,
+            date=timezone.now().date() - timedelta(days=7),
+            goals_for=1,
+            goals_against=3,
+        )
+        PlayerMatchStat.objects.create(
+            match=match,
+            player=player,
+            points=6,
+            assists=1,
+        )
+        upcoming_game = UpcomingGame.objects.create(
+            home_team=team,
+            away_team=opponent_team,
+            scheduled_at=timezone.now() + timedelta(days=2),
+            venue='Main Arena',
+        )
+        GameAttendance.objects.create(
+            game=upcoming_game,
+            player=player,
+            status=GameAttendance.Status.GOING,
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:ai_analytics_hub'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Upcoming Opponent Brief')
+        self.assertContains(response, 'Next opponent: Rivals')
+        self.assertContains(response, 'Past record vs Rivals')
+        self.assertContains(response, 'Confirmed availability is 1 player')
 
     def test_manage_coach_detail_shows_only_primary_actions(self):
         admin = User.objects.create_user(
