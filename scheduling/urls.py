@@ -85,4 +85,11 @@ urlpatterns = [
     path('league-handler/admins/<int:assignment_id>/reject/', views.reject_admin, name='reject_admin'),
     path('notifications/popup-data/', views.notifications_popup_data, name='notifications_popup_data'),
     path('opponent-analysis/', views.opponent_analysis, name='opponent_analysis'),
+    # Subscription / Membership payments
+    path('player/subscription/', views.subscription_home, name='subscription_home'),
+    path('player/subscription/pay/', views.pay_subscription, name='pay_subscription'),
+    path('staff/subscription/fee/', views.set_team_fee, name='set_team_fee'),
+    path('staff/subscription/overview/', views.subscription_overview, name='subscription_overview'),
+    path('staff/subscription/cash-pending/', views.pending_cash_payments, name='pending_cash_payments'),
+    path('staff/subscription/cash/<int:payment_id>/confirm/', views.confirm_cash_payment, name='confirm_cash_payment'),
 ]

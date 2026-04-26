@@ -69,6 +69,8 @@ from .models import (
     UpcomingGame,
     GameAttendance,
     StaffTeamAssignment,
+    TeamSubscriptionFee,
+    MembershipPayment,
 )
 
 
@@ -316,6 +318,12 @@ def player_home(request):
         )
     latest_soreness = player.soreness_reports.first()
 
+    now = timezone.now()
+    subscription_fee = TeamSubscriptionFee.objects.filter(team=player.team).first() if player.team else None
+    current_payment = MembershipPayment.objects.filter(
+        player=player, period_month=now.month, period_year=now.year
+    ).first() if subscription_fee else None
+
     context = {
         'player': player,
         'welcome_name': player.name,
@@ -325,6 +333,8 @@ def player_home(request):
         'unread_notifications': player.notifications.filter(read_at__isnull=True).count(),
         'rsvp_count': player.session_rsvps.count(),
         'availability_count': player.availability_slots.count(),
+        'subscription_fee': subscription_fee,
+        'current_payment': current_payment,
     }
     return render(request, 'scheduling/player_home.html', context)
 
@@ -582,6 +592,25 @@ def admin_home(request):
         admin_team = assignment.team
 
     welcome_name = request.user.first_name or request.user.username
+
+    now = timezone.now()
+    pending_cash_count = MembershipPayment.objects.filter(
+        status=MembershipPayment.Status.PENDING,
+        player__team=admin_team,
+    ).count()
+    unpaid_count = 0
+    if admin_team is not None:
+        fee_exists = TeamSubscriptionFee.objects.filter(team=admin_team).exists()
+        if fee_exists:
+            active_players = Player.objects.filter(team=admin_team, is_active=True, role=Player.Role.PLAYER)
+            paid_ids = MembershipPayment.objects.filter(
+                player__team=admin_team,
+                period_month=now.month,
+                period_year=now.year,
+                status=MembershipPayment.Status.PAID,
+            ).values_list('player_id', flat=True)
+            unpaid_count = active_players.exclude(pk__in=paid_ids).count()
+
     context = {
         'welcome_name': welcome_name,
         'active_players': Player.objects.filter(role=Player.Role.PLAYER, is_active=True, team=admin_team).count(),
@@ -591,6 +620,8 @@ def admin_home(request):
         'notification_count': Notification.objects.count(),
         'poll_count': SessionVotePoll.objects.count(),
         'pending_count': Player.objects.filter(team=admin_team, is_approved=False).count(),
+        'pending_cash_count': pending_cash_count,
+        'unpaid_count': unpaid_count,
     }
     return render(request, 'scheduling/admin_home.html', context)
 
@@ -3542,3 +3573,273 @@ def opponent_analysis(request):
 
     return render(request, 'scheduling/opponent_analysis.html', {'teams': teams})
 
+
+# ---------------------------------------------------------------------------
+# Subscription / Membership Payment views
+# ---------------------------------------------------------------------------
+
+@login_required(login_url='scheduling:login')
+def subscription_home(request):
+    """Player: see current month status + full payment history."""
+    player = getattr(request.user, 'player_profile', None)
+    if player is None or player.role != Player.Role.PLAYER:
+        return redirect('scheduling:dashboard')
+
+    now = timezone.now()
+    current_month = now.month
+    current_year = now.year
+
+    current_payment = MembershipPayment.objects.filter(
+        player=player, period_month=current_month, period_year=current_year
+    ).first()
+
+    fee = None
+    if player.team is not None:
+        fee = TeamSubscriptionFee.objects.filter(team=player.team).first()
+
+    history = MembershipPayment.objects.filter(player=player).order_by('-period_year', '-period_month')
+
+    return render(request, 'scheduling/subscription_home.html', {
+        'player': player,
+        'current_payment': current_payment,
+        'current_month': current_month,
+        'current_year': current_year,
+        'fee': fee,
+        'history': history,
+    })
+
+
+@login_required(login_url='scheduling:login')
+def pay_subscription(request):
+    """Player: submit a card or cash payment for the current month."""
+    player = getattr(request.user, 'player_profile', None)
+    if player is None or player.role != Player.Role.PLAYER:
+        return redirect('scheduling:dashboard')
+
+    now = timezone.now()
+    current_month = now.month
+    current_year = now.year
+
+    existing = MembershipPayment.objects.filter(
+        player=player, period_month=current_month, period_year=current_year
+    ).first()
+    if existing is not None and existing.status == MembershipPayment.Status.PAID:
+        messages.info(request, 'Your subscription for this month is already paid.')
+        return redirect('scheduling:subscription_home')
+
+    fee = None
+    if player.team is not None:
+        fee = TeamSubscriptionFee.objects.filter(team=player.team).first()
+    if fee is None:
+        messages.warning(request, 'Your club has not configured a subscription fee yet. Please contact your admin.')
+        return redirect('scheduling:subscription_home')
+
+    if request.method == 'POST':
+        method = request.POST.get('method')
+
+        if method == 'card':
+            card_number = request.POST.get('card_number', '').replace(' ', '')
+            expiry = request.POST.get('expiry', '')
+            cvv = request.POST.get('cvv', '')
+            name_on_card = request.POST.get('name_on_card', '').strip()
+
+            errors = []
+            if len(card_number) not in (15, 16) or not card_number.isdigit():
+                errors.append('Enter a valid 15- or 16-digit card number.')
+            if not expiry or len(expiry) != 5:
+                errors.append('Enter expiry in MM/YY format.')
+            if not cvv or not cvv.isdigit() or len(cvv) not in (3, 4):
+                errors.append('Enter a valid CVV (3 or 4 digits).')
+            if not name_on_card:
+                errors.append('Enter the name on the card.')
+
+            if errors:
+                for e in errors:
+                    messages.error(request, e)
+                return render(request, 'scheduling/pay_subscription.html', {
+                    'fee': fee, 'method': 'card', 'existing': existing,
+                    'current_month': current_month, 'current_year': current_year,
+                })
+
+            last4 = card_number[-4:]
+            if existing is not None:
+                existing.method = MembershipPayment.Method.CARD
+                existing.status = MembershipPayment.Status.PAID
+                existing.card_last4 = last4
+                existing.paid_at = timezone.now()
+                existing.save(update_fields=['method', 'status', 'card_last4', 'paid_at'])
+            else:
+                MembershipPayment.objects.create(
+                    player=player,
+                    amount=fee.monthly_amount,
+                    period_month=current_month,
+                    period_year=current_year,
+                    method=MembershipPayment.Method.CARD,
+                    status=MembershipPayment.Status.PAID,
+                    card_last4=last4,
+                    paid_at=timezone.now(),
+                )
+            messages.success(request, f'Payment of {fee.currency} {fee.monthly_amount} received. Card ending {last4}.')
+            return redirect('scheduling:subscription_home')
+
+        elif method == 'cash':
+            if existing is not None:
+                messages.info(request, 'Your cash payment request is already pending admin confirmation.')
+                return redirect('scheduling:subscription_home')
+            MembershipPayment.objects.create(
+                player=player,
+                amount=fee.monthly_amount,
+                period_month=current_month,
+                period_year=current_year,
+                method=MembershipPayment.Method.CASH,
+                status=MembershipPayment.Status.PENDING,
+            )
+            messages.success(request, 'Cash payment request submitted. Your admin will confirm once received.')
+            return redirect('scheduling:subscription_home')
+
+        else:
+            messages.error(request, 'Please select a payment method.')
+
+    return render(request, 'scheduling/pay_subscription.html', {
+        'fee': fee,
+        'method': request.GET.get('method', ''),
+        'existing': existing,
+        'current_month': current_month,
+        'current_year': current_year,
+    })
+
+
+@login_required(login_url='scheduling:login')
+def set_team_fee(request):
+    """Admin: create or update the monthly subscription fee for their team."""
+    if not request.user.is_staff:
+        return redirect('scheduling:dashboard')
+
+    admin_team = _get_admin_team(request.user)
+    if admin_team is None:
+        messages.error(request, 'You are not assigned to a team.')
+        return redirect('scheduling:admin_home')
+
+    fee_obj = TeamSubscriptionFee.objects.filter(team=admin_team).first()
+
+    if request.method == 'POST':
+        amount_raw = request.POST.get('monthly_amount', '').strip()
+        currency = request.POST.get('currency', 'USD').strip().upper() or 'USD'
+        try:
+            amount = float(amount_raw)
+            if amount <= 0:
+                raise ValueError
+        except ValueError:
+            messages.error(request, 'Please enter a valid positive amount.')
+            return render(request, 'scheduling/team_subscription_fee.html', {
+                'fee': fee_obj, 'admin_team': admin_team,
+            })
+
+        if fee_obj is not None:
+            fee_obj.monthly_amount = amount
+            fee_obj.currency = currency
+            fee_obj.save(update_fields=['monthly_amount', 'currency', 'updated_at'])
+        else:
+            fee_obj = TeamSubscriptionFee.objects.create(
+                team=admin_team, monthly_amount=amount, currency=currency
+            )
+        messages.success(request, f'Monthly fee set to {currency} {amount:.2f}.')
+        return redirect('scheduling:admin_home')
+
+    return render(request, 'scheduling/team_subscription_fee.html', {
+        'fee': fee_obj, 'admin_team': admin_team,
+    })
+
+
+@login_required(login_url='scheduling:login')
+def subscription_overview(request):
+    """Admin: see all active players on the team with their current-month payment status."""
+    if not request.user.is_staff:
+        return redirect('scheduling:dashboard')
+
+    admin_team = _get_admin_team(request.user)
+    now = timezone.now()
+    current_month = now.month
+    current_year = now.year
+
+    players = Player.objects.filter(
+        role=Player.Role.PLAYER, is_active=True, team=admin_team
+    ).order_by('name')
+
+    payments = {
+        p.player_id: p
+        for p in MembershipPayment.objects.filter(
+            player__in=players,
+            period_month=current_month,
+            period_year=current_year,
+        )
+    }
+
+    fee = TeamSubscriptionFee.objects.filter(team=admin_team).first()
+
+    rows = []
+    for pl in players:
+        payment = payments.get(pl.pk)
+        if payment is None:
+            status_label = 'unpaid'
+        elif payment.status == MembershipPayment.Status.PAID:
+            status_label = 'paid'
+        else:
+            status_label = 'pending_cash'
+        rows.append({'player': pl, 'payment': payment, 'status_label': status_label})
+
+    return render(request, 'scheduling/subscription_overview.html', {
+        'rows': rows,
+        'admin_team': admin_team,
+        'fee': fee,
+        'current_month': current_month,
+        'current_year': current_year,
+    })
+
+
+@login_required(login_url='scheduling:login')
+def pending_cash_payments(request):
+    """Admin: list pending cash payments for their team's players."""
+    if not request.user.is_staff:
+        return redirect('scheduling:dashboard')
+
+    admin_team = _get_admin_team(request.user)
+    pending = MembershipPayment.objects.filter(
+        method=MembershipPayment.Method.CASH,
+        status=MembershipPayment.Status.PENDING,
+        player__team=admin_team,
+    ).select_related('player').order_by('-created_at')
+
+    return render(request, 'scheduling/pending_cash_payments.html', {
+        'pending': pending,
+        'admin_team': admin_team,
+    })
+
+
+@login_required(login_url='scheduling:login')
+def confirm_cash_payment(request, payment_id):
+    """Admin: mark a pending cash payment as paid."""
+    if not request.user.is_staff:
+        return redirect('scheduling:dashboard')
+    if request.method != 'POST':
+        return redirect('scheduling:pending_cash_payments')
+
+    admin_team = _get_admin_team(request.user)
+    payment = get_object_or_404(
+        MembershipPayment,
+        pk=payment_id,
+        method=MembershipPayment.Method.CASH,
+        status=MembershipPayment.Status.PENDING,
+        player__team=admin_team,
+    )
+    payment.status = MembershipPayment.Status.PAID
+    payment.paid_at = timezone.now()
+    payment.save(update_fields=['status', 'paid_at'])
+    Notification.objects.create(
+        recipient=payment.player,
+        title='Subscription payment confirmed',
+        message=f'Your cash payment of {payment.amount} for {payment.period_month}/{payment.period_year} has been confirmed.',
+        notification_type='general',
+    )
+    messages.success(request, f'Cash payment confirmed for {payment.player.name}.')
+    return redirect('scheduling:pending_cash_payments')

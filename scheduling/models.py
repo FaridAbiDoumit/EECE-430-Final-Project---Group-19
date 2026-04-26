@@ -639,3 +639,43 @@ class PlayerSorenessReport(models.Model):
         super().clean()
         if self.soreness_level < 1 or self.soreness_level > 10:
             raise ValidationError({'soreness_level': 'Soreness level must be between 1 and 10.'})
+
+
+class TeamSubscriptionFee(models.Model):
+    """Monthly subscription fee configured by a club admin for their team."""
+    team = models.OneToOneField(Team, on_delete=models.CASCADE, related_name='subscription_fee')
+    monthly_amount = models.DecimalField(max_digits=8, decimal_places=2)
+    currency = models.CharField(max_length=8, default='USD')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.team.name} – {self.currency} {self.monthly_amount}/month'
+
+
+class MembershipPayment(models.Model):
+    """One payment record per player per calendar month."""
+
+    class Method(models.TextChoices):
+        CARD = 'card', 'Card'
+        CASH = 'cash', 'Cash'
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        PAID = 'paid', 'Paid'
+
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='membership_payments')
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
+    period_month = models.PositiveSmallIntegerField()  # 1–12
+    period_year = models.PositiveSmallIntegerField()
+    method = models.CharField(max_length=10, choices=Method.choices)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    card_last4 = models.CharField(max_length=4, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-period_year', '-period_month', 'player']
+        unique_together = [('player', 'period_month', 'period_year')]
+
+    def __str__(self):
+        return f'{self.player.name} {self.period_month}/{self.period_year} – {self.status}'

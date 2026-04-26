@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subscription Overview | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --forest: #46674f; --paper: #dedede; --header-left: #eceeed; --header-right: #b7c9b4; --ink: #111; --accent: #0df2dc; --shadow: 0 10px 24px rgba(0,0,0,0.12); }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; font-family: 'Josefin Sans', sans-serif; color: var(--ink); background: var(--forest); }
+        a { color: inherit; text-decoration: none; }
+        .page-shell { min-height: 100vh; display: flex; flex-direction: column; }
+        .page-header { background: linear-gradient(90deg, var(--header-left) 0%, var(--header-right) 100%); padding: 42px 34px 38px; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+        .page-title { margin: 0; font-size: clamp(1.8rem, 2vw + 1rem, 2.8rem); font-weight: 600; position: relative; display: inline-block; padding-bottom: 12px; }
+        .page-title::after { content: ''; position: absolute; left: 0; bottom: 0; width: min(100%, 220px); height: 3px; background: var(--accent); }
+        .header-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .action-link { padding: 8px 16px; border: 1px solid #81918a; border-radius: 6px; background: rgba(255,255,255,0.12); font-size: 0.92rem; }
+        .action-link:hover { background: rgba(255,255,255,0.22); }
+        .page-content { flex: 1; padding: 48px 40px 64px; max-width: 1000px; margin: 0 auto; width: 100%; }
+        .summary-bar { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+        .stat-pill { background: var(--paper); border-radius: 10px; padding: 14px 20px; box-shadow: var(--shadow); font-size: 0.92rem; }
+        .stat-pill strong { display: block; font-size: 1.4rem; margin-bottom: 2px; }
+        .overview-table { width: 100%; border-collapse: collapse; background: var(--paper); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+        .overview-table th { background: var(--forest); color: #fff; padding: 13px 16px; text-align: left; font-size: 0.88rem; font-weight: 600; }
+        .overview-table td { padding: 12px 16px; font-size: 0.92rem; border-bottom: 1px solid #ccc; }
+        .overview-table tr:last-child td { border-bottom: none; }
+        .pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+        .pill-paid    { background: #d1fae5; color: #065f46; }
+        .pill-pending { background: #fef3c7; color: #92400e; }
+        .pill-unpaid  { background: #fee2e2; color: #991b1b; }
+        .section-title { font-size: 1.1rem; font-weight: 600; color: #fff; margin: 0 0 14px; }
+        .empty-note { color: #ccc; text-align: center; padding: 28px; background: rgba(255,255,255,0.06); border-radius: 12px; }
+        @media (max-width: 680px) { .page-header { padding: 24px 16px; flex-direction: column; } .page-content { padding: 28px 16px 40px; } }
+    </style>
+</head>
+<body>
+<div class="page-shell">
+    <header class="page-header">
+        <div>
+            <h1 class="page-title">Subscriptions</h1>
+            <p style="margin:8px 0 0;font-size:0.95rem;color:#444;">{{ current_month }}/{{ current_year }} — {{ admin_team }}</p>
+        </div>
+        <div class="header-actions">
+            <a class="action-link" href="{% url 'scheduling:pending_cash_payments' %}">Cash pending</a>
+            <a class="action-link" href="{% url 'scheduling:set_team_fee' %}">Set fee</a>
+            <a class="action-link" href="{% url 'scheduling:admin_home' %}">← Home</a>
+        </div>
+    </header>
+    <main class="page-content">
+        {% with paid_count=rows|length %}
+        <div class="summary-bar">
+            {% with total=rows|length %}
+            <div class="stat-pill"><strong>{{ total }}</strong>Total players</div>
+            {% endwith %}
+            {% if fee %}
+            <div class="stat-pill"><strong>{{ fee.currency }} {{ fee.monthly_amount }}</strong>Monthly fee</div>
+            {% else %}
+            <div class="stat-pill"><strong>Not set</strong>Monthly fee</div>
+            {% endif %}
+        </div>
+        {% endwith %}
+
+        <p class="section-title">Player payment status</p>
+
+        {% if rows %}
+        <table class="overview-table">
+            <thead>
+                <tr>
+                    <th>Player</th>
+                    <th>Status</th>
+                    <th>Method</th>
+                    <th>Amount</th>
+                    <th>Paid on</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>{{ row.player.name }}</td>
+                    <td>
+                        {% if row.status_label == 'paid' %}
+                            <span class="pill pill-paid">Paid</span>
+                        {% elif row.status_label == 'pending_cash' %}
+                            <span class="pill pill-pending">Pending cash</span>
+                        {% else %}
+                            <span class="pill pill-unpaid">Unpaid</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.payment %}{{ row.payment.get_method_display }}{% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if row.payment %}{{ row.payment.amount }}{% elif fee %}{{ fee.monthly_amount }}{% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if row.payment and row.payment.paid_at %}{{ row.payment.paid_at|date:"M d, Y" }}{% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-note">No active players on this team.</div>
+        {% endif %}
+    </main>
+</div>
+{% include "scheduling/_notification_popups.html" %}
+</body>
+</html>

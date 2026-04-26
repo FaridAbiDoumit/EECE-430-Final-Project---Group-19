@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Set Subscription Fee | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --forest: #46674f; --paper: #dedede; --header-left: #eceeed; --header-right: #b7c9b4; --ink: #111; --accent: #0df2dc; --shadow: 0 10px 24px rgba(0,0,0,0.12); }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; font-family: 'Josefin Sans', sans-serif; color: var(--ink); background: var(--forest); }
+        a { color: inherit; text-decoration: none; }
+        .page-shell { min-height: 100vh; display: flex; flex-direction: column; }
+        .page-header { background: linear-gradient(90deg, var(--header-left) 0%, var(--header-right) 100%); padding: 42px 34px 38px; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+        .page-title { margin: 0; font-size: clamp(1.8rem, 2vw + 1rem, 2.8rem); font-weight: 600; position: relative; display: inline-block; padding-bottom: 12px; }
+        .page-title::after { content: ''; position: absolute; left: 0; bottom: 0; width: min(100%, 220px); height: 3px; background: var(--accent); }
+        .back-link { padding: 8px 16px; border: 1px solid #81918a; border-radius: 6px; background: rgba(255,255,255,0.12); font-size: 0.92rem; }
+        .back-link:hover { background: rgba(255,255,255,0.22); }
+        .page-content { flex: 1; padding: 48px 40px 64px; display: flex; justify-content: center; }
+        .form-card { background: var(--paper); border-radius: 18px; padding: 36px 36px 32px; box-shadow: var(--shadow); width: 100%; max-width: 460px; }
+        .form-card h2 { margin: 0 0 8px; font-size: 1.35rem; }
+        .form-card .subtitle { margin: 0 0 28px; font-size: 0.92rem; color: #444; }
+        .form-group { margin-bottom: 20px; }
+        .form-label { display: block; font-size: 0.88rem; font-weight: 600; margin-bottom: 6px; color: #333; }
+        .form-input { width: 100%; padding: 12px 14px; border: 1.5px solid #bbb; border-radius: 8px; font: inherit; font-size: 1rem; background: #f8f8f8; }
+        .form-input:focus { outline: none; border-color: var(--forest); background: #fff; }
+        .submit-btn { width: 100%; padding: 14px; border-radius: 8px; border: none; background: var(--forest); color: #fff; font: inherit; font-size: 1.05rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s; margin-top: 4px; }
+        .submit-btn:hover { opacity: 0.85; }
+        .current-fee { background: #f0fdf4; border: 1px solid #86efac; border-radius: 10px; padding: 14px 16px; margin-bottom: 24px; font-size: 0.93rem; color: #166534; }
+        .msg-list { list-style: none; padding: 0; margin: 0 0 18px; }
+        .msg-list li { padding: 11px 14px; border-radius: 8px; margin-bottom: 7px; font-size: 0.93rem; }
+        .msg-error { background: #fee2e2; color: #991b1b; }
+        .msg-success { background: #d1fae5; color: #065f46; }
+        @media (max-width: 680px) { .page-header { padding: 24px 16px; flex-direction: column; } .page-content { padding: 28px 16px 40px; } }
+    </style>
+</head>
+<body>
+<div class="page-shell">
+    <header class="page-header">
+        <div>
+            <h1 class="page-title">Subscription Fee</h1>
+        </div>
+        <a class="back-link" href="{% url 'scheduling:admin_home' %}">← Back to home</a>
+    </header>
+    <main class="page-content">
+        <div class="form-card">
+            {% if messages %}
+            <ul class="msg-list">
+                {% for msg in messages %}
+                <li class="msg-{{ msg.tags }}">{{ msg }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            <h2>{% if fee %}Update{% else %}Set{% endif %} Monthly Fee</h2>
+            <p class="subtitle">For team: <strong>{{ admin_team }}</strong></p>
+
+            {% if fee %}
+            <div class="current-fee">
+                Current fee: <strong>{{ fee.currency }} {{ fee.monthly_amount }}</strong> per month
+                &nbsp;·&nbsp; Last updated {{ fee.updated_at|date:"M d, Y" }}
+            </div>
+            {% endif %}
+
+            <form method="post">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label class="form-label" for="id_monthly_amount">Monthly amount</label>
+                    <input class="form-input" type="number" step="0.01" min="0.01" id="id_monthly_amount"
+                           name="monthly_amount" placeholder="e.g. 25.00" value="{{ fee.monthly_amount|default:'' }}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="id_currency">Currency</label>
+                    <input class="form-input" type="text" id="id_currency" name="currency" maxlength="8"
+                           placeholder="USD" value="{{ fee.currency|default:'USD' }}">
+                </div>
+                <button type="submit" class="submit-btn">{% if fee %}Update fee{% else %}Set fee{% endif %}</button>
+            </form>
+        </div>
+    </main>
+</div>
+{% include "scheduling/_notification_popups.html" %}
+</body>
+</html>

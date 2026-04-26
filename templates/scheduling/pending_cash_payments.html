@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pending Cash Payments | Volley Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --forest: #46674f; --paper: #dedede; --header-left: #eceeed; --header-right: #b7c9b4; --ink: #111; --accent: #0df2dc; --shadow: 0 10px 24px rgba(0,0,0,0.12); }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; font-family: 'Josefin Sans', sans-serif; color: var(--ink); background: var(--forest); }
+        a { color: inherit; text-decoration: none; }
+        .page-shell { min-height: 100vh; display: flex; flex-direction: column; }
+        .page-header { background: linear-gradient(90deg, var(--header-left) 0%, var(--header-right) 100%); padding: 42px 34px 38px; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+        .page-title { margin: 0; font-size: clamp(1.8rem, 2vw + 1rem, 2.8rem); font-weight: 600; position: relative; display: inline-block; padding-bottom: 12px; }
+        .page-title::after { content: ''; position: absolute; left: 0; bottom: 0; width: min(100%, 220px); height: 3px; background: var(--accent); }
+        .header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .action-link { padding: 8px 16px; border: 1px solid #81918a; border-radius: 6px; background: rgba(255,255,255,0.12); font-size: 0.92rem; }
+        .action-link:hover { background: rgba(255,255,255,0.22); }
+        .page-content { flex: 1; padding: 48px 40px 64px; max-width: 800px; margin: 0 auto; width: 100%; }
+        .payments-list { display: flex; flex-direction: column; gap: 14px; }
+        .payment-row {
+            background: var(--paper); border-radius: 14px; padding: 20px 24px; box-shadow: var(--shadow);
+            display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+        }
+        .payment-info h3 { margin: 0 0 4px; font-size: 1.05rem; }
+        .payment-info p { margin: 0; font-size: 0.88rem; color: #444; }
+        .payment-meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+        .amount-tag { font-size: 1.1rem; font-weight: 600; }
+        .confirm-form button {
+            padding: 10px 20px; border-radius: 8px; border: none;
+            background: var(--forest); color: #fff; font: inherit; font-size: 0.95rem; font-weight: 600;
+            cursor: pointer; transition: opacity 0.15s;
+        }
+        .confirm-form button:hover { opacity: 0.82; }
+        .empty-note { color: #ccc; text-align: center; padding: 32px; background: rgba(255,255,255,0.06); border-radius: 12px; font-size: 1rem; }
+        .section-title { font-size: 1.1rem; font-weight: 600; color: #fff; margin: 0 0 16px; }
+        .msg-list { list-style: none; padding: 0; margin: 0 0 18px; }
+        .msg-list li { padding: 11px 14px; border-radius: 8px; margin-bottom: 7px; font-size: 0.93rem; }
+        .msg-success { background: #d1fae5; color: #065f46; }
+        .msg-error   { background: #fee2e2; color: #991b1b; }
+        @media (max-width: 680px) { .page-header { padding: 24px 16px; flex-direction: column; } .page-content { padding: 28px 16px 40px; } .payment-row { flex-direction: column; align-items: flex-start; } }
+    </style>
+</head>
+<body>
+<div class="page-shell">
+    <header class="page-header">
+        <div>
+            <h1 class="page-title">Cash Payments</h1>
+            <p style="margin:8px 0 0;font-size:0.95rem;color:#444;">Awaiting confirmation</p>
+        </div>
+        <div class="header-actions">
+            <a class="action-link" href="{% url 'scheduling:subscription_overview' %}">← Overview</a>
+            <a class="action-link" href="{% url 'scheduling:admin_home' %}">Home</a>
+        </div>
+    </header>
+    <main class="page-content">
+        {% if messages %}
+        <ul class="msg-list">
+            {% for msg in messages %}
+            <li class="msg-{{ msg.tags }}">{{ msg }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        <p class="section-title">{{ pending_payments|length }} pending request{{ pending_payments|length|pluralize }}</p>
+
+        {% if pending_payments %}
+        <div class="payments-list">
+            {% for payment in pending_payments %}
+            <div class="payment-row">
+                <div class="payment-info">
+                    <h3>{{ payment.player.name }}</h3>
+                    <p>
+                        Period: {{ payment.period_month }}/{{ payment.period_year }}
+                        &nbsp;·&nbsp;
+                        Submitted {{ payment.created_at|date:"M d, Y" }}
+                    </p>
+                </div>
+                <div class="payment-meta">
+                    <span class="amount-tag">{{ payment.amount }}</span>
+                    <form class="confirm-form" method="post" action="{% url 'scheduling:confirm_cash_payment' payment.id %}">
+                        {% csrf_token %}
+                        <button type="submit">Confirm receipt</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-note">No pending cash payments. All clear!</div>
+        {% endif %}
+    </main>
+</div>
+{% include "scheduling/_notification_popups.html" %}
+</body>
+</html>

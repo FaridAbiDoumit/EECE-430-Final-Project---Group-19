@@ -189,6 +189,17 @@
         </header>
 
         <main class="player-content">
+            {% if subscription_fee and not current_payment %}
+            <div style="background:#fef3c7;border-left:4px solid #f59e0b;border-radius:8px;padding:14px 18px;margin-bottom:24px;font-size:0.95rem;color:#92400e;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+                <span>⚠️ Your <strong>monthly subscription</strong> for this month is unpaid ({{ subscription_fee.currency }} {{ subscription_fee.monthly_amount }}).</span>
+                <a href="{% url 'scheduling:pay_subscription' %}" style="background:#f59e0b;color:#fff;padding:7px 16px;border-radius:6px;font-weight:600;font-size:0.9rem;text-decoration:none;">Pay now</a>
+            </div>
+            {% elif subscription_fee and current_payment and current_payment.status == 'pending' %}
+            <div style="background:#dbeafe;border-left:4px solid #3b82f6;border-radius:8px;padding:14px 18px;margin-bottom:24px;font-size:0.95rem;color:#1e40af;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+                <span>ℹ️ Your cash payment for this month is <strong>pending admin confirmation</strong>.</span>
+                <a href="{% url 'scheduling:subscription_home' %}" style="background:#3b82f6;color:#fff;padding:7px 16px;border-radius:6px;font-weight:600;font-size:0.9rem;text-decoration:none;">View</a>
+            </div>
+            {% endif %}
             <section class="card-grid" aria-label="Player quick actions">
                 <a class="hub-card" href="{% url 'scheduling:player_stats_detail' player.id %}">
                     <h2>My personal stats</h2>
@@ -284,6 +295,25 @@
                         <circle cx="12" cy="12" r="10"></circle>
                         <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"></path>
                         <path d="M2 12h20"></path>
+                    </svg>
+                </a>
+
+                <a class="hub-card" href="{% url 'scheduling:subscription_home' %}">
+                    <h2>My Subscription</h2>
+                    <p>
+                        {% if subscription_fee and current_payment and current_payment.status == 'paid' %}
+                            This month: Paid ✓
+                        {% elif subscription_fee and current_payment and current_payment.status == 'pending' %}
+                            This month: Pending cash
+                        {% elif subscription_fee %}
+                            This month: Unpaid
+                        {% else %}
+                            Monthly membership payments
+                        {% endif %}
+                    </p>
+                    <svg class="hub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+                        <path d="M2 10h20M6 15h4"></path>
                     </svg>
                 </a>
 
