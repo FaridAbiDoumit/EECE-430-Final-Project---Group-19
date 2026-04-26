@@ -266,6 +266,55 @@
                 grid-template-columns: 1fr;
             }
         }
+        .export-btn {
+            padding: 10px 18px;
+            border-radius: 10px;
+            border: none;
+            background: var(--accent);
+            color: #111;
+            font-family: 'Josefin Sans', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .export-btn:hover { opacity: 0.85; }
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        @media print {
+            body { background: #fff !important; color: #111 !important; }
+            .shell { padding: 10px !important; }
+            .header-actions { display: none !important; }
+            .eyebrow { color: #555 !important; }
+            .header h1 { color: #111 !important; }
+            .header p { color: #333 !important; }
+            .panel {
+                box-shadow: none !important;
+                border: 1px solid #ccc;
+                break-inside: avoid;
+            }
+            .insight-card {
+                box-shadow: none !important;
+                border: 1px solid #ccc;
+                break-inside: avoid;
+            }
+            .grid, .grid-half {
+                grid-template-columns: 1fr 1fr !important;
+            }
+            .sw-grid {
+                grid-template-columns: 1fr 1fr !important;
+            }
+            .result-win  { background: #d4f5e2 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .result-loss { background: #fde8e8 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .result-draw { background: #e8eef7 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .sw-strength { background: #d4f5e2 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .sw-weakness { background: #fde8e8 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .source-badge { background: #e6faf8 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
     </style>
 </head>
 <body>
@@ -276,7 +325,12 @@
                 <h1>{{ page_title }}</h1>
                 <p>{{ page_intro }}</p>
             </div>
-            <a class="back-button" href="{{ home_url }}">Back to Home</a>
+            <div class="header-actions">
+                {% if is_coach_view %}
+                    <button class="export-btn" onclick="window.print()">Export as PDF</button>
+                {% endif %}
+                <a class="back-button" href="{{ home_url }}">Back to Home</a>
+            </div>
         </header>
 
         {% if is_coach_view %}
