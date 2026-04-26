@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.contrib.sessions.models import Session
 from django.db.models import Avg, Count, Q, Sum, Value
 from django.db.models.functions import Coalesce
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -34,12 +34,13 @@ from .forms import (
     AnnouncementCreateForm,
     SupportTicketForm,
     MatchForm,
+    LeagueMatchForm,
     PlayerMatchStatForm,
     TeamGoalForm,
     TeamCreateForm,
     UpcomingGameForm,
 )
-from .ai_analytics import build_ai_analytics_context
+from .ai_analytics import build_ai_analytics_context, generate_scouting_narrative, generate_opponent_analysis
 from .models import (
     Notification,
     Player,
@@ -439,6 +440,20 @@ def league_handler_manage_teams(request):
         if team_form.is_valid():
             team = team_form.save()
             messages.success(request, f'Team "{team.name}" added to the league.')
+            # Notify all OTHER active league handlers about the new team
+            other_handlers = Player.objects.filter(
+                is_active=True,
+                role=Player.Role.LEAGUE_SYSTEM_HANDLER,
+            ).exclude(pk=handler.pk)
+            Notification.objects.bulk_create([
+                Notification(
+                    recipient=lh,
+                    title='New Team Added to League',
+                    message=f'A new team "{team.name}" has been added to the league.',
+                    notification_type=Notification.Type.GENERAL,
+                )
+                for lh in other_handlers
+            ])
             return redirect('scheduling:league_handler_manage_teams')
         messages.error(request, 'Could not add team. Please fix the form errors below.')
     else:
@@ -618,6 +633,21 @@ def approve_member(request, player_id):
         message=f'Your registration to {admin_team.name if admin_team else "the club"} has been approved. Welcome!',
         notification_type='general',
     )
+    # Notify all active league handlers about the newly approved player
+    league_handlers = Player.objects.filter(
+        is_active=True,
+        role=Player.Role.LEAGUE_SYSTEM_HANDLER,
+    )
+    team_label = admin_team.name if admin_team else 'the club'
+    Notification.objects.bulk_create([
+        Notification(
+            recipient=lh,
+            title='New Player Approved',
+            message=f'{player.name} has been approved and joined {team_label}.',
+            notification_type=Notification.Type.GENERAL,
+        )
+        for lh in league_handlers
+    ])
     messages.success(request, f'{player.name} has been approved.')
     next_url = request.POST.get('next', '')
     if next_url not in ('scheduling:pending_members', 'scheduling:player_status_list'):
@@ -741,6 +771,73 @@ def _chat_groups_for_user(user, profile):
     return groups.none()
 
 
+def _build_direct_conversation_messages(user_profile, selected_user, is_admin, request_user):
+    """Fetch Message + AnnouncementReply records for a 1:1 chat and return a merged, sorted, serialized list."""
+    if user_profile is not None:
+        raw_messages = list(
+            Message.objects.filter(
+                Q(player=selected_user, sender=user_profile)
+                | Q(player=user_profile, sender=selected_user)
+            ).order_by('created_at').select_related('sender')
+        )
+        ann_replies = list(
+            AnnouncementReply.objects.filter(
+                Q(sender=user_profile, announcement__created_by_player=selected_user)
+                | Q(sender=selected_user, announcement__created_by_player=user_profile)
+            ).select_related('announcement', 'sender').order_by('created_at')
+        )
+    elif is_admin:
+        raw_messages = list(
+            Message.objects.filter(
+                player=selected_user,
+                sender_is_admin=True,
+            ).order_by('created_at').select_related('sender')
+        )
+        ann_replies = list(
+            AnnouncementReply.objects.filter(
+                sender=selected_user,
+                announcement__created_by_player=None,
+                announcement__created_by_user=request_user,
+            ).select_related('announcement', 'sender').order_by('created_at')
+        )
+    else:
+        raw_messages = list(
+            Message.objects.filter(player=selected_user).order_by('created_at').select_related('sender')
+        )
+        ann_replies = []
+
+    combined = []
+    for msg in raw_messages:
+        is_sent = (
+            (user_profile is not None and msg.sender_id == user_profile.id)
+            or (is_admin and msg.sender_is_admin)
+        )
+        combined.append({
+            'id': f'msg_{msg.id}',
+            'author': 'You' if is_sent else (msg.sender.name if msg.sender else selected_user.name),
+            'content': msg.content,
+            'created_at': msg.created_at,
+            'sent_by_current_user': is_sent,
+            'announcement_context': None,
+        })
+
+    for reply in ann_replies:
+        is_sent = user_profile is not None and reply.sender_id == user_profile.id
+        combined.append({
+            'id': f'ann_{reply.id}',
+            'author': 'You' if is_sent else reply.sender.name,
+            'content': reply.content,
+            'created_at': reply.created_at,
+            'sent_by_current_user': is_sent,
+            'announcement_context': reply.announcement.title,
+        })
+
+    combined.sort(key=lambda x: x['created_at'])
+    for item in combined:
+        item['created_at'] = item['created_at'].strftime('%b %d, %Y - %H:%M')
+    return combined
+
+
 def _serialize_direct_messages(conversation_messages, selected_user, user_profile, is_admin):
     messages_data = []
     for message in conversation_messages:
@@ -819,6 +916,10 @@ def _create_announcement_notifications(announcement, sender_name):
         recipients = recipients.exclude(pk=announcement.created_by_player.pk)
     if announcement.created_by_user is not None:
         recipients = recipients.exclude(user=announcement.created_by_user)
+
+    # League handlers only receive announcements explicitly opted-in by the sender
+    if not announcement.notify_league_handler:
+        recipients = recipients.exclude(role=Player.Role.LEAGUE_SYSTEM_HANDLER)
 
     notifications = [
         Notification(
@@ -952,7 +1053,10 @@ def chatting_hub(request):
                         messages.success(request, 'Your private reply was sent.')
 
                 params = {}
-                if selected_group is not None:
+                author_player = announcement_obj.created_by_player
+                if author_player is not None and author_player != user_profile:
+                    params['selected'] = author_player.id
+                elif selected_group is not None:
                     params['group'] = selected_group.id
                 elif selected_user is not None:
                     params['selected'] = selected_user.id
@@ -1079,23 +1183,11 @@ def chatting_hub(request):
         group_messages = GroupMessage.objects.filter(group=selected_group).order_by('created_at')
         conversation_messages = _serialize_group_messages(group_messages, request.user, user_profile)
     elif selected_user is not None:
-        if user_profile is not None:
-            direct_messages = Message.objects.filter(
-                Q(player=selected_user, sender=user_profile)
-                | Q(player=user_profile, sender=selected_user)
-            ).order_by('created_at')
-        elif is_admin:
-            direct_messages = Message.objects.filter(
-                player=selected_user,
-                sender_is_admin=True,
-            ).order_by('created_at')
-        else:
-            direct_messages = Message.objects.filter(player=selected_user).order_by('created_at')
-        conversation_messages = _serialize_direct_messages(
-            conversation_messages=direct_messages,
-            selected_user=selected_user,
+        conversation_messages = _build_direct_conversation_messages(
             user_profile=user_profile,
+            selected_user=selected_user,
             is_admin=is_admin,
+            request_user=request.user,
         )
 
     contact_list = list(contacts)
@@ -1156,26 +1248,12 @@ def chatting_messages(request):
     if selected_user is None:
         return JsonResponse({'messages': []})
 
-    if user_profile is not None:
-        direct_messages = Message.objects.filter(
-            Q(player=selected_user, sender=user_profile)
-            | Q(player=user_profile, sender=selected_user)
-        ).order_by('created_at')
-    elif is_admin:
-        direct_messages = Message.objects.filter(
-            player=selected_user,
-            sender_is_admin=True,
-        ).order_by('created_at')
-    else:
-        direct_messages = Message.objects.filter(player=selected_user).order_by('created_at')
-
-    messages_data = _serialize_direct_messages(
-        conversation_messages=direct_messages,
-        selected_user=selected_user,
+    messages_data = _build_direct_conversation_messages(
         user_profile=user_profile,
+        selected_user=selected_user,
         is_admin=is_admin,
+        request_user=request.user,
     )
-
     return JsonResponse({'messages': messages_data})
 
 
@@ -2814,31 +2892,59 @@ def record_match(request):
         return redirect(_post_login_route_for(request.user))
 
     if request.method == 'POST':
-        form = MatchForm(request.POST)
+        form = LeagueMatchForm(request.POST)
         if form.is_valid():
-            match = form.save()
-            qs = Player.objects.filter(is_active=True)
-            if match.team_id is not None:
-                qs = qs.filter(team=match.team)
+            team_1 = form.cleaned_data['team_1']
+            team_2 = form.cleaned_data['team_2']
+            date = form.cleaned_data['date']
+            score_1 = form.cleaned_data['team_1_score']
+            score_2 = form.cleaned_data['team_2_score']
+            notes = form.cleaned_data.get('notes', '')
+
+            # Create a Match record from team_1's perspective
+            match_1 = Match.objects.create(
+                team=team_1,
+                opponent=team_2.name,
+                opponent_team=team_2,
+                date=date,
+                goals_for=score_1,
+                goals_against=score_2,
+                notes=notes,
+            )
+            # Create the mirror record from team_2's perspective
+            match_2 = Match.objects.create(
+                team=team_2,
+                opponent=team_1.name,
+                opponent_team=team_1,
+                date=date,
+                goals_for=score_2,
+                goals_against=score_1,
+                notes=notes,
+            )
+
+            # Notify all active players in both teams
+            both_team_players = Player.objects.filter(
+                is_active=True,
+                team__in=[team_1, team_2],
+            )
             if profile:
-                qs = qs.exclude(pk=profile.pk)
+                both_team_players = both_team_players.exclude(pk=profile.pk)
             Notification.objects.bulk_create([
                 Notification(
                     recipient=p,
                     title='New Match Result Recorded',
                     message=(
-                        f'A match result has been recorded:'
-                        f' vs {match.opponent} on {match.date.strftime("%b %d, %Y")},'
-                        f' {match.goals_for}–{match.goals_against}.'
+                        f'Match result recorded: {team_1.name} {score_1}–{score_2} {team_2.name}'
+                        f' on {date.strftime("%b %d, %Y")}.'
                     ),
                     notification_type=Notification.Type.STATS_ADDED,
                 )
-                for p in qs
+                for p in both_team_players
             ])
-            messages.success(request, 'Match recorded.')
-            return redirect('scheduling:record_player_stats', match_id=match.id)
+            messages.success(request, f'Match recorded for both {team_1.name} and {team_2.name}.')
+            return redirect('scheduling:record_player_stats', match_id=match_1.id)
     else:
-        form = MatchForm()
+        form = LeagueMatchForm()
     return render(request, 'scheduling/record_match.html', {'form': form})
 
 
@@ -2848,24 +2954,52 @@ def record_player_stats(request, match_id):
     if not _can_manage_stats_entries(profile):
         return redirect(_post_login_route_for(request.user))
 
+    # match_id always belongs to team_1's record; find the mirror via opponent_team
     match = get_object_or_404(Match, pk=match_id)
-    existing_stats = list(match.player_stats.select_related('player'))
+    mirror_match = None
+    if match.opponent_team is not None:
+        mirror_match = (
+            Match.objects
+            .filter(team=match.opponent_team, opponent_team=match.team, date=match.date)
+            .exclude(pk=match.id)
+            .first()
+        )
+
+    # Determine which team's form to render: first team_1, then team_2
+    current_phase = request.GET.get('phase', '1')
+    if current_phase == '2' and mirror_match is not None:
+        active_match = mirror_match
+    else:
+        active_match = match
+        current_phase = '1'
+
+    existing_stats = list(active_match.player_stats.select_related('player'))
+
+    # Also collect stats already entered for the other match so we can show a combined summary
+    other_match = mirror_match if current_phase == '1' else match
+    other_stats = list(other_match.player_stats.select_related('player')) if other_match else []
 
     if request.method == 'POST':
-        form = PlayerMatchStatForm(request.POST, team=match.team)
+        form = PlayerMatchStatForm(request.POST, team=active_match.team)
         if form.is_valid():
             stat = form.save(commit=False)
-            stat.match = match
+            stat.match = active_match
             stat.save()
             messages.success(request, f'Stats for {stat.player.name} saved.')
-            return redirect('scheduling:record_player_stats', match_id=match.id)
+            return redirect(
+                f"{reverse('scheduling:record_player_stats', args=[match_id])}?phase={current_phase}"
+            )
     else:
-        form = PlayerMatchStatForm(team=match.team)
+        form = PlayerMatchStatForm(team=active_match.team)
 
     return render(request, 'scheduling/record_player_stats.html', {
         'form': form,
         'match': match,
+        'active_match': active_match,
+        'mirror_match': mirror_match,
+        'current_phase': current_phase,
         'existing_stats': existing_stats,
+        'other_stats': other_stats,
     })
 
 
@@ -2879,7 +3013,7 @@ def add_team_goal(request):
         form = TeamGoalForm(request.POST)
         if form.is_valid():
             goal = form.save()
-            qs = Player.objects.filter(is_active=True)
+            qs = Player.objects.filter(is_active=True).exclude(role=Player.Role.LEAGUE_SYSTEM_HANDLER)
             if profile:
                 qs = qs.exclude(pk=profile.pk)
             Notification.objects.bulk_create([
@@ -3104,4 +3238,307 @@ def notifications_popup_data(request):
     )
     data = [{'id': n.pk, 'title': n.title, 'message': n.message} for n in notifs]
     return JsonResponse({'notifications': data})
+
+
+@login_required
+def player_scouting_report(request, player_id):
+    """Download a PDF scouting report for a player (coach own-team or admin)."""
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import cm
+        from reportlab.platypus import (
+            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable,
+        )
+    except ImportError:
+        messages.error(request, 'PDF generation requires reportlab. Run: pip install reportlab')
+        return redirect('scheduling:manage_player_detail', player_id=player_id)
+
+    viewer = request.user
+    viewer_profile = getattr(viewer, 'player_profile', None)
+
+    is_admin = viewer.is_staff
+    is_coach = (
+        viewer_profile is not None
+        and viewer_profile.role == Player.Role.COACH
+    )
+
+    if not is_admin and not is_coach:
+        messages.error(request, 'You do not have permission to download scouting reports.')
+        return redirect('scheduling:dashboard')
+
+    player = get_object_or_404(Player, pk=player_id, role=Player.Role.PLAYER)
+
+    # Coaches can only scout players from their own team
+    if is_coach and not is_admin:
+        if viewer_profile.team is None or player.team != viewer_profile.team:
+            messages.error(request, 'You can only download scouting reports for players on your team.')
+            return redirect('scheduling:coach_home')
+
+    stats_qs = (
+        PlayerMatchStat.objects
+        .filter(player=player)
+        .select_related('match')
+        .order_by('-match__date', '-match__id')
+    )
+    totals = {
+        key: (stats_qs.aggregate(**{f't_{key}': Coalesce(Sum(key), Value(0))})[f't_{key}'])
+        for key in ('goals', 'points', 'assists', 'blocks', 'aces', 'interceptions', 'returns')
+    }
+    last5 = list(stats_qs[:5])
+    latest_soreness = player.soreness_reports.first()
+    latest_injury = next((s.most_recent_injury for s in stats_qs if s.most_recent_injury), '')
+    narrative = generate_scouting_narrative(player)
+
+    # ---- Build PDF ----
+    response = HttpResponse(content_type='application/pdf')
+    safe_name = player.name.replace(' ', '_')
+    response['Content-Disposition'] = f'attachment; filename="scouting_{safe_name}.pdf"'
+
+    doc = SimpleDocTemplate(
+        response,
+        pagesize=A4,
+        leftMargin=2 * cm, rightMargin=2 * cm,
+        topMargin=2 * cm, bottomMargin=2 * cm,
+    )
+    styles = getSampleStyleSheet()
+    forest = colors.HexColor('#3f5e4a')
+    ink = colors.HexColor('#111111')
+    accent = colors.HexColor('#0df2dc')
+
+    title_style = ParagraphStyle(
+        'ReportTitle',
+        parent=styles['Title'],
+        textColor=forest,
+        fontSize=20,
+        spaceAfter=6,
+    )
+    section_style = ParagraphStyle(
+        'SectionHead',
+        parent=styles['Heading2'],
+        textColor=forest,
+        fontSize=13,
+        spaceBefore=14,
+        spaceAfter=4,
+    )
+    body_style = ParagraphStyle(
+        'Body',
+        parent=styles['Normal'],
+        textColor=ink,
+        fontSize=10,
+        leading=14,
+    )
+
+    story = []
+
+    # Title
+    story.append(Paragraph(f'Scouting Report: {player.name}', title_style))
+    story.append(Paragraph(
+        f'Generated {date.today():%B %d, %Y}',
+        ParagraphStyle('sub', parent=styles['Normal'], fontSize=9, textColor=colors.grey),
+    ))
+    story.append(HRFlowable(width='100%', thickness=1, color=forest, spaceAfter=10))
+
+    # Player profile table
+    story.append(Paragraph('Player Profile', section_style))
+    profile_data = [
+        ['Name', player.name],
+        ['Team', player.team.name if player.team else 'Unassigned'],
+        ['Status', player.get_status_display() if hasattr(player, 'get_status_display') else player.status],
+        ['Contract Expiry', str(player.contract_expiry) if player.contract_expiry else 'N/A'],
+    ]
+    profile_table = Table(profile_data, colWidths=[4 * cm, None])
+    profile_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('TEXTCOLOR', (0, 0), (0, -1), forest),
+        ('ROWBACKGROUNDS', (0, 0), (-1, -1), [colors.HexColor('#f5f5f5'), colors.white]),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cccccc')),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    story.append(profile_table)
+
+    # Career stats totals
+    story.append(Paragraph('Career Stats (All Recorded Matches)', section_style))
+    metric_labels = ['Goals', 'Points', 'Assists', 'Blocks', 'Aces', 'Interceptions', 'Returns']
+    metric_keys = ['goals', 'points', 'assists', 'blocks', 'aces', 'interceptions', 'returns']
+    stats_header = ['Metric', 'Total', '', 'Metric', 'Total']
+    paired_rows = []
+    for i in range(0, len(metric_keys), 2):
+        left_label = metric_labels[i]
+        left_val = str(totals[metric_keys[i]])
+        if i + 1 < len(metric_keys):
+            right_label = metric_labels[i + 1]
+            right_val = str(totals[metric_keys[i + 1]])
+        else:
+            right_label = ''
+            right_val = ''
+        paired_rows.append([left_label, left_val, '', right_label, right_val])
+    stats_table = Table(
+        [stats_header] + paired_rows,
+        colWidths=[4.5 * cm, 2.5 * cm, 0.8 * cm, 4.5 * cm, 2.5 * cm],
+    )
+    stats_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('BACKGROUND', (0, 0), (-1, 0), forest),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#f5f5f5'), colors.white]),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cccccc')),
+        ('SPAN', (2, 0), (2, -1)),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+        ('ALIGN', (4, 0), (4, -1), 'CENTER'),
+    ]))
+    story.append(stats_table)
+
+    # Last 5 matches form
+    story.append(Paragraph('Last 5 Matches', section_style))
+    if last5:
+        match_header = ['Date', 'Opponent', 'Result', 'Pts', 'Aces', 'Blocks', 'Assists']
+        match_rows = []
+        for s in last5:
+            m = s.match
+            match_rows.append([
+                m.date.strftime('%b %d, %Y'),
+                m.opponent,
+                m.result.upper(),
+                str(s.points),
+                str(s.aces),
+                str(s.blocks),
+                str(s.assists),
+            ])
+        form_table = Table(
+            [match_header] + match_rows,
+            colWidths=[2.8 * cm, None, 1.8 * cm, 1.4 * cm, 1.4 * cm, 1.8 * cm, 1.8 * cm],
+        )
+        form_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('BACKGROUND', (0, 0), (-1, 0), forest),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#f5f5f5'), colors.white]),
+            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cccccc')),
+            ('LEFTPADDING', (0, 0), (-1, -1), 5),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ]))
+        story.append(form_table)
+    else:
+        story.append(Paragraph('No match stats recorded for this player yet.', body_style))
+
+    # Recovery & injury notes
+    story.append(Paragraph('Recovery & Injury Notes', section_style))
+    soreness_text = (
+        f'Latest soreness: {latest_soreness.soreness_level}/10 '
+        f'(reported {latest_soreness.reported_at:%b %d, %Y})'
+        if latest_soreness
+        else 'No soreness report on file.'
+    )
+    story.append(Paragraph(soreness_text, body_style))
+    if latest_injury:
+        story.append(Paragraph(f'Latest injury note: {latest_injury}', body_style))
+    else:
+        story.append(Paragraph('No injury note on file.', body_style))
+
+    # AI narrative
+    story.append(Paragraph('AI Scout Analysis', section_style))
+    story.append(HRFlowable(width='100%', thickness=0.5, color=accent, spaceAfter=6))
+    story.append(Paragraph(narrative, body_style))
+
+    story.append(Spacer(1, 1 * cm))
+    story.append(Paragraph(
+        f'Report generated by Volleyball Club Management System on {date.today():%B %d, %Y}.',
+        ParagraphStyle('footer', parent=styles['Normal'], fontSize=8, textColor=colors.grey),
+    ))
+
+    doc.build(story)
+    return response
+
+
+@login_required
+def opponent_analysis(request):
+    """Opponent analysis page for league system handler."""
+    profile = getattr(request.user, 'player_profile', None)
+    if profile is None or profile.role != Player.Role.LEAGUE_SYSTEM_HANDLER:
+        messages.error(request, 'Only the league system handler can access opponent analysis.')
+        return redirect('scheduling:dashboard')
+
+    teams = Team.objects.all().order_by('name')
+
+    if request.method == 'POST':
+        team1_id = request.POST.get('team1')
+        team2_id = request.POST.get('team2')
+
+        if not team1_id or not team2_id:
+            messages.error(request, 'Please select two teams.')
+            return render(request, 'scheduling/opponent_analysis.html', {'teams': teams})
+
+        if team1_id == team2_id:
+            messages.error(request, 'Please select two different teams.')
+            return render(request, 'scheduling/opponent_analysis.html', {'teams': teams})
+
+        team1 = get_object_or_404(Team, pk=team1_id)
+        team2 = get_object_or_404(Team, pk=team2_id)
+
+        def _team_record(team):
+            matches = Match.objects.filter(team=team)
+            wins = sum(1 for m in matches if m.result == Match.Result.WIN)
+            losses = sum(1 for m in matches if m.result == Match.Result.LOSS)
+            draws = sum(1 for m in matches if m.result == Match.Result.DRAW)
+            goals_for = sum(m.goals_for for m in matches)
+            goals_against = sum(m.goals_against for m in matches)
+            return {
+                'wins': wins, 'losses': losses, 'draws': draws,
+                'played': wins + losses + draws,
+                'goals_for': goals_for, 'goals_against': goals_against,
+                'points': wins * 3 + draws,
+                'gd': goals_for - goals_against,
+            }
+
+        t1_record = _team_record(team1)
+        t2_record = _team_record(team2)
+
+        # Head-to-head: team1 matches where opponent field matches team2 name
+        h2h_t1 = list(
+            Match.objects.filter(team=team1, opponent_team=team2).order_by('-date', '-id')[:5]
+        )
+        h2h_t2 = list(
+            Match.objects.filter(team=team2, opponent_team=team1).order_by('-date', '-id')[:5]
+        )
+        # Recent form (last 5)
+        t1_form = list(Match.objects.filter(team=team1).order_by('-date', '-id')[:5])
+        t2_form = list(Match.objects.filter(team=team2).order_by('-date', '-id')[:5])
+
+        ai_result = generate_opponent_analysis(
+            team1_name=team1.name,
+            t1_record=t1_record,
+            team2_name=team2.name,
+            t2_record=t2_record,
+        )
+
+        context = {
+            'teams': teams,
+            'team1': team1,
+            'team2': team2,
+            't1_record': t1_record,
+            't2_record': t2_record,
+            'h2h': h2h_t1,
+            't1_form': t1_form,
+            't2_form': t2_form,
+            'ai_summary': ai_result['text'],
+            'ai_source': ai_result['source'],
+            'is_ai_enabled': ai_result['is_ai_enabled'],
+        }
+        return render(request, 'scheduling/opponent_analysis.html', context)
+
+    return render(request, 'scheduling/opponent_analysis.html', {'teams': teams})
 

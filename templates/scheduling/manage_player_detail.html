@@ -197,6 +197,7 @@
             </div>
             <div class="header-actions">
                 <span class="header-chip">Admin</span>
+                <a class="header-link" href="{% url 'scheduling:player_scouting_report' player.id %}">Download Scouting Report</a>
                 <a class="header-link" href="{% url 'scheduling:player_status_list' %}">Back to User Status</a>
                 <a class="header-link" href="{% url 'scheduling:admin_home' %}">Admin Home</a>
             </div>

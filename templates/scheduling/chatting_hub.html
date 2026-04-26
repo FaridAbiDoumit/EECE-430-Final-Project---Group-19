@@ -268,6 +268,20 @@
             color: #a1262d;
             font-size: 0.9rem;
         }
+        .ann-league-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            color: #444;
+            margin-top: 6px;
+            cursor: pointer;
+        }
+        .ann-league-label input[type="checkbox"] {
+            width: 15px;
+            height: 15px;
+            flex-shrink: 0;
+        }
         .announcement-item {
             display: grid;
             gap: 5px;
@@ -416,7 +430,7 @@
             display: inline-block;
             width: fit-content;
             max-width: 78%;
-            min-width: 140px;
+            min-width: 80px;
             background: #f1f7ef;
             border: 1px solid #d8e2d3;
             border-radius: 18px;
@@ -424,6 +438,19 @@
             box-shadow: 0 3px 8px rgba(24, 41, 29, 0.05);
             word-break: break-word;
             white-space: normal;
+        }
+        .message-bubble p {
+            margin: 0;
+        }
+        .ann-reply-badge {
+            display: inline-block;
+            font-size: 0.78rem;
+            color: var(--forest);
+            background: rgba(70, 103, 79, 0.12);
+            border-radius: 6px;
+            padding: 2px 8px;
+            margin-bottom: 6px;
+            font-weight: 600;
         }
         .message-sent .message-bubble {
             background: #e8f3e7;
@@ -616,6 +643,10 @@
                                     <input type="hidden" name="chat_action" value="create_announcement" />
                                     {{ announcement_form.title }}
                                     {{ announcement_form.content }}
+                                    <label class="ann-league-label">
+                                        {{ announcement_form.notify_league_handler }}
+                                        Also notify league system handler(s)
+                                    </label>
                                     {% for error in announcement_form.non_field_errors %}
                                         <p class="group-form-error">{{ error }}</p>
                                     {% endfor %}
@@ -702,6 +733,9 @@
                                                     <span class="message-author">{{ message.author }}</span>
                                                     <time>{{ message.created_at }}</time>
                                                 </div>
+                                                {% if message.announcement_context %}
+                                                    <div class="ann-reply-badge">&#8617; Re: {{ message.announcement_context }}</div>
+                                                {% endif %}
                                                 <p>{{ message.content }}</p>
                                             </div>
                                         </article>
@@ -803,6 +837,9 @@
                 container.innerHTML = messages.map(message => {
                     const author = message.sent_by_current_user ? 'You' : message.author;
                     const sideClass = message.sent_by_current_user ? 'message-sent' : 'message-received';
+                    const badge = message.announcement_context
+                        ? `<div class="ann-reply-badge">&#8617; Re: ${message.announcement_context.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`
+                        : '';
                     return `
                         <article class="message ${sideClass}">
                             <div class="message-bubble">
@@ -810,6 +847,7 @@
                                     <span class="message-author">${author}</span>
                                     <time>${message.created_at}</time>
                                 </div>
+                                ${badge}
                                 <p>${message.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
                             </div>
                         </article>

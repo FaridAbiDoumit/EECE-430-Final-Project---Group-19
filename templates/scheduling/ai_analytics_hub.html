@@ -177,9 +177,92 @@
             padding: 12px 14px;
             line-height: 1.55;
         }
+        /* Coach-view specific styles */
+        .grid-half {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .panel h2 { margin-top: 0; }
+        .brief-meta {
+            margin: 0 0 14px;
+            font-size: 0.96rem;
+            color: #444;
+        }
+        .brief-text {
+            margin: 12px 0 0;
+            font-size: 1.04rem;
+            line-height: 1.72;
+        }
+        .result-badge {
+            display: inline-block;
+            padding: 8px 20px;
+            border-radius: 999px;
+            font-size: 1.5rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            margin-bottom: 10px;
+        }
+        .result-win  { background: #d4f5e2; color: #1a6e3a; }
+        .result-loss { background: #fde8e8; color: #b52020; }
+        .result-draw { background: #e8eef7; color: #2a4580; }
+        .result-none { background: #f0f0f0; color: #555; font-size: 1.1rem; }
+        .result-body {
+            margin: 0;
+            color: #444;
+            font-size: 0.97rem;
+            line-height: 1.55;
+        }
+        .sw-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin: 14px 0 0;
+        }
+        .sw-item {
+            border-radius: 12px;
+            padding: 14px;
+        }
+        .sw-strength { background: #d4f5e2; }
+        .sw-weakness { background: #fde8e8; }
+        .sw-label {
+            display: block;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            font-weight: 600;
+            margin-bottom: 6px;
+            opacity: 0.7;
+        }
+        .sw-metric {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        .sw-value {
+            font-size: 0.9rem;
+            color: #555;
+        }
+        .record-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+        .record-chip {
+            padding: 6px 14px;
+            border-radius: 999px;
+            background: var(--card-bg);
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
         @media (max-width: 960px) {
             .grid,
+            .grid-half,
             .cards {
+                grid-template-columns: 1fr;
+            }
+            .sw-grid {
                 grid-template-columns: 1fr;
             }
         }
@@ -196,72 +279,178 @@
             <a class="back-button" href="{{ home_url }}">Back to Home</a>
         </header>
 
-        <section class="grid">
-            <article class="panel">
-                <h2>AI Summary</h2>
-                <span class="source-badge">{{ analysis_source }}</span>
-                <p class="summary">{{ analysis_summary }}</p>
-            </article>
+        {% if is_coach_view %}
 
-            <aside class="panel">
-                <h2>Current Snapshot</h2>
-                <ul class="snapshot-list">
-                    {% for item in snapshot_items %}
-                        <li class="snapshot-item">
-                            <span class="snapshot-label">{{ item.label }}</span>
-                            <span class="snapshot-value">{{ item.value }}</span>
-                        </li>
-                    {% empty %}
-                        <li class="snapshot-item">
-                            <span class="snapshot-label">Status</span>
-                            <span class="snapshot-value">Waiting for role-specific data</span>
-                        </li>
-                    {% endfor %}
-                </ul>
-            </aside>
-        </section>
+            <!-- 1. Next Opponent Brief (full width) -->
+            <section class="panel">
+                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+                    <h2 style="margin:0;">Next Opponent Brief</h2>
+                    <span class="source-badge">{{ opponent_brief_source }}</span>
+                </div>
+                {% if opponent_name %}
+                    <p class="brief-meta">
+                        <strong>{{ opponent_name }}</strong>
+                        {% if next_game %}
+                            &mdash; {{ next_game.scheduled_at|date:"M j, Y" }}
+                            {% if next_game.venue %} &mdash; {{ next_game.venue }}{% endif %}
+                        {% endif %}
+                    </p>
+                {% endif %}
+                <p class="brief-text">{{ opponent_brief_text }}</p>
+            </section>
 
-        <section class="cards">
-            {% for card in insight_cards %}
-                <article class="insight-card">
-                    <h3>{{ card.title }}</h3>
-                    <div class="insight-value">{{ card.value }}</div>
-                    <p>{{ card.body }}</p>
+            <!-- 2. Latest Result + AI-Recommended Focus Areas (2 col) -->
+            <div class="grid">
+                <article class="panel">
+                    <h2>Latest Result</h2>
+                    {% if latest_result_value == "WIN" %}
+                        <div class="result-badge result-win">WIN</div>
+                    {% elif latest_result_value == "LOSS" %}
+                        <div class="result-badge result-loss">LOSS</div>
+                    {% elif latest_result_value == "DRAW" %}
+                        <div class="result-badge result-draw">DRAW</div>
+                    {% else %}
+                        <div class="result-badge result-none">{{ latest_result_value }}</div>
+                    {% endif %}
+                    <p class="result-body">{{ latest_result_body }}</p>
                 </article>
-            {% endfor %}
-        </section>
 
-        <section class="panel">
-            <h2>Recommended Next Steps</h2>
-            <ul class="action-list">
-                {% for item in action_items %}
-                    <li class="action-item">{{ item }}</li>
-                {% empty %}
-                    <li class="action-item">No recommended actions are available yet.</li>
+                <section class="panel">
+                    <h2>AI-Recommended Focus Areas</h2>
+                    <ul class="action-list">
+                        {% for item in focus_areas %}
+                            <li class="action-item">{{ item }}</li>
+                        {% empty %}
+                            <li class="action-item">No focus areas available yet.</li>
+                        {% endfor %}
+                    </ul>
+                </section>
+            </div>
+
+            <!-- 3. Our Team + Opponent Team (2 equal cols) -->
+            <div class="grid-half">
+                <section class="panel">
+                    <h2>{{ our_team_name }} &mdash; Strength &amp; Weakness</h2>
+                    <div class="sw-grid">
+                        <div class="sw-item sw-strength">
+                            <span class="sw-label">Strength</span>
+                            <div class="sw-metric">{{ our_strength_metric }}</div>
+                            <div class="sw-value">{{ our_strength_value }} total</div>
+                        </div>
+                        <div class="sw-item sw-weakness">
+                            <span class="sw-label">Development Area</span>
+                            <div class="sw-metric">{{ our_weakness_metric }}</div>
+                            <div class="sw-value">{{ our_weakness_value }} total</div>
+                        </div>
+                    </div>
+                    <div class="record-row">
+                        <span class="record-chip">{{ our_record.wins }}W</span>
+                        <span class="record-chip">{{ our_record.losses }}L</span>
+                        <span class="record-chip">{{ our_record.draws }}D</span>
+                    </div>
+                </section>
+
+                <section class="panel">
+                    {% if opponent_name %}
+                        <h2>{{ opponent_name }} &mdash; Strength &amp; Weakness</h2>
+                        {% if has_opponent_stats %}
+                            <div class="sw-grid">
+                                <div class="sw-item sw-strength">
+                                    <span class="sw-label">Strength</span>
+                                    <div class="sw-metric">{{ opponent_strength_metric }}</div>
+                                    <div class="sw-value">{{ opponent_strength_value }} total</div>
+                                </div>
+                                <div class="sw-item sw-weakness">
+                                    <span class="sw-label">Development Area</span>
+                                    <div class="sw-metric">{{ opponent_weakness_metric }}</div>
+                                    <div class="sw-value">{{ opponent_weakness_value }} total</div>
+                                </div>
+                            </div>
+                            <div class="record-row">
+                                <span class="record-chip">{{ opp_record.wins }}W</span>
+                                <span class="record-chip">{{ opp_record.losses }}L</span>
+                                <span class="record-chip">{{ opp_record.draws }}D</span>
+                            </div>
+                        {% else %}
+                            <p class="hint">No match data is recorded for {{ opponent_name }} yet.</p>
+                        {% endif %}
+                    {% else %}
+                        <h2>Upcoming Opponent</h2>
+                        <p class="hint">No upcoming game is scheduled. Opponent stats will appear here once a game is set.</p>
+                    {% endif %}
+                </section>
+            </div>
+
+        {% else %}
+
+            <section class="grid">
+                <article class="panel">
+                    <h2>AI Summary</h2>
+                    <span class="source-badge">{{ analysis_source }}</span>
+                    <p class="summary">{{ analysis_summary }}</p>
+                </article>
+
+                <aside class="panel">
+                    <h2>Current Snapshot</h2>
+                    <ul class="snapshot-list">
+                        {% for item in snapshot_items %}
+                            <li class="snapshot-item">
+                                <span class="snapshot-label">{{ item.label }}</span>
+                                <span class="snapshot-value">{{ item.value }}</span>
+                            </li>
+                        {% empty %}
+                            <li class="snapshot-item">
+                                <span class="snapshot-label">Status</span>
+                                <span class="snapshot-value">Waiting for role-specific data</span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </aside>
+            </section>
+
+            <section class="cards">
+                {% for card in insight_cards %}
+                    <article class="insight-card">
+                        <h3>{{ card.title }}</h3>
+                        <div class="insight-value">{{ card.value }}</div>
+                        <p>{{ card.body }}</p>
+                    </article>
                 {% endfor %}
-            </ul>
-        </section>
+            </section>
 
-        {% if strategy_items %}
             <section class="panel">
-                <h2>{{ strategy_section_title }}</h2>
-                <ul class="strategy-list">
-                    {% for item in strategy_items %}
-                        <li class="strategy-item">{{ item }}</li>
+                <h2>Recommended Next Steps</h2>
+                <ul class="action-list">
+                    {% for item in action_items %}
+                        <li class="action-item">{{ item }}</li>
+                    {% empty %}
+                        <li class="action-item">No recommended actions are available yet.</li>
                     {% endfor %}
                 </ul>
             </section>
-        {% endif %}
 
-        {% if secondary_items %}
-            <section class="panel">
-                <h2>{{ secondary_section_title }}</h2>
-                <ul class="strategy-list">
-                    {% for item in secondary_items %}
-                        <li class="strategy-item">{{ item }}</li>
-                    {% endfor %}
-                </ul>
-            </section>
+            {% if strategy_items %}
+                <section class="panel">
+                    <h2>{{ strategy_section_title }}</h2>
+                    <ul class="strategy-list">
+                        {% for item in strategy_items %}
+                            <li class="strategy-item">{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                </section>
+            {% endif %}
+
+            {% if secondary_items %}
+                <section class="panel">
+                    <h2>{{ secondary_section_title }}</h2>
+                    <ul class="strategy-list">
+                        {% for item in secondary_items %}
+                            <li class="strategy-item">{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                </section>
+            {% endif %}
+
         {% endif %}
     </main>
 </body>

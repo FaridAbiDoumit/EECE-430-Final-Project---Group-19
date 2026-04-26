@@ -295,6 +295,24 @@
                     </svg>
                 </a>
 
+                <a class="hub-card" href="{% url 'scheduling:ai_analytics_hub' %}">
+                    <h2>AI Analytics</h2>
+                    <p>League standings, hot streaks, and AI-generated insights.</p>
+                    <svg class="hub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 3v18h18"></path>
+                        <path d="M7 16l4-4 4 4 4-4"></path>
+                    </svg>
+                </a>
+
+                <a class="hub-card" href="{% url 'scheduling:opponent_analysis' %}">
+                    <h2>Opponent Analysis</h2>
+                    <p>Compare any two teams head-to-head with an AI tactical brief.</p>
+                    <svg class="hub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="8" cy="12" r="5"></circle>
+                        <circle cx="16" cy="12" r="5"></circle>
+                    </svg>
+                </a>
+
                 <form class="logout-form" method="post" action="{% url 'scheduling:logout' %}">
                     {% csrf_token %}
                     <button class="logout-button" type="submit">

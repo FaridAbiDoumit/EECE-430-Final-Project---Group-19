@@ -58,6 +58,7 @@ urlpatterns = [
     path('candidates/<int:candidate_id>/convert/', views.convert_tryout_candidate, name='convert_tryout_candidate'),
     path('players/status/', views.player_status_list, name='player_status_list'),
     path('players/<int:player_id>/', views.manage_player_detail, name='manage_player_detail'),
+    path('players/<int:player_id>/scouting-report/', views.player_scouting_report, name='player_scouting_report'),
     path('players/<int:player_id>/chat/', views.chat_with_player, name='chat_with_player'),
     path('players/<int:player_id>/support/', views.player_support, name='player_support'),
     path('players/eligible/', views.eligible_players, name='eligible_players'),
@@ -83,4 +84,5 @@ urlpatterns = [
     path('league-handler/admins/<int:assignment_id>/approve/', views.approve_admin, name='approve_admin'),
     path('league-handler/admins/<int:assignment_id>/reject/', views.reject_admin, name='reject_admin'),
     path('notifications/popup-data/', views.notifications_popup_data, name='notifications_popup_data'),
+    path('opponent-analysis/', views.opponent_analysis, name='opponent_analysis'),
 ]

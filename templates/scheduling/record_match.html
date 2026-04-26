@@ -76,15 +76,47 @@
 </head>
 <body>
     <div class="form-shell">
-        <h1>Record Match Result</h1>
+        <h1>Record League Match</h1>
+
+        {% if form.non_field_errors %}
+            <ul class="errorlist">
+                {% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}
+            </ul>
+        {% endif %}
+
         <form method="post">
             {% csrf_token %}
-            {% for field in form %}
-                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                {{ field }}
-                {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-            {% endfor %}
-            <button type="submit">Save Match &amp; Add Player Stats</button>
+
+            <label for="{{ form.team_1.id_for_label }}">{{ form.team_1.label }}</label>
+            {{ form.team_1 }}
+            {% if form.team_1.errors %}<ul class="errorlist">{% for e in form.team_1.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+
+            <label for="{{ form.team_2.id_for_label }}">{{ form.team_2.label }}</label>
+            {{ form.team_2 }}
+            {% if form.team_2.errors %}<ul class="errorlist">{% for e in form.team_2.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+
+            <label for="{{ form.date.id_for_label }}">{{ form.date.label }}</label>
+            {{ form.date }}
+            {% if form.date.errors %}<ul class="errorlist">{% for e in form.date.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+
+            <div style="display:flex;gap:16px;margin-top:14px;">
+                <div style="flex:1;">
+                    <label for="{{ form.team_1_score.id_for_label }}">{{ form.team_1_score.label }}</label>
+                    {{ form.team_1_score }}
+                    {% if form.team_1_score.errors %}<ul class="errorlist">{% for e in form.team_1_score.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                </div>
+                <div style="flex:1;">
+                    <label for="{{ form.team_2_score.id_for_label }}">{{ form.team_2_score.label }}</label>
+                    {{ form.team_2_score }}
+                    {% if form.team_2_score.errors %}<ul class="errorlist">{% for e in form.team_2_score.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                </div>
+            </div>
+
+            <label for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
+            {{ form.notes }}
+            {% if form.notes.errors %}<ul class="errorlist">{% for e in form.notes.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+
+            <button type="submit">Save &amp; Add Player Stats</button>
         </form>
         <a class="back-link" href="{% url 'scheduling:team_stats' %}">← Back to Team Stats</a>
     </div>

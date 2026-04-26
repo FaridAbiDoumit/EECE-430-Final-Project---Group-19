@@ -102,10 +102,32 @@
     <div class="shell">
         <section class="panel">
             <h1>Add Player Stats</h1>
+
+            <!-- Match summary header -->
             <div class="match-info">
-                <strong>{{ match.opponent }}</strong> — {{ match.date|date:"M j, Y" }}<br>
-                Score: {{ match.goals_for }} – {{ match.goals_against }}
+                <strong>{{ match.team.name }}</strong>
+                {{ match.goals_for }} – {{ match.goals_against }}
+                <strong>{{ match.opponent_team.name|default:match.opponent }}</strong>
+                &nbsp;·&nbsp; {{ match.date|date:"M j, Y" }}
             </div>
+
+            <!-- Phase tabs -->
+            <div style="display:flex;gap:10px;margin-bottom:16px;">
+                <a href="?phase=1"
+                   style="padding:8px 16px;border-radius:8px;background:{% if current_phase == '1' %}#111{% else %}#ccc{% endif %};color:{% if current_phase == '1' %}#fff{% else %}#111{% endif %};text-decoration:none;font-weight:600;">
+                    {{ match.team.name }} stats
+                </a>
+                {% if mirror_match %}
+                <a href="?phase=2"
+                   style="padding:8px 16px;border-radius:8px;background:{% if current_phase == '2' %}#111{% else %}#ccc{% endif %};color:{% if current_phase == '2' %}#fff{% else %}#111{% endif %};text-decoration:none;font-weight:600;">
+                    {{ mirror_match.team.name }} stats
+                </a>
+                {% endif %}
+            </div>
+
+            <p style="font-size:0.95rem;color:#444;">
+                Entering stats for <strong>{{ active_match.team.name }}</strong> players.
+            </p>
 
             {% if messages %}
                 <ul style="list-style:none;padding:0;margin:0 0 10px;">
@@ -126,6 +148,9 @@
             </form>
 
             <div class="actions">
+                {% if current_phase == '1' and mirror_match %}
+                    <a href="?phase=2">Next: {{ mirror_match.team.name }} stats →</a>
+                {% endif %}
                 <a href="{% url 'scheduling:team_stats' %}">Finish → Dashboard</a>
                 <a href="{% url 'scheduling:record_match' %}">Record Another Match</a>
             </div>
@@ -133,8 +158,20 @@
 
         {% if existing_stats %}
         <section class="panel">
-            <h2>Stats Recorded for This Match</h2>
+            <h2>{{ active_match.team.name }} — Stats Recorded</h2>
             {% for s in existing_stats %}
+                <div class="stat-row">
+                    <span>{{ s.player.name }}</span>
+                    <span>{{ s.goals }}G · {{ s.interceptions }}Int · {{ s.points }}Pts · {{ s.blocks }}Blk · {{ s.assists }}Ast · {{ s.aces }}Ace · {{ s.returns }}Ret{% if s.most_recent_injury %} · Injury: {{ s.most_recent_injury }}{% endif %}</span>
+                </div>
+            {% endfor %}
+        </section>
+        {% endif %}
+
+        {% if other_stats %}
+        <section class="panel">
+            <h2>{% if current_phase == '1' %}{{ mirror_match.team.name }}{% else %}{{ match.team.name }}{% endif %} — Stats Recorded</h2>
+            {% for s in other_stats %}
                 <div class="stat-row">
                     <span>{{ s.player.name }}</span>
                     <span>{{ s.goals }}G · {{ s.interceptions }}Int · {{ s.points }}Pts · {{ s.blocks }}Blk · {{ s.assists }}Ast · {{ s.aces }}Ace · {{ s.returns }}Ret{% if s.most_recent_injury %} · Injury: {{ s.most_recent_injury }}{% endif %}</span>

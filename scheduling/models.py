@@ -404,6 +404,10 @@ class Announcement(models.Model):
         blank=True,
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    notify_league_handler = models.BooleanField(
+        default=False,
+        help_text='Also send this announcement to league system handler(s).',
+    )
 
     class Meta:
         ordering = ['-created_at', '-id']
@@ -540,6 +544,15 @@ class Match(models.Model):
         Team,
         on_delete=models.SET_NULL,
         related_name='matches',
+        null=True,
+        blank=True,
+    )
+    # When the match is recorded via the league handler between two known teams,
+    # opponent_team links to the actual Team object of the opposing side.
+    opponent_team = models.ForeignKey(
+        Team,
+        on_delete=models.SET_NULL,
+        related_name='opponent_matches',
         null=True,
         blank=True,
     )

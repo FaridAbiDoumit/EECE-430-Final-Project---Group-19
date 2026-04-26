@@ -219,9 +219,14 @@ class ChatGroupCreateForm(forms.Form):
 
 
 class AnnouncementCreateForm(forms.ModelForm):
+    notify_league_handler = forms.BooleanField(
+        required=False,
+        label='Also notify league system handler(s)',
+    )
+
     class Meta:
         model = Announcement
-        fields = ['title', 'content']
+        fields = ['title', 'content', 'notify_league_handler']
         widgets = {
             'title': forms.TextInput(attrs={'placeholder': 'Announcement title', 'class': 'form-input'}),
             'content': forms.Textarea(
@@ -269,6 +274,7 @@ class SupportTicketForm(forms.ModelForm):
 
 
 class MatchForm(forms.ModelForm):
+    """Legacy form kept for non-league-handler use. League handler should use LeagueMatchForm."""
     class Meta:
         model = Match
         fields = ['team', 'opponent', 'date', 'goals_for', 'goals_against', 'notes']
@@ -281,6 +287,32 @@ class MatchForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['team'].queryset = Team.objects.filter(is_active=True).order_by('name')
         self.fields['team'].required = True
+
+
+class LeagueMatchForm(forms.Form):
+    """Used by the league system handler to record a match between two known league teams."""
+    team_1 = forms.ModelChoiceField(
+        queryset=Team.objects.filter(is_active=True).order_by('name'),
+        label='Team 1',
+        empty_label='Select team 1',
+    )
+    team_2 = forms.ModelChoiceField(
+        queryset=Team.objects.filter(is_active=True).order_by('name'),
+        label='Team 2',
+        empty_label='Select team 2',
+    )
+    date = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}))
+    team_1_score = forms.IntegerField(min_value=0, label='Team 1 score')
+    team_2_score = forms.IntegerField(min_value=0, label='Team 2 score')
+    notes = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 3}), label='Notes (optional)')
+
+    def clean(self):
+        cleaned = super().clean()
+        t1 = cleaned.get('team_1')
+        t2 = cleaned.get('team_2')
+        if t1 and t2 and t1 == t2:
+            raise forms.ValidationError('Team 1 and Team 2 must be different teams.')
+        return cleaned
 
 
 class PlayerMatchStatForm(forms.ModelForm):
