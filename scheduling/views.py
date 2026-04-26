@@ -814,6 +814,11 @@ def _can_manage_announcements(user, profile):
 
 def _create_announcement_notifications(announcement, sender_name):
     recipients = Player.objects.filter(is_active=True)
+    if announcement.created_by_player is not None:
+        recipients = recipients.exclude(pk=announcement.created_by_player.pk)
+    if announcement.created_by_user is not None:
+        recipients = recipients.exclude(user=announcement.created_by_user)
+
     notifications = [
         Notification(
             recipient=recipient,

@@ -1239,9 +1239,20 @@ class SchedulingViewsTests(TestCase):
             name='Coach Broadcaster',
             email='coach-broadcast@example.com',
             role=Player.Role.COACH,
+            is_approved=True,
         )
-        first = Player.objects.create(name='First Active', email='first-active@example.com', role=Player.Role.PLAYER)
-        second = Player.objects.create(name='Second Active', email='second-active@example.com', role=Player.Role.COACH)
+        first = Player.objects.create(
+            name='First Active',
+            email='first-active@example.com',
+            role=Player.Role.PLAYER,
+            is_approved=True,
+        )
+        second = Player.objects.create(
+            name='Second Active',
+            email='second-active@example.com',
+            role=Player.Role.COACH,
+            is_approved=True,
+        )
 
         self.client.force_login(coach_user)
         response = self.client.post(
@@ -1256,8 +1267,8 @@ class SchedulingViewsTests(TestCase):
         self.assertEqual(response.status_code, 302)
         announcement = Announcement.objects.get(title='Practice Update')
         self.assertEqual(announcement.created_by_player, coach)
-        self.assertEqual(Notification.objects.filter(title='Announcement: Practice Update').count(), 3)
-        self.assertTrue(Notification.objects.filter(recipient=coach, title='Announcement: Practice Update').exists())
+        self.assertEqual(Notification.objects.filter(title='Announcement: Practice Update').count(), 2)
+        self.assertFalse(Notification.objects.filter(recipient=coach, title='Announcement: Practice Update').exists())
         self.assertTrue(Notification.objects.filter(recipient=first, title='Announcement: Practice Update').exists())
         self.assertTrue(Notification.objects.filter(recipient=second, title='Announcement: Practice Update').exists())
 
