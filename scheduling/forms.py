@@ -359,7 +359,6 @@ class SignUpForm(forms.Form):
         ('player', 'Player'),
         ('coach', 'Coach'),
         ('club_admin', 'Team Admin'),
-        ('league_system_handler', 'League System Handler'),
     ]
 
     name = forms.CharField(max_length=100)

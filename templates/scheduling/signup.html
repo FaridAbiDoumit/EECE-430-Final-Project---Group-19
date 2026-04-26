@@ -422,15 +422,6 @@
             if (!teamBlock || !teamInput) {
                 return;
             }
-
-            const selectedRole = document.querySelector('input[name="role"]:checked')?.value;
-            const isHandler = selectedRole === 'league_system_handler';
-            teamBlock.hidden = isHandler;
-            teamInput.disabled = isHandler;
-
-            if (isHandler) {
-                teamInput.value = '';
-            }
         }
 
         for (const roleInput of roleInputs) {
