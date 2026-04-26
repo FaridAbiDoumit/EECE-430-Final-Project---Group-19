@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -530,6 +531,93 @@ class SchedulingViewsTests(TestCase):
         ]:
             response = self.client.get(reverse(route_name))
             self.assertRedirects(response, reverse('scheduling:admin_home'))
+
+    @patch.dict('os.environ', {}, clear=True)
+    def test_player_ai_hub_shows_stat_based_fallback_insights(self):
+        user = User.objects.create_user(
+            username='aiplayer@example.com',
+            email='aiplayer@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(
+            user=user,
+            name='AI Player',
+            email='aiplayer@example.com',
+            role=Player.Role.PLAYER,
+        )
+        match = Match.objects.create(
+            opponent='Spikers',
+            date=timezone.now().date(),
+            goals_for=3,
+            goals_against=1,
+        )
+        PlayerMatchStat.objects.create(
+            match=match,
+            player=player,
+            points=14,
+            assists=2,
+            blocks=1,
+            returns=3,
+        )
+        PlayerSorenessReport.objects.create(player=player, soreness_level=8, notes='Tight shoulder')
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:ai_analytics_hub'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'AI Summary')
+        self.assertContains(response, 'Built from live stats')
+        self.assertContains(response, 'Best contribution')
+        self.assertContains(response, 'Next focus')
+        self.assertContains(response, 'Recovery status')
+        self.assertContains(response, 'OPENAI_API_KEY')
+
+    @patch.dict('os.environ', {}, clear=True)
+    def test_coach_ai_hub_shows_team_level_fallback_insights(self):
+        team = Team.objects.create(name='AI Team')
+        user = User.objects.create_user(
+            username='aicoach@example.com',
+            email='aicoach@example.com',
+            password='strong-pass-123',
+        )
+        coach = Player.objects.create(
+            user=user,
+            name='AI Coach',
+            email='aicoach@example.com',
+            role=Player.Role.COACH,
+            team=team,
+        )
+        player = Player.objects.create(
+            name='Team Player',
+            email='teamplayer@example.com',
+            role=Player.Role.PLAYER,
+            team=team,
+        )
+        match = Match.objects.create(
+            opponent='Blockers',
+            team=team,
+            date=timezone.now().date(),
+            goals_for=2,
+            goals_against=3,
+        )
+        PlayerMatchStat.objects.create(
+            match=match,
+            player=player,
+            points=9,
+            assists=1,
+            blocks=2,
+        )
+        PlayerSorenessReport.objects.create(player=player, soreness_level=7, notes='Heavy legs')
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:ai_analytics_hub'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Team-level match intelligence')
+        self.assertContains(response, 'Latest result')
+        self.assertContains(response, 'Primary focus')
+        self.assertContains(response, 'Recovery watch')
+        self.assertContains(response, coach.team.name)
 
     def test_manage_coach_detail_shows_only_primary_actions(self):
         admin = User.objects.create_user(

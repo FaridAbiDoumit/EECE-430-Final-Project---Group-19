@@ -39,6 +39,7 @@ from .forms import (
     TeamCreateForm,
     UpcomingGameForm,
 )
+from .ai_analytics import build_ai_analytics_context
 from .models import (
     Notification,
     Player,
@@ -1204,10 +1205,12 @@ def ai_analytics_hub(request):
         messages.info(request, 'AI analytics is not available for admin accounts.')
         return redirect('scheduling:admin_home')
 
+    analytics_context = build_ai_analytics_context(request.user)
     return render(
         request,
         'scheduling/ai_analytics_hub.html',
         {
+            **analytics_context,
             'home_url': reverse(_post_login_route_for(request.user)),
             'role_label': _role_label_for(request.user),
         },
