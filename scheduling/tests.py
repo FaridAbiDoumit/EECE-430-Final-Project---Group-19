@@ -568,11 +568,11 @@ class SchedulingViewsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'AI Summary')
-        self.assertContains(response, 'Built from live stats')
+        self.assertContains(response, 'Based on recorded stats')
         self.assertContains(response, 'Best contribution')
         self.assertContains(response, 'Next focus')
         self.assertContains(response, 'Recovery status')
-        self.assertContains(response, 'OPENAI_API_KEY')
+        self.assertNotContains(response, 'GROQ_API_KEY')
 
     @patch.dict('os.environ', {}, clear=True)
     def test_coach_ai_hub_shows_team_level_fallback_insights(self):

@@ -10,6 +10,7 @@ from .models import GameAttendance, Match, Player, PlayerMatchStat, UpcomingGame
 
 
 logger = logging.getLogger(__name__)
+GROQ_BASE_URL = 'https://api.groq.com/openai/v1'
 
 AI_METRIC_LABELS = {
     'goals': 'Goals',
@@ -55,7 +56,7 @@ def _build_generic_context():
             'Use a coach account to review team-level match and recovery signals.',
         ],
         'snapshot_items': [],
-        'is_ai_enabled': bool(os.getenv('OPENAI_API_KEY')),
+        'is_ai_enabled': bool(os.getenv('GROQ_API_KEY')),
         'strategy_section_title': '',
         'strategy_items': [],
     }
@@ -500,11 +501,11 @@ def _match_payload(match):
 
 
 def _generate_ai_summary(role_label, stat_payload, fallback_summary):
-    api_key = os.getenv('OPENAI_API_KEY')
+    api_key = os.getenv('GROQ_API_KEY')
     if not api_key:
         return {
             'text': fallback_summary,
-            'source': 'Built from live stats',
+            'source': 'Based on recorded stats',
             'is_ai_enabled': False,
         }
 
@@ -513,14 +514,17 @@ def _generate_ai_summary(role_label, stat_payload, fallback_summary):
     except ImportError:
         return {
             'text': fallback_summary,
-            'source': 'Built from live stats (OpenAI SDK not installed)',
+            'source': 'Based on recorded stats',
             'is_ai_enabled': False,
         }
 
     try:
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(
+            api_key=api_key,
+            base_url=GROQ_BASE_URL,
+        )
         response = client.responses.create(
-            model=os.getenv('OPENAI_MODEL', 'gpt-5-mini'),
+            model=os.getenv('GROQ_MODEL', 'openai/gpt-oss-20b'),
             input=(
                 f'You are generating a short volleyball analytics note for a {role_label}. '
                 'Use only the supplied stats. Keep the tone practical and specific. '
@@ -533,14 +537,14 @@ def _generate_ai_summary(role_label, stat_payload, fallback_summary):
         if summary_text:
             return {
                 'text': summary_text,
-                'source': 'Generated with OpenAI',
+                'source': 'AI-generated',
                 'is_ai_enabled': True,
             }
     except Exception:
-        logger.exception('AI analytics summary generation failed')
+        logger.exception('Groq AI analytics summary generation failed')
 
     return {
         'text': fallback_summary,
-        'source': 'Built from live stats',
+        'source': 'Based on recorded stats',
         'is_ai_enabled': False,
     }

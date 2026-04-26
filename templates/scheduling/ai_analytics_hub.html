@@ -201,11 +201,6 @@
                 <h2>AI Summary</h2>
                 <span class="source-badge">{{ analysis_source }}</span>
                 <p class="summary">{{ analysis_summary }}</p>
-                {% if not is_ai_enabled %}
-                    <div class="hint">
-                        Add <strong>OPENAI_API_KEY</strong> on the server to upgrade this summary from local heuristics to model-generated feedback.
-                    </div>
-                {% endif %}
             </article>
 
             <aside class="panel">
