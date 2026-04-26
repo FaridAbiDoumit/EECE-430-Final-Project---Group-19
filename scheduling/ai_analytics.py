@@ -363,12 +363,9 @@ def _build_player_context(player):
             {'label': 'Latest soreness', 'value': _format_soreness_value(latest_soreness)},
         ],
         'is_ai_enabled': summary['is_ai_enabled'],
-        'strategy_section_title': 'Readiness Focus',
-        'strategy_items': _player_readiness_items(
-            focus_metric=focus_metric,
-            latest_soreness=latest_soreness,
-            latest_injury=latest_injury,
-        ),
+        'is_player_view': True,
+        'strategy_section_title': 'Recovery Signal',
+        'strategy_items': _player_recovery_items(latest_soreness, latest_injury),
         'secondary_section_title': 'Next Match Prep',
         'secondary_items': _player_next_match_prep(player, focus_metric, latest_soreness),
     }
@@ -603,6 +600,27 @@ def _player_readiness_items(focus_metric, latest_soreness, latest_injury):
     return items
 
 
+def _player_recovery_items(latest_soreness, latest_injury):
+    if latest_soreness is None:
+        soreness_line = 'No soreness report has been logged yet — submit one after your next session.'
+    else:
+        level = latest_soreness.soreness_level
+        if level >= HIGH_SORENESS_LEVEL:
+            label, advice = 'Elevated', 'Prioritize rest and reduce training load before the next session.'
+        elif level >= 4:
+            label, advice = 'Moderate', 'Maintain current workload but monitor how your body responds.'
+        else:
+            label, advice = 'Low', 'Recovery looks good — you can maintain or increase training intensity.'
+        soreness_line = f'Soreness level: {level}/10 — {label}. {advice}'
+
+    injury_line = (
+        f'Active injury note: "{latest_injury}" — factor this into your workload decisions.'
+        if latest_injury
+        else 'No active injury note is on file.'
+    )
+    return [soreness_line, injury_line]
+
+
 def _player_next_match_prep(player, focus_metric, latest_soreness):
     next_game = _next_game_for_team(player.team)
     if next_game is None or player.team is None:
@@ -620,6 +638,51 @@ def _player_next_match_prep(player, focus_metric, latest_soreness):
     ]
     if latest_soreness is not None and latest_soreness.soreness_level >= HIGH_SORENESS_LEVEL:
         items.append('Your recovery signal is elevated, so treat workload and warm-up quality as part of match prep.')
+
+    # --- Opponent defender analysis ---
+    opp_stats = list(
+        PlayerMatchStat.objects
+        .filter(player__team=opponent, match__team=opponent)
+        .values('player__name')
+        .annotate(
+            total_blocks=Coalesce(Sum('blocks'), Value(0)),
+            total_interceptions=Coalesce(Sum('interceptions'), Value(0)),
+            total_returns=Coalesce(Sum('returns'), Value(0)),
+        )
+    )
+    defenders = sorted(
+        opp_stats,
+        key=lambda r: -(r['total_blocks'] + r['total_interceptions'] + r['total_returns']),
+    )[:3]
+
+    if not defenders or all(
+        r['total_blocks'] + r['total_interceptions'] + r['total_returns'] == 0
+        for r in defenders
+    ):
+        items.append(
+            f'No defensive stats are recorded for {opponent.name} yet — '
+            f'scout through match history for preparation cues.'
+        )
+    else:
+        defender_parts = [
+            f'{d["player__name"]} (Blocks: {d["total_blocks"]}, '
+            f'Interceptions: {d["total_interceptions"]}, Returns: {d["total_returns"]})'
+            for d in defenders
+            if d['total_blocks'] + d['total_interceptions'] + d['total_returns'] > 0
+        ]
+        if defender_parts:
+            items.append(f'Top defenders on {opponent.name}: {"; ".join(defender_parts)}.')
+        opp_totals = _metric_totals(
+            PlayerMatchStat.objects.filter(player__team=opponent, match__team=opponent)
+        )
+        defensive_metrics = {k: opp_totals[k] for k in ('blocks', 'interceptions', 'returns')}
+        if any(v > 0 for v in defensive_metrics.values()):
+            top_def_metric = max(defensive_metrics, key=defensive_metrics.get)
+            items.append(
+                f'Their strongest defensive area is {AI_METRIC_LABELS[top_def_metric].lower()} '
+                f'({defensive_metrics[top_def_metric]} total) — plan your attack accordingly.'
+            )
+
     return items
 
 

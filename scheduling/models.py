@@ -8,6 +8,9 @@ class Team(models.Model):
     name = models.CharField(max_length=120, unique=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    court_name = models.CharField(max_length=200, blank=True, default='')
+    court_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    court_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
 
     class Meta:
         ordering = ['name', 'id']

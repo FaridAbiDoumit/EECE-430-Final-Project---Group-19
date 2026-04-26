@@ -92,4 +92,7 @@ urlpatterns = [
     path('staff/subscription/overview/', views.subscription_overview, name='subscription_overview'),
     path('staff/subscription/cash-pending/', views.pending_cash_payments, name='pending_cash_payments'),
     path('staff/subscription/cash/<int:payment_id>/confirm/', views.confirm_cash_payment, name='confirm_cash_payment'),
+    # Court location
+    path('staff/court-location/', views.set_court_location, name='set_court_location'),
+    path('player/court-map/', views.court_map, name='court_map'),
 ]

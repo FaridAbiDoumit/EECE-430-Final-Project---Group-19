@@ -1,0 +1,317 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Court Map</title>
+  <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@300;400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --forest: #46674f;
+      --paper: #dedede;
+      --header-left: #eceeed;
+      --header-right: #b7c9b4;
+      --ink: #111111;
+      --accent: #0df2dc;
+      --shadow: 0 10px 24px rgba(0,0,0,0.12);
+    }
+    body {
+      font-family: 'Josefin Sans', sans-serif;
+      background: var(--forest);
+      min-height: 100vh;
+      color: var(--ink);
+      padding: 2rem 1rem;
+    }
+
+    .page-header {
+      background: linear-gradient(135deg, var(--header-left) 0%, var(--header-right) 100%);
+      border-radius: 16px;
+      padding: 1.5rem 2rem;
+      margin-bottom: 2rem;
+      max-width: 820px;
+      margin-left: auto;
+      margin-right: auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: var(--shadow);
+    }
+    .page-header h1 { font-size: 1.6rem; font-weight: 700; color: var(--forest); }
+    .back-link {
+      font-size: 0.85rem;
+      color: var(--forest);
+      text-decoration: none;
+      font-weight: 600;
+      border: 2px solid var(--forest);
+      padding: 0.35rem 0.9rem;
+      border-radius: 8px;
+      transition: background 0.2s, color 0.2s;
+    }
+    .back-link:hover { background: var(--forest); color: var(--paper); }
+
+    .card {
+      background: var(--paper);
+      border-radius: 16px;
+      padding: 2rem;
+      max-width: 820px;
+      margin: 0 auto 2rem;
+      box-shadow: var(--shadow);
+    }
+
+    .court-info {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    .court-name {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--forest);
+    }
+    .court-name span {
+      font-size: 0.85rem;
+      font-weight: 400;
+      color: #555;
+      display: block;
+      margin-top: 0.2rem;
+    }
+
+    .btn-directions {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--forest);
+      color: var(--paper);
+      padding: 0.65rem 1.4rem;
+      border-radius: 10px;
+      font-family: 'Josefin Sans', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+      text-decoration: none;
+      letter-spacing: 0.04em;
+      transition: opacity 0.2s;
+    }
+    .btn-directions:hover { opacity: 0.85; }
+    .btn-directions:not([href]) { opacity: 0.45; pointer-events: none; cursor: default; }
+
+    #map {
+      height: 440px;
+      border-radius: 12px;
+      border: 2px solid #ccc;
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.82rem;
+      color: #555;
+      margin-top: 0.75rem;
+    }
+    .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #ccc;
+      flex-shrink: 0;
+    }
+    .dot.green  { background: #27ae60; }
+    .dot.orange { background: #e67e22; }
+    .dot.red    { background: #e74c3c; }
+
+    .no-court {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #555;
+    }
+    .no-court h2 { font-size: 1.2rem; color: var(--forest); margin-bottom: 0.5rem; }
+
+    .legend {
+      display: flex;
+      gap: 1.5rem;
+      margin-top: 0.9rem;
+      flex-wrap: wrap;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.82rem;
+      color: #444;
+    }
+    .legend-dot {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+{% include "scheduling/_notification_popups.html" %}
+
+<header class="page-header">
+  <h1>
+    {% if next_event_type == 'session' %}
+      Court for Next Session
+    {% elif next_event_type == 'game' %}
+      Court for Next Game
+    {% else %}
+      Court Map
+    {% endif %}
+  </h1>
+  <a class="back-link" href="{% url 'scheduling:player_home' %}">← Back</a>
+</header>
+
+{% if court_configured %}
+<div class="card">
+  <div class="court-info">
+    <div class="court-name">
+      {% if next_event_type == 'session' %}
+        {{ next_event.title }}
+        <span>{{ next_event.starts_at|date:"D, d M Y · H:i" }}</span>
+      {% elif next_event_type == 'game' %}
+        {{ next_event.home_team }} vs {{ next_event.away_team }}
+        <span>{{ next_event.scheduled_at|date:"D, d M Y · H:i" }}</span>
+      {% else %}
+        {{ court_name|default:"Team Court" }}
+        <span>{{ team.name }}</span>
+      {% endif %}
+    </div>
+    <a class="btn-directions" id="directions-btn" href="#" target="_blank" rel="noopener">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+      </svg>
+      Get Directions
+    </a>
+  </div>
+
+  <div id="map"></div>
+
+  <div class="status-bar">
+    <div class="dot" id="geo-dot"></div>
+    <span id="geo-status">Locating you…</span>
+  </div>
+
+  <div class="legend" id="legend" style="display:none;">
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#2980b9;"></div> Court
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#c0392b;"></div> Your location
+    </div>
+  </div>
+</div>
+
+<script>
+  var COURT_LAT = {{ court_lat }};
+  var COURT_LNG = {{ court_lng }};
+  var COURT_NAME = "{{ court_name|escapejs }}";
+
+  // Court pin icon (blue)
+  var courtIcon = L.divIcon({
+    className: '',
+    html: '<div style="background:#2980b9;width:18px;height:18px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>',
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+    popupAnchor: [0, -12]
+  });
+
+  // Player pin icon (red)
+  var playerIcon = L.divIcon({
+    className: '',
+    html: '<div style="background:#c0392b;width:18px;height:18px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>',
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+    popupAnchor: [0, -12]
+  });
+
+  var map = L.map('map').setView([COURT_LAT, COURT_LNG], 14);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19
+  }).addTo(map);
+
+  // Court marker
+  L.marker([COURT_LAT, COURT_LNG], {icon: courtIcon})
+    .addTo(map)
+    .bindPopup('<strong>' + COURT_NAME + '</strong>')
+    .openPopup();
+
+  var geoStatus   = document.getElementById('geo-status');
+  var geoDot      = document.getElementById('geo-dot');
+  var dirBtn      = document.getElementById('directions-btn');
+  var legend      = document.getElementById('legend');
+  var playerMarker = null;
+  var routeLine    = null;
+
+  // Default directions link (court only) — player can still tap without geolocation
+  dirBtn.href = 'https://www.google.com/maps/dir/?api=1&destination=' + COURT_LAT + ',' + COURT_LNG;
+
+  if ('geolocation' in navigator) {
+    navigator.geolocation.getCurrentPosition(
+      function(pos) {
+        var pLat = pos.coords.latitude;
+        var pLng = pos.coords.longitude;
+
+        playerMarker = L.marker([pLat, pLng], {icon: playerIcon})
+          .addTo(map)
+          .bindPopup('Your Location');
+
+        // Fit both markers
+        var bounds = L.latLngBounds([[COURT_LAT, COURT_LNG], [pLat, pLng]]);
+        map.fitBounds(bounds, {padding: [50, 50]});
+
+        // Draw a dashed line between the two points
+        routeLine = L.polyline([[pLat, pLng], [COURT_LAT, COURT_LNG]], {
+          color: '#46674f',
+          weight: 3,
+          dashArray: '8, 8',
+          opacity: 0.8
+        }).addTo(map);
+
+        // Update directions link to include origin
+        dirBtn.href = 'https://www.google.com/maps/dir/' + pLat + ',' + pLng + '/' + COURT_LAT + ',' + COURT_LNG;
+
+        geoStatus.textContent = 'Your location found';
+        geoDot.classList.add('green');
+        legend.style.display = 'flex';
+      },
+      function(err) {
+        var msg = 'Location access denied — showing court only';
+        if (err.code === err.TIMEOUT) msg = 'Location request timed out — showing court only';
+        geoStatus.textContent = msg;
+        geoDot.classList.add('orange');
+        legend.style.display = 'flex';
+        // Only show court legend entry
+        legend.innerHTML = '<div class="legend-item"><div class="legend-dot" style="background:#2980b9;"></div> Court</div>';
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  } else {
+    geoStatus.textContent = 'Geolocation not supported by your browser';
+    geoDot.classList.add('red');
+    legend.style.display = 'flex';
+    legend.innerHTML = '<div class="legend-item"><div class="legend-dot" style="background:#2980b9;"></div> Court</div>';
+  }
+</script>
+
+{% else %}
+<div class="card">
+  <div class="no-court">
+    <h2>No Court Set</h2>
+    <p>Your coach or admin hasn't set a court location yet.<br>Check back later.</p>
+  </div>
+</div>
+{% endif %}
+
+</body>
+</html>

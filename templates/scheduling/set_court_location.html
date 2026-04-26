@@ -1,0 +1,273 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Set Court Location – Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@300;400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --forest: #46674f;
+      --paper: #dedede;
+      --header-left: #eceeed;
+      --header-right: #b7c9b4;
+      --ink: #111111;
+      --accent: #0df2dc;
+      --shadow: 0 10px 24px rgba(0,0,0,0.12);
+    }
+    body {
+      font-family: 'Josefin Sans', sans-serif;
+      background: var(--forest);
+      min-height: 100vh;
+      color: var(--ink);
+      padding: 2rem 1rem;
+    }
+    .page-header {
+      background: linear-gradient(135deg, var(--header-left) 0%, var(--header-right) 100%);
+      border-radius: 16px;
+      padding: 1.5rem 2rem;
+      margin-bottom: 2rem;
+      max-width: 760px;
+      margin-left: auto;
+      margin-right: auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: var(--shadow);
+    }
+    .page-header h1 { font-size: 1.6rem; font-weight: 700; color: var(--forest); }
+    .back-link {
+      font-size: 0.85rem;
+      color: var(--forest);
+      text-decoration: none;
+      font-weight: 600;
+      border: 2px solid var(--forest);
+      padding: 0.35rem 0.9rem;
+      border-radius: 8px;
+      transition: background 0.2s, color 0.2s;
+    }
+    .back-link:hover { background: var(--forest); color: var(--paper); }
+
+    .card {
+      background: var(--paper);
+      border-radius: 16px;
+      padding: 2rem;
+      max-width: 760px;
+      margin: 0 auto 2rem;
+      box-shadow: var(--shadow);
+    }
+    .card h2 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--forest);
+      margin-bottom: 1.25rem;
+      border-bottom: 2px solid var(--forest);
+      padding-bottom: 0.5rem;
+    }
+
+    .form-group { margin-bottom: 1.2rem; }
+    label { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.35rem; color: var(--ink); }
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      padding: 0.6rem 0.9rem;
+      border: 2px solid #bbb;
+      border-radius: 8px;
+      font-family: 'Josefin Sans', sans-serif;
+      font-size: 0.95rem;
+      background: #fff;
+      transition: border-color 0.2s;
+    }
+    input:focus { outline: none; border-color: var(--forest); }
+    .hint { font-size: 0.78rem; color: #666; margin-top: 0.3rem; }
+
+    .coord-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+    .btn-save {
+      background: var(--forest);
+      color: var(--paper);
+      border: none;
+      padding: 0.75rem 2rem;
+      border-radius: 10px;
+      font-family: 'Josefin Sans', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      transition: opacity 0.2s;
+    }
+    .btn-save:hover { opacity: 0.85; }
+
+    .messages-list { list-style: none; max-width: 760px; margin: 0 auto 1.25rem; }
+    .messages-list li {
+      padding: 0.7rem 1rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    .messages-list li.error { background: #fde8e8; color: #c0392b; }
+    .messages-list li.success { background: #e8fdf1; color: #1e7e48; }
+
+    #map-preview {
+      height: 320px;
+      border-radius: 12px;
+      margin-top: 1rem;
+      border: 2px solid #ccc;
+    }
+    .map-tip {
+      font-size: 0.8rem;
+      color: #555;
+      margin-top: 0.4rem;
+    }
+    .current-info {
+      background: #f0f5f1;
+      border-left: 4px solid var(--forest);
+      border-radius: 0 8px 8px 0;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.88rem;
+      color: #444;
+    }
+    .current-info strong { color: var(--forest); }
+  </style>
+</head>
+<body>
+
+{% include "scheduling/_notification_popups.html" %}
+
+<header class="page-header">
+  <h1>
+    {% if next_event_type == 'session' %}
+      Set Court – Next Session
+    {% elif next_event_type == 'game' %}
+      Set Court – Next Game
+    {% else %}
+      Set Court Location
+    {% endif %}
+  </h1>
+  <a class="back-link" href="{% url 'scheduling:admin_home' %}">← Dashboard</a>
+</header>
+
+{% if messages %}
+<ul class="messages-list">
+  {% for m in messages %}
+  <li class="{{ m.tags }}">{{ m }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<div class="card">
+  <h2>
+    {% if next_event_type == 'session' %}
+      {{ next_event.title }} &ndash; {{ next_event.starts_at|date:"D, d M Y &middot; H:i" }}
+    {% elif next_event_type == 'game' %}
+      {{ next_event.home_team }} vs {{ next_event.away_team }} &ndash; {{ next_event.scheduled_at|date:"D, d M Y &middot; H:i" }}
+    {% else %}
+      Team: {{ admin_team.name }}
+    {% endif %}
+  </h2>
+
+  {% if admin_team.court_lat and admin_team.court_lng %}
+  <div class="current-info">
+    <strong>Current court:</strong>
+    {{ admin_team.court_name|default:"(no name)" }} —
+    {{ admin_team.court_lat }}, {{ admin_team.court_lng }}
+  </div>
+  {% endif %}
+
+  <form method="post" id="court-form">
+    {% csrf_token %}
+
+    <div class="form-group">
+      <label for="id_court_name">Court / Venue Name</label>
+      <input type="text" id="id_court_name" name="court_name"
+             value="{{ admin_team.court_name }}"
+             placeholder="e.g. AUB Sports Complex" maxlength="200" />
+    </div>
+
+    <div class="coord-row">
+      <div class="form-group">
+        <label for="id_court_lat">Latitude</label>
+        <input type="number" id="id_court_lat" name="court_lat"
+               value="{{ admin_team.court_lat|default:'' }}"
+               step="0.000001" min="-90" max="90"
+               placeholder="e.g. 33.900000" />
+        <p class="hint">Between -90 and 90</p>
+      </div>
+      <div class="form-group">
+        <label for="id_court_lng">Longitude</label>
+        <input type="number" id="id_court_lng" name="court_lng"
+               value="{{ admin_team.court_lng|default:'' }}"
+               step="0.000001" min="-180" max="180"
+               placeholder="e.g. 35.476000" />
+        <p class="hint">Between -180 and 180</p>
+      </div>
+    </div>
+
+    <p class="map-tip">Click the map below to pick exact coordinates, or type them manually above.</p>
+    <div id="map-preview"></div>
+
+    <div style="margin-top:1.5rem;">
+      <button type="submit" class="btn-save">Save Court Location</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  // Initial values from Django
+  var initLat = parseFloat("{{ admin_team.court_lat|default:'33.8938' }}") || 33.8938;
+  var initLng = parseFloat("{{ admin_team.court_lng|default:'35.5018' }}") || 35.5018;
+  var hasCoords = {{ admin_team.court_lat|yesno:"true,false" }};
+
+  var map = L.map('map-preview').setView([initLat, initLng], hasCoords ? 15 : 8);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19
+  }).addTo(map);
+
+  var marker = null;
+
+  function updateMarker(lat, lng, name) {
+    if (marker) { map.removeLayer(marker); }
+    marker = L.marker([lat, lng]).addTo(map)
+      .bindPopup(name || 'Court Location')
+      .openPopup();
+    map.setView([lat, lng], 15);
+  }
+
+  if (hasCoords) {
+    updateMarker(initLat, initLng, "{{ admin_team.court_name|escapejs }}");
+  }
+
+  // Click map to set coordinates
+  map.on('click', function(e) {
+    var lat = e.latlng.lat.toFixed(6);
+    var lng = e.latlng.lng.toFixed(6);
+    document.getElementById('id_court_lat').value = lat;
+    document.getElementById('id_court_lng').value = lng;
+    updateMarker(parseFloat(lat), parseFloat(lng), document.getElementById('id_court_name').value);
+  });
+
+  // Live update marker as user types coordinates
+  function refreshFromInputs() {
+    var lat = parseFloat(document.getElementById('id_court_lat').value);
+    var lng = parseFloat(document.getElementById('id_court_lng').value);
+    var name = document.getElementById('id_court_name').value;
+    if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      updateMarker(lat, lng, name);
+    }
+  }
+
+  document.getElementById('id_court_lat').addEventListener('input', refreshFromInputs);
+  document.getElementById('id_court_lng').addEventListener('input', refreshFromInputs);
+  document.getElementById('id_court_name').addEventListener('input', function() {
+    if (marker) marker.setPopupContent(this.value || 'Court Location');
+  });
+</script>
+</body>
+</html>

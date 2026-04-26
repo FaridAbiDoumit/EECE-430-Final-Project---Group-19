@@ -437,72 +437,117 @@
 
         {% else %}
 
-            <section class="grid">
-                <article class="panel">
+            {% if is_player_view %}
+
+                <section class="panel">
                     <h2>AI Summary</h2>
                     <span class="source-badge">{{ analysis_source }}</span>
                     <p class="summary">{{ analysis_summary }}</p>
-                </article>
+                </section>
 
-                <aside class="panel">
-                    <h2>Current Snapshot</h2>
-                    <ul class="snapshot-list">
-                        {% for item in snapshot_items %}
-                            <li class="snapshot-item">
-                                <span class="snapshot-label">{{ item.label }}</span>
-                                <span class="snapshot-value">{{ item.value }}</span>
-                            </li>
+                {% if strategy_items %}
+                    <section class="panel">
+                        <h2>{{ strategy_section_title }}</h2>
+                        <ul class="strategy-list">
+                            {% for item in strategy_items %}
+                                <li class="strategy-item">{{ item }}</li>
+                            {% endfor %}
+                        </ul>
+                    </section>
+                {% endif %}
+
+                <section class="panel">
+                    <h2>AI-Recommended Next Steps</h2>
+                    <ul class="action-list">
+                        {% for item in action_items %}
+                            <li class="action-item">{{ item }}</li>
                         {% empty %}
-                            <li class="snapshot-item">
-                                <span class="snapshot-label">Status</span>
-                                <span class="snapshot-value">Waiting for role-specific data</span>
-                            </li>
+                            <li class="action-item">No recommended actions are available yet.</li>
                         {% endfor %}
                     </ul>
-                </aside>
-            </section>
+                </section>
 
-            <section class="cards">
-                {% for card in insight_cards %}
-                    <article class="insight-card">
-                        <h3>{{ card.title }}</h3>
-                        <div class="insight-value">{{ card.value }}</div>
-                        <p>{{ card.body }}</p>
+                {% if secondary_items %}
+                    <section class="panel">
+                        <h2>{{ secondary_section_title }}</h2>
+                        <ul class="strategy-list">
+                            {% for item in secondary_items %}
+                                <li class="strategy-item">{{ item }}</li>
+                            {% endfor %}
+                        </ul>
+                    </section>
+                {% endif %}
+
+            {% else %}
+
+                <section class="grid">
+                    <article class="panel">
+                        <h2>AI Summary</h2>
+                        <span class="source-badge">{{ analysis_source }}</span>
+                        <p class="summary">{{ analysis_summary }}</p>
                     </article>
-                {% endfor %}
-            </section>
 
-            <section class="panel">
-                <h2>Recommended Next Steps</h2>
-                <ul class="action-list">
-                    {% for item in action_items %}
-                        <li class="action-item">{{ item }}</li>
-                    {% empty %}
-                        <li class="action-item">No recommended actions are available yet.</li>
+                    <aside class="panel">
+                        <h2>Current Snapshot</h2>
+                        <ul class="snapshot-list">
+                            {% for item in snapshot_items %}
+                                <li class="snapshot-item">
+                                    <span class="snapshot-label">{{ item.label }}</span>
+                                    <span class="snapshot-value">{{ item.value }}</span>
+                                </li>
+                            {% empty %}
+                                <li class="snapshot-item">
+                                    <span class="snapshot-label">Status</span>
+                                    <span class="snapshot-value">Waiting for role-specific data</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </aside>
+                </section>
+
+                <section class="cards">
+                    {% for card in insight_cards %}
+                        <article class="insight-card">
+                            <h3>{{ card.title }}</h3>
+                            <div class="insight-value">{{ card.value }}</div>
+                            <p>{{ card.body }}</p>
+                        </article>
                     {% endfor %}
-                </ul>
-            </section>
+                </section>
 
-            {% if strategy_items %}
                 <section class="panel">
-                    <h2>{{ strategy_section_title }}</h2>
-                    <ul class="strategy-list">
-                        {% for item in strategy_items %}
-                            <li class="strategy-item">{{ item }}</li>
+                    <h2>Recommended Next Steps</h2>
+                    <ul class="action-list">
+                        {% for item in action_items %}
+                            <li class="action-item">{{ item }}</li>
+                        {% empty %}
+                            <li class="action-item">No recommended actions are available yet.</li>
                         {% endfor %}
                     </ul>
                 </section>
-            {% endif %}
 
-            {% if secondary_items %}
-                <section class="panel">
-                    <h2>{{ secondary_section_title }}</h2>
-                    <ul class="strategy-list">
-                        {% for item in secondary_items %}
-                            <li class="strategy-item">{{ item }}</li>
-                        {% endfor %}
-                    </ul>
-                </section>
+                {% if strategy_items %}
+                    <section class="panel">
+                        <h2>{{ strategy_section_title }}</h2>
+                        <ul class="strategy-list">
+                            {% for item in strategy_items %}
+                                <li class="strategy-item">{{ item }}</li>
+                            {% endfor %}
+                        </ul>
+                    </section>
+                {% endif %}
+
+                {% if secondary_items %}
+                    <section class="panel">
+                        <h2>{{ secondary_section_title }}</h2>
+                        <ul class="strategy-list">
+                            {% for item in secondary_items %}
+                                <li class="strategy-item">{{ item }}</li>
+                            {% endfor %}
+                        </ul>
+                    </section>
+                {% endif %}
+
             {% endif %}
 
         {% endif %}

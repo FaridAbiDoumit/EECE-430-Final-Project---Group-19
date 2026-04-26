@@ -335,6 +335,12 @@ def player_home(request):
         'availability_count': player.availability_slots.count(),
         'subscription_fee': subscription_fee,
         'current_payment': current_payment,
+        'court_configured': bool(player.team and player.team.court_lat is not None),
+        'next_session': next_session,
+        'next_game': UpcomingGame.objects.filter(
+            Q(home_team=player.team) | Q(away_team=player.team),
+            scheduled_at__gte=now,
+        ).order_by('scheduled_at').first() if player.team else None,
     }
     return render(request, 'scheduling/player_home.html', context)
 
@@ -3843,3 +3849,139 @@ def confirm_cash_payment(request, payment_id):
     )
     messages.success(request, f'Cash payment confirmed for {payment.player.name}.')
     return redirect('scheduling:pending_cash_payments')
+
+
+# ---------------------------------------------------------------------------
+# Court location
+# ---------------------------------------------------------------------------
+
+@login_required(login_url='scheduling:login')
+def set_court_location(request):
+    """Admin: set or update the court name and coordinates for their team."""
+    if not request.user.is_staff:
+        return redirect('scheduling:dashboard')
+
+    admin_team = _get_admin_team(request.user)
+    if admin_team is None:
+        messages.error(request, 'No team assigned to your account.')
+        return redirect('scheduling:admin_home')
+
+    if request.method == 'POST':
+        court_name = request.POST.get('court_name', '').strip()
+        lat_raw = request.POST.get('court_lat', '').strip()
+        lng_raw = request.POST.get('court_lng', '').strip()
+
+        errors = []
+        try:
+            lat = float(lat_raw)
+            if not (-90 <= lat <= 90):
+                errors.append('Latitude must be between -90 and 90.')
+        except ValueError:
+            errors.append('Enter a valid latitude (decimal number).')
+            lat = None
+
+        try:
+            lng = float(lng_raw)
+            if not (-180 <= lng <= 180):
+                errors.append('Longitude must be between -180 and 180.')
+        except ValueError:
+            errors.append('Enter a valid longitude (decimal number).')
+            lng = None
+
+        if errors:
+            for e in errors:
+                messages.error(request, e)
+        else:
+            admin_team.court_name = court_name
+            admin_team.court_lat = lat
+            admin_team.court_lng = lng
+            admin_team.save(update_fields=['court_name', 'court_lat', 'court_lng'])
+            messages.success(request, 'Court location saved.')
+            return redirect('scheduling:admin_home')
+
+    # Provide next-event context so the template can label the court accordingly
+    now_dt = timezone.now()
+    admin_next_session = (
+        TrainingSession.objects.filter(starts_at__gte=now_dt, cancelled=False)
+        .order_by('starts_at')
+        .first()
+    )
+    admin_next_game = (
+        UpcomingGame.objects.filter(
+            Q(home_team=admin_team) | Q(away_team=admin_team),
+            scheduled_at__gte=now_dt,
+        )
+        .order_by('scheduled_at')
+        .first()
+    )
+    if admin_next_session and admin_next_game:
+        if admin_next_session.starts_at <= admin_next_game.scheduled_at:
+            admin_next_event_type, admin_next_event = 'session', admin_next_session
+        else:
+            admin_next_event_type, admin_next_event = 'game', admin_next_game
+    elif admin_next_session:
+        admin_next_event_type, admin_next_event = 'session', admin_next_session
+    elif admin_next_game:
+        admin_next_event_type, admin_next_event = 'game', admin_next_game
+    else:
+        admin_next_event_type, admin_next_event = None, None
+
+    return render(request, 'scheduling/set_court_location.html', {
+        'admin_team': admin_team,
+        'next_event_type': admin_next_event_type,
+        'next_event': admin_next_event,
+    })
+
+
+@login_required(login_url='scheduling:login')
+def court_map(request):
+    """Player: interactive map showing the court and directions from current location."""
+    player = getattr(request.user, 'player_profile', None)
+    if player is None or player.role != Player.Role.PLAYER:
+        return redirect('scheduling:dashboard')
+
+    team = player.team
+    court_configured = (
+        team is not None
+        and team.court_lat is not None
+        and team.court_lng is not None
+    )
+
+    now_dt = timezone.now()
+    next_session = (
+        TrainingSession.objects.filter(starts_at__gte=now_dt, cancelled=False)
+        .order_by('starts_at')
+        .first()
+    )
+    next_game = (
+        UpcomingGame.objects.filter(
+            Q(home_team=team) | Q(away_team=team),
+            scheduled_at__gte=now_dt,
+        )
+        .order_by('scheduled_at')
+        .first()
+    ) if team else None
+
+    if next_session and next_game:
+        if next_session.starts_at <= next_game.scheduled_at:
+            next_event_type, next_event = 'session', next_session
+        else:
+            next_event_type, next_event = 'game', next_game
+    elif next_session:
+        next_event_type, next_event = 'session', next_session
+    elif next_game:
+        next_event_type, next_event = 'game', next_game
+    else:
+        next_event_type, next_event = None, None
+
+    return render(request, 'scheduling/court_map.html', {
+        'player': player,
+        'team': team,
+        'court_configured': court_configured,
+        'court_lat': float(team.court_lat) if court_configured else None,
+        'court_lng': float(team.court_lng) if court_configured else None,
+        'court_name': team.court_name if court_configured else '',
+        'next_event_type': next_event_type,
+        'next_event': next_event,
+    })
+

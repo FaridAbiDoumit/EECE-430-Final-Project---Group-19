@@ -317,6 +317,31 @@
                     </svg>
                 </a>
 
+                <a class="hub-card" href="{% url 'scheduling:court_map' %}">
+                    <h2>Court Map</h2>
+                    <p>
+                        {% if not court_configured %}
+                            Court location not set yet
+                        {% elif next_session and next_game %}
+                            {% if next_session.starts_at <= next_game.scheduled_at %}
+                                Next session: {{ next_session.title }}
+                            {% else %}
+                                Next game: {{ next_game.home_team }} vs {{ next_game.away_team }}
+                            {% endif %}
+                        {% elif next_session %}
+                            Next session: {{ next_session.title }}
+                        {% elif next_game %}
+                            Next game: {{ next_game.home_team }} vs {{ next_game.away_team }}
+                        {% else %}
+                            Get directions to your court
+                        {% endif %}
+                    </p>
+                    <svg class="hub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="10" r="3"></circle>
+                        <path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 14-8 14S4 15.25 4 10a8 8 0 0 1 8-8z"></path>
+                    </svg>
+                </a>
+
                 <form class="logout-form" method="post" action="{% url 'scheduling:logout' %}">
                     {% csrf_token %}
                     <button class="logout-button" type="submit">
