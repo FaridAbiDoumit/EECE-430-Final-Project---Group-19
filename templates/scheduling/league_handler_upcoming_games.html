@@ -184,6 +184,17 @@
         .messages li.success { background: #d4f0e0; border-color: #a8dfc0; }
 
         .empty-note { color: #666; font-style: italic; font-size: 0.92rem; }
+
+        .gender-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 600;
+        }
+        .badge-mens    { background: #d0e8ff; color: #0057a8; }
+        .badge-womens  { background: #ffd6e8; color: #9b0047; }
+        .badge-mixed   { background: #e0f4e0; color: #2e6b3e; }
     </style>
 </head>
 <body>
@@ -235,6 +246,13 @@
                         {% endif %}
                     </div>
                     <div class="form-group">
+                        <label for="{{ form.gender_category.id_for_label }}">Game Category</label>
+                        {{ form.gender_category }}
+                        {% if form.gender_category.errors %}
+                        <span style="color:#b52020;font-size:0.85rem;">{{ form.gender_category.errors|join:", " }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="form-group">
                         <label for="{{ form.scheduled_at.id_for_label }}">Date &amp; Time</label>
                         {{ form.scheduled_at }}
                         {% if form.scheduled_at.errors %}
@@ -264,6 +282,7 @@
                         <th>Date &amp; Time</th>
                         <th>Home Team</th>
                         <th>Away Team</th>
+                        <th>Category</th>
                         <th>Venue</th>
                         <th>Notes</th>
                         <th></th>
@@ -275,6 +294,9 @@
                         <td>{{ game.scheduled_at|date:"d M Y" }}<br><small>{{ game.scheduled_at|time:"H:i" }}</small></td>
                         <td>{{ game.home_team.name }}</td>
                         <td>{{ game.away_team.name }}</td>
+                        <td>
+                            <span class="gender-badge badge-{{ game.gender_category }}">{{ game.get_gender_category_display }}</span>
+                        </td>
                         <td>{{ game.venue|default:"—" }}</td>
                         <td>{{ game.notes|default:"—" }}</td>
                         <td>

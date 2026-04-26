@@ -304,6 +304,11 @@ class LeagueMatchForm(forms.Form):
     date = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}))
     team_1_score = forms.IntegerField(min_value=0, label='Team 1 score')
     team_2_score = forms.IntegerField(min_value=0, label='Team 2 score')
+    gender_category = forms.ChoiceField(
+        choices=Team.GenderCategory.choices,
+        label='Game category',
+        initial=Team.GenderCategory.MIXED,
+    )
     notes = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 3}), label='Notes (optional)')
 
     def clean(self):
@@ -312,6 +317,18 @@ class LeagueMatchForm(forms.Form):
         t2 = cleaned.get('team_2')
         if t1 and t2 and t1 == t2:
             raise forms.ValidationError('Team 1 and Team 2 must be different teams.')
+        gc = cleaned.get('gender_category')
+        if t1 and t2 and gc:
+            for team in (t1, t2):
+                tgc = team.gender_category
+                if gc == Team.GenderCategory.MENS and tgc == Team.GenderCategory.WOMENS:
+                    raise forms.ValidationError(
+                        f'{team.name} is a women\'s team and cannot play in a men\'s game.'
+                    )
+                if gc == Team.GenderCategory.WOMENS and tgc == Team.GenderCategory.MENS:
+                    raise forms.ValidationError(
+                        f'{team.name} is a men\'s team and cannot play in a women\'s game.'
+                    )
         return cleaned
 
 
@@ -320,11 +337,15 @@ class PlayerMatchStatForm(forms.ModelForm):
         model = PlayerMatchStat
         fields = ['player', 'goals', 'interceptions', 'points', 'blocks', 'assists', 'aces', 'returns', 'most_recent_injury']
 
-    def __init__(self, *args, team=None, **kwargs):
+    def __init__(self, *args, team=None, gender_category=None, **kwargs):
         super().__init__(*args, **kwargs)
         queryset = Player.objects.filter(role=Player.Role.PLAYER, is_active=True)
         if team is not None:
             queryset = queryset.filter(team=team)
+        if gender_category == Team.GenderCategory.MENS:
+            queryset = queryset.filter(gender=Player.Gender.MALE)
+        elif gender_category == Team.GenderCategory.WOMENS:
+            queryset = queryset.filter(gender=Player.Gender.FEMALE)
         self.fields['player'].queryset = queryset
 
 
@@ -365,6 +386,7 @@ class SignUpForm(forms.Form):
     email = forms.EmailField()
     password = forms.CharField(widget=forms.PasswordInput(render_value=True))
     role = forms.ChoiceField(choices=ROLE_CHOICES, widget=forms.RadioSelect)
+    gender = forms.ChoiceField(choices=Player.Gender.choices, widget=forms.RadioSelect, initial=Player.Gender.MALE)
     team = forms.ModelChoiceField(queryset=Team.objects.none(), empty_label='Select a team', required=False)
 
     def __init__(self, *args, **kwargs):
@@ -410,6 +432,14 @@ class SignUpForm(forms.Form):
         if role in {'player', 'coach', 'club_admin'} and not Team.objects.filter(is_active=True).exists():
             self.add_error('team', 'No teams are available yet. Please ask the league system handler to add teams first.')
 
+        gender = cleaned_data.get('gender')
+        team = cleaned_data.get('team')
+        if team is not None and gender:
+            if team.gender_category == Team.GenderCategory.MENS and gender == Player.Gender.FEMALE:
+                self.add_error('gender', "This is a Men's team. Female players are not eligible to register for it.")
+            if team.gender_category == Team.GenderCategory.WOMENS and gender == Player.Gender.MALE:
+                self.add_error('gender', "This is a Women's team. Male players are not eligible to register for it.")
+
         return cleaned_data
 
     def save(self):
@@ -446,7 +476,8 @@ class SignUpForm(forms.Form):
         assigned_team = team if role in {'player', 'coach'} else None
         # League system handlers are auto-approved — they are the top of the hierarchy with no one to approve them.
         auto_approved = role == 'league_system_handler'
-        Player.objects.create(user=user, name=name, email=email, role=player_role, team=assigned_team, is_approved=auto_approved)
+        gender = self.cleaned_data.get('gender', Player.Gender.MALE)
+        Player.objects.create(user=user, name=name, email=email, role=player_role, team=assigned_team, is_approved=auto_approved, gender=gender)
 
         return user
 
@@ -516,7 +547,7 @@ class EmailAuthenticationForm(AuthenticationForm):
 class UpcomingGameForm(forms.ModelForm):
     class Meta:
         model = UpcomingGame
-        fields = ['home_team', 'away_team', 'scheduled_at', 'venue', 'notes']
+        fields = ['home_team', 'away_team', 'gender_category', 'scheduled_at', 'venue', 'notes']
         widgets = {
             'scheduled_at': forms.DateTimeInput(
                 attrs={'type': 'datetime-local'},
@@ -542,4 +573,16 @@ class UpcomingGameForm(forms.ModelForm):
         away = cleaned_data.get('away_team')
         if home and away and home == away:
             raise forms.ValidationError('Home team and away team must be different.')
+        gc = cleaned_data.get('gender_category')
+        if home and away and gc:
+            for team in (home, away):
+                tgc = team.gender_category
+                if gc == Team.GenderCategory.MENS and tgc == Team.GenderCategory.WOMENS:
+                    raise forms.ValidationError(
+                        f'{team.name} is a women\'s team and cannot play in a men\'s game.'
+                    )
+                if gc == Team.GenderCategory.WOMENS and tgc == Team.GenderCategory.MENS:
+                    raise forms.ValidationError(
+                        f'{team.name} is a men\'s team and cannot play in a women\'s game.'
+                    )
         return cleaned_data

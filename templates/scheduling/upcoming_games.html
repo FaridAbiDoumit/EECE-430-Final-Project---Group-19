@@ -163,6 +163,27 @@
         .badge-not_going { background: #f8d7da; color: #b52020; }
         .badge-injured   { background: #fff3cd; color: #c07000; }
         .badge-maybe     { background: #e2e3e5; color: #555; }
+        .badge-mens    { background: #d0e8ff; color: #0057a8; }
+        .badge-womens  { background: #ffd6e8; color: #9b0047; }
+        .badge-mixed   { background: #e0f4e0; color: #2e6b3e; }
+        .roster-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            background: #d4edda;
+            color: #1a7a3f;
+        }
+        .roster-badge-no {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            background: #e2e3e5;
+            color: #555;
+        }
         .card-divider {
             border: none;
             border-top: 1px solid rgba(0,0,0,0.1);
@@ -282,6 +303,7 @@
                             <span>{{ entry.game.scheduled_at|date:"l, d M Y" }}</span>
                             <span>{{ entry.game.scheduled_at|time:"H:i" }}</span>
                             {% if entry.game.venue %}<span>{{ entry.game.venue }}</span>{% endif %}
+                            <span class="status-badge badge-{{ entry.game.gender_category }}">{{ entry.game.get_gender_category_display }}</span>
                         </div>
                         {% if entry.game.notes %}
                         <p class="game-notes">{{ entry.game.notes }}</p>
@@ -329,6 +351,16 @@
                         </div>
                     </div>
                 </div>
+
+                {% if is_player %}
+                    <div style="margin-top:10px;">
+                        {% if entry.is_in_roster %}
+                        <span class="roster-badge">✓ Selected for this game</span>
+                        {% else %}
+                        <span class="roster-badge-no">Not selected for roster</span>
+                        {% endif %}
+                    </div>
+                {% endif %}
 
                 {% if is_player %}
                 <form class="status-form" method="post" action="{% url 'scheduling:set_game_attendance' entry.game.pk %}">

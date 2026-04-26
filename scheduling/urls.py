@@ -79,6 +79,7 @@ urlpatterns = [
     # Upcoming Games
     path('upcoming-games/', views.upcoming_games, name='upcoming_games'),
     path('upcoming-games/<int:game_id>/attend/', views.set_game_attendance, name='set_game_attendance'),
+    path('coach/games/<int:game_id>/roster/', views.coach_game_roster, name='coach_game_roster'),
     path('league-handler/upcoming-games/', views.league_handler_upcoming_games, name='league_handler_upcoming_games'),
     path('league-handler/admins/pending/', views.pending_admins, name='pending_admins'),
     path('league-handler/admins/<int:assignment_id>/approve/', views.approve_admin, name='approve_admin'),

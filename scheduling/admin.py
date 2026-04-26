@@ -18,8 +18,8 @@ from .models import (
 
 @admin.register(Player)
 class PlayerAdmin(admin.ModelAdmin):
-    list_display = ('name', 'email', 'user', 'role', 'status', 'is_active')
-    list_filter = ('role', 'status', 'is_active')
+    list_display = ('name', 'email', 'user', 'role', 'gender', 'status', 'is_active')
+    list_filter = ('role', 'gender', 'status', 'is_active')
     search_fields = ('name', 'email', 'user__username')
 
 

@@ -5,12 +5,22 @@ from django.utils import timezone
 
 
 class Team(models.Model):
+    class GenderCategory(models.TextChoices):
+        MENS = 'mens', "Men's"
+        WOMENS = 'womens', "Women's"
+        MIXED = 'mixed', 'Mixed'
+
     name = models.CharField(max_length=120, unique=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     court_name = models.CharField(max_length=200, blank=True, default='')
     court_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     court_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    gender_category = models.CharField(
+        max_length=10,
+        choices=GenderCategory.choices,
+        default=GenderCategory.MIXED,
+    )
 
     class Meta:
         ordering = ['name', 'id']
@@ -30,6 +40,10 @@ class Player(models.Model):
         INJURED = 'injured', 'Injured'
         RECOVERING = 'recovering', 'Recovering'
 
+    class Gender(models.TextChoices):
+        MALE = 'male', 'Male'
+        FEMALE = 'female', 'Female'
+
     name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
     user = models.OneToOneField(
@@ -48,6 +62,11 @@ class Player(models.Model):
     )
     role = models.CharField(max_length=32, choices=Role.choices, default=Role.PLAYER)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ELIGIBLE)
+    gender = models.CharField(
+        max_length=10,
+        choices=Gender.choices,
+        default=Gender.MALE,
+    )
     is_active = models.BooleanField(default=True)
     is_approved = models.BooleanField(default=False)
     medical_certification_expiry = models.DateField(null=True, blank=True)
@@ -58,6 +77,18 @@ class Player(models.Model):
 
     def __str__(self):
         return self.name
+
+    def clean(self):
+        if self.team is not None:
+            cat = self.team.gender_category
+            if cat == Team.GenderCategory.MENS and self.gender == Player.Gender.FEMALE:
+                raise ValidationError(
+                    {'gender': "This is a Men's team. Female players are not eligible to join."}
+                )
+            if cat == Team.GenderCategory.WOMENS and self.gender == Player.Gender.MALE:
+                raise ValidationError(
+                    {'gender': "This is a Women's team. Male players are not eligible to join."}
+                )
 
 
 class StaffTeamAssignment(models.Model):
@@ -482,6 +513,11 @@ class UpcomingGame(models.Model):
     scheduled_at = models.DateTimeField()
     venue = models.CharField(max_length=200, blank=True)
     notes = models.TextField(blank=True)
+    gender_category = models.CharField(
+        max_length=10,
+        choices=Team.GenderCategory.choices,
+        default=Team.GenderCategory.MIXED,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -497,6 +533,19 @@ class UpcomingGame(models.Model):
             and self.home_team_id == self.away_team_id
         ):
             raise ValidationError('Home team and away team must be different.')
+        # Gender compatibility check
+        if self.home_team_id and self.away_team_id and self.gender_category:
+            gc = self.gender_category
+            for team in (self.home_team, self.away_team):
+                tgc = team.gender_category
+                if gc == Team.GenderCategory.MENS and tgc == Team.GenderCategory.WOMENS:
+                    raise ValidationError(
+                        f'{team.name} is a women\'s team and cannot play in a men\'s game.'
+                    )
+                if gc == Team.GenderCategory.WOMENS and tgc == Team.GenderCategory.MENS:
+                    raise ValidationError(
+                        f'{team.name} is a men\'s team and cannot play in a women\'s game.'
+                    )
 
 
 class GameAttendance(models.Model):
@@ -536,6 +585,32 @@ class GameAttendance(models.Model):
         return f'{self.player} – {self.game} – {self.get_status_display()}'
 
 
+class GameRoster(models.Model):
+    game = models.ForeignKey(
+        UpcomingGame,
+        on_delete=models.CASCADE,
+        related_name='roster_entries',
+    )
+    player = models.ForeignKey(
+        Player,
+        on_delete=models.CASCADE,
+        related_name='game_roster_entries',
+    )
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['game', 'player'],
+                name='unique_game_roster_entry',
+            )
+        ]
+        ordering = ['player__name']
+
+    def __str__(self):
+        return f'{self.player} – {self.game}'
+
+
 class Match(models.Model):
     class Result(models.TextChoices):
         WIN = 'win', 'Win'
@@ -563,6 +638,11 @@ class Match(models.Model):
     goals_for = models.PositiveIntegerField(default=0)
     goals_against = models.PositiveIntegerField(default=0)
     notes = models.TextField(blank=True)
+    gender_category = models.CharField(
+        max_length=10,
+        choices=Team.GenderCategory.choices,
+        default=Team.GenderCategory.MIXED,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

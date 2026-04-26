@@ -160,6 +160,72 @@
         .dashboard-card {
             width: min(100%, 664px);
         }
+        /* Games section */
+        .games-section {
+            max-width: 1240px;
+            margin: 40px auto 0;
+        }
+        .games-section-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #f0f4f1;
+            margin: 0 0 14px;
+        }
+        .games-list {
+            display: grid;
+            gap: 14px;
+        }
+        .games-list-item {
+            background: var(--paper);
+            border-radius: 12px;
+            padding: 16px 20px;
+            box-shadow: var(--shadow);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .games-list-info { flex: 1; }
+        .games-list-matchup {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0;
+        }
+        .games-list-meta {
+            font-size: 0.88rem;
+            color: #555;
+            margin: 3px 0 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        .gender-badge {
+            display: inline-block;
+            padding: 2px 9px;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .badge-mens    { background: #d0e8ff; color: #0057a8; }
+        .badge-womens  { background: #ffd6e8; color: #9b0047; }
+        .badge-mixed   { background: #e0f4e0; color: #2e6b3e; }
+        .roster-btn {
+            padding: 7px 16px;
+            background: var(--forest);
+            color: #fff;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .roster-btn:hover { background: #2e4737; }
+        .games-empty {
+            color: #ccc;
+            font-size: 0.95rem;
+            font-style: italic;
+        }
         @media (max-width: 1024px) {
             .card-grid {
                 grid-template-columns: repeat(2, minmax(220px, 1fr));
@@ -289,6 +355,29 @@
                         <path d="M6.5 6.5l3-2 2.5 1.5L17.5 3"></path>
                     </svg>
                 </a>
+            </div>
+
+            <div class="games-section">
+                <h2 class="games-section-title">Upcoming Games — Manage Rosters</h2>
+                {% if upcoming_games %}
+                <div class="games-list">
+                    {% for game in upcoming_games %}
+                    <div class="games-list-item">
+                        <div class="games-list-info">
+                            <p class="games-list-matchup">{{ game.home_team.name }} vs {{ game.away_team.name }}</p>
+                            <div class="games-list-meta">
+                                <span>{{ game.scheduled_at|date:"d M Y" }} {{ game.scheduled_at|time:"H:i" }}</span>
+                                {% if game.venue %}<span>{{ game.venue }}</span>{% endif %}
+                                <span class="gender-badge badge-{{ game.gender_category }}">{{ game.get_gender_category_display }}</span>
+                            </div>
+                        </div>
+                        <a class="roster-btn" href="{% url 'scheduling:coach_game_roster' game.pk %}">Manage Roster →</a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="games-empty">No upcoming games scheduled for your team.</p>
+                {% endif %}
             </div>
 
         </main>

@@ -272,6 +272,7 @@
                                 <thead>
                                     <tr>
                                         <th>Name</th>
+                                        <th>Gender</th>
                                         <th>Status</th>
                                         <th>Active</th>
                                         <th></th>
@@ -281,6 +282,7 @@
                                     {% for player in players %}
                                         <tr>
                                             <td>{{ player.name }}</td>
+                                            <td>{{ player.get_gender_display }}</td>
                                             <td><span class="status-pill">{{ player.get_status_display }}</span></td>
                                             <td>
                                                 {% if player.is_active %}

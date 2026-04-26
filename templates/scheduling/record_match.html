@@ -95,6 +95,10 @@
             {{ form.team_2 }}
             {% if form.team_2.errors %}<ul class="errorlist">{% for e in form.team_2.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
 
+            <label for="{{ form.gender_category.id_for_label }}">{{ form.gender_category.label }}</label>
+            {{ form.gender_category }}
+            {% if form.gender_category.errors %}<ul class="errorlist">{% for e in form.gender_category.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+
             <label for="{{ form.date.id_for_label }}">{{ form.date.label }}</label>
             {{ form.date }}
             {% if form.date.errors %}<ul class="errorlist">{% for e in form.date.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}

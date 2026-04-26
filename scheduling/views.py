@@ -68,6 +68,7 @@ from .models import (
     AnnouncementReply,
     UpcomingGame,
     GameAttendance,
+    GameRoster,
     StaffTeamAssignment,
     TeamSubscriptionFee,
     MembershipPayment,
@@ -408,6 +409,12 @@ def coach_home(request):
         .order_by('starts_at')
         .first()
     )
+    upcoming_games_qs = (
+        UpcomingGame.objects
+        .filter(Q(home_team=coach.team) | Q(away_team=coach.team), scheduled_at__gte=timezone.now() - timedelta(hours=12))
+        .select_related('home_team', 'away_team')
+        .order_by('scheduled_at')[:10]
+    ) if coach.team else []
     context = {
         'coach': coach,
         'welcome_name': coach.name,
@@ -416,6 +423,7 @@ def coach_home(request):
         'open_tryouts': TryoutSession.objects.filter(registration_open=True).count(),
         'poll_count': SessionVotePoll.objects.count(),
         'session_count': TrainingSession.objects.count(),
+        'upcoming_games': upcoming_games_qs,
     }
     return render(request, 'scheduling/coach_home.html', context)
 
@@ -2937,6 +2945,7 @@ def record_match(request):
             score_1 = form.cleaned_data['team_1_score']
             score_2 = form.cleaned_data['team_2_score']
             notes = form.cleaned_data.get('notes', '')
+            gender_category = form.cleaned_data.get('gender_category', '')
 
             # Create a Match record from team_1's perspective
             match_1 = Match.objects.create(
@@ -2947,6 +2956,7 @@ def record_match(request):
                 goals_for=score_1,
                 goals_against=score_2,
                 notes=notes,
+                gender_category=gender_category,
             )
             # Create the mirror record from team_2's perspective
             match_2 = Match.objects.create(
@@ -2957,6 +2967,7 @@ def record_match(request):
                 goals_for=score_2,
                 goals_against=score_1,
                 notes=notes,
+                gender_category=gender_category,
             )
 
             # Notify all active players in both teams
@@ -3017,7 +3028,7 @@ def record_player_stats(request, match_id):
     other_stats = list(other_match.player_stats.select_related('player')) if other_match else []
 
     if request.method == 'POST':
-        form = PlayerMatchStatForm(request.POST, team=active_match.team)
+        form = PlayerMatchStatForm(request.POST, team=active_match.team, gender_category=active_match.gender_category)
         if form.is_valid():
             stat = form.save(commit=False)
             stat.match = active_match
@@ -3027,7 +3038,7 @@ def record_player_stats(request, match_id):
                 f"{reverse('scheduling:record_player_stats', args=[match_id])}?phase={current_phase}"
             )
     else:
-        form = PlayerMatchStatForm(team=active_match.team)
+        form = PlayerMatchStatForm(team=active_match.team, gender_category=active_match.gender_category)
 
     return render(request, 'scheduling/record_player_stats.html', {
         'form': form,
@@ -3126,11 +3137,17 @@ def upcoming_games(request):
     # Current player's own attendance records (players only).
     is_player = player_profile is not None and player_profile.role == Player.Role.PLAYER
     my_attendance: dict = {}
+    roster_game_ids: set = set()
     if is_player:
         my_attendance = {
             a.game_id: a
             for a in GameAttendance.objects.filter(game_id__in=game_ids, player=player_profile)
         }
+        roster_game_ids = set(
+            GameRoster.objects
+            .filter(game_id__in=game_ids, player=player_profile)
+            .values_list('game_id', flat=True)
+        )
 
     enriched_games = []
     for game in games:
@@ -3144,6 +3161,7 @@ def upcoming_games(request):
             'my_status': my_attendance.get(game.pk),
             'is_home': game.home_team_id == team.pk,
             'opponent': game.away_team if game.home_team_id == team.pk else game.home_team,
+            'is_in_roster': game.pk in roster_game_ids,
         })
 
     context = {
@@ -3219,6 +3237,53 @@ def league_handler_upcoming_games(request):
         'games': all_games,
     }
     return render(request, 'scheduling/league_handler_upcoming_games.html', context)
+
+
+@login_required(login_url='scheduling:login')
+def coach_game_roster(request, game_id):
+    coach = getattr(request.user, 'player_profile', None)
+    if coach is None or coach.role != Player.Role.COACH:
+        messages.info(request, 'Only coaches can manage the game roster.')
+        return redirect('scheduling:dashboard')
+    if coach.team is None:
+        messages.info(request, 'You are not assigned to a team.')
+        return redirect('scheduling:coach_home')
+
+    game = get_object_or_404(UpcomingGame, pk=game_id)
+    if game.home_team_id != coach.team_id and game.away_team_id != coach.team_id:
+        messages.error(request, 'This game does not involve your team.')
+        return redirect('scheduling:coach_home')
+
+    gc = game.gender_category
+    eligible = Player.objects.filter(
+        team=coach.team, role=Player.Role.PLAYER, is_active=True, is_approved=True
+    ).order_by('name')
+    if gc == Team.GenderCategory.MENS:
+        eligible = eligible.filter(gender=Player.Gender.MALE)
+    elif gc == Team.GenderCategory.WOMENS:
+        eligible = eligible.filter(gender=Player.Gender.FEMALE)
+
+    if request.method == 'POST':
+        selected_ids = set(request.POST.getlist('players'))
+        # Replace roster: delete old entries for this team's players, then bulk-create new
+        GameRoster.objects.filter(game=game, player__team=coach.team).delete()
+        valid_ids = [p.pk for p in eligible if str(p.pk) in selected_ids]
+        GameRoster.objects.bulk_create([
+            GameRoster(game=game, player_id=pid) for pid in valid_ids
+        ])
+        messages.success(request, f'Roster updated — {len(valid_ids)} player(s) selected.')
+        return redirect('scheduling:coach_game_roster', game_id=game_id)
+
+    selected_player_ids = set(
+        GameRoster.objects.filter(game=game, player__team=coach.team).values_list('player_id', flat=True)
+    )
+    context = {
+        'game': game,
+        'eligible': eligible,
+        'selected_player_ids': selected_player_ids,
+        'gc_label': game.get_gender_category_display(),
+    }
+    return render(request, 'scheduling/coach_game_roster.html', context)
 
 
 @login_required(login_url='scheduling:login')
