@@ -1,7 +1,10 @@
 import logging
 import os
+from hashlib import sha256
+import json
 from datetime import timedelta
 
+from django.core.cache import cache
 from django.db.models import Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
@@ -11,6 +14,7 @@ from .models import GameAttendance, Match, Player, PlayerMatchStat, UpcomingGame
 
 logger = logging.getLogger(__name__)
 GROQ_BASE_URL = 'https://api.groq.com/openai/v1'
+AI_SUMMARY_CACHE_SECONDS = 900
 
 AI_METRIC_LABELS = {
     'goals': 'Goals',
@@ -59,6 +63,8 @@ def _build_generic_context():
         'is_ai_enabled': bool(os.getenv('GROQ_API_KEY')),
         'strategy_section_title': '',
         'strategy_items': [],
+        'secondary_section_title': '',
+        'secondary_items': [],
     }
 
 
@@ -168,6 +174,8 @@ def _build_player_context(player):
             latest_soreness=latest_soreness,
             latest_injury=latest_injury,
         ),
+        'secondary_section_title': 'Next Match Prep',
+        'secondary_items': _player_next_match_prep(player, focus_metric, latest_soreness),
     }
 
 
@@ -202,6 +210,11 @@ def _build_coach_context(coach):
         if latest_report is not None and latest_report.soreness_level >= HIGH_SORENESS_LEVEL:
             soreness_watch.append((player, latest_report))
     upcoming_brief = _coach_upcoming_brief(team, focus_metric, soreness_watch) if team is not None else None
+    tactical_recommendations = (
+        _coach_tactical_recommendations(team, matches, focus_metric, soreness_watch)
+        if team is not None
+        else []
+    )
 
     if team is None:
         fallback_summary = (
@@ -288,6 +301,8 @@ def _build_coach_context(coach):
         'is_ai_enabled': summary['is_ai_enabled'],
         'strategy_section_title': 'Upcoming Opponent Brief',
         'strategy_items': upcoming_brief or [],
+        'secondary_section_title': 'Tactical Recommendations',
+        'secondary_items': tactical_recommendations,
     }
 
 
@@ -362,15 +377,28 @@ def _player_readiness_items(focus_metric, latest_soreness, latest_injury):
     return items
 
 
+def _player_next_match_prep(player, focus_metric, latest_soreness):
+    next_game = _next_game_for_team(player.team)
+    if next_game is None or player.team is None:
+        return [
+            'No upcoming game is scheduled yet, so keep building consistency in training and stats logging.',
+        ]
+
+    opponent = next_game.away_team if next_game.home_team_id == player.team_id else next_game.home_team
+    attendance = GameAttendance.objects.filter(game=next_game, player=player).first()
+    attendance_text = attendance.get_status_display() if attendance is not None else 'Not submitted'
+    items = [
+        f'Next match: {opponent.name} on {next_game.scheduled_at:%b %d, %Y at %H:%M}.',
+        f'Your current game attendance status is {attendance_text}.',
+        f'Before the match, emphasize actions that improve your {AI_METRIC_LABELS[focus_metric].lower()}.',
+    ]
+    if latest_soreness is not None and latest_soreness.soreness_level >= HIGH_SORENESS_LEVEL:
+        items.append('Your recovery signal is elevated, so treat workload and warm-up quality as part of match prep.')
+    return items
+
+
 def _coach_upcoming_brief(team, focus_metric, soreness_watch):
-    cutoff = timezone.now() - timedelta(hours=12)
-    next_game = (
-        UpcomingGame.objects
-        .filter(Q(home_team=team) | Q(away_team=team), scheduled_at__gte=cutoff)
-        .select_related('home_team', 'away_team')
-        .order_by('scheduled_at', 'id')
-        .first()
-    )
+    next_game = _next_game_for_team(team)
     if next_game is None:
         return [
             'No upcoming game is scheduled yet, so the coach brief will expand once the next opponent is posted.',
@@ -428,6 +456,62 @@ def _coach_upcoming_brief(team, focus_metric, soreness_watch):
         brief_items.append('No high-soreness watch list is currently active from the latest reports.')
 
     return brief_items
+
+
+def _coach_tactical_recommendations(team, matches, focus_metric, soreness_watch):
+    if team is None:
+        return []
+
+    latest_matches = list(matches.order_by('-date', '-id')[:3])
+    recommendations = [
+        f'Center the next match plan on improving team {AI_METRIC_LABELS[focus_metric].lower()}.',
+    ]
+
+    if latest_matches:
+        recent_losses = sum(1 for match in latest_matches if match.result == Match.Result.LOSS)
+        if recent_losses >= 2:
+            recommendations.append('Shorten review loops and simplify rotations, because recent results show pressure points late in matches.')
+        elif any(match.result == Match.Result.WIN for match in latest_matches):
+            recommendations.append('Carry over the strongest recent patterns from your latest win and repeat them early.')
+
+        avg_goals_against = sum(match.goals_against for match in latest_matches) / len(latest_matches)
+        if avg_goals_against >= 2:
+            recommendations.append('Prioritize defensive organization early, because recent opponents are scoring at a meaningful rate.')
+
+    next_game = _next_game_for_team(team)
+    if next_game is not None:
+        confirmed = GameAttendance.objects.filter(
+            game=next_game,
+            player__team=team,
+            status=GameAttendance.Status.GOING,
+        ).count()
+        maybe_count = GameAttendance.objects.filter(
+            game=next_game,
+            player__team=team,
+            status=GameAttendance.Status.MAYBE,
+        ).count()
+        if maybe_count > 0:
+            recommendations.append(f'Lock down availability before match day: {confirmed} confirmed and {maybe_count} still undecided.')
+
+    if soreness_watch:
+        watched_names = ', '.join(player.name for player, _ in soreness_watch[:2])
+        recommendations.append(f'Adjust workload for {watched_names} so recovery risk does not undercut the game plan.')
+
+    return recommendations[:4]
+
+
+def _next_game_for_team(team):
+    if team is None:
+        return None
+
+    cutoff = timezone.now() - timedelta(hours=12)
+    return (
+        UpcomingGame.objects
+        .filter(Q(home_team=team) | Q(away_team=team), scheduled_at__gte=cutoff)
+        .select_related('home_team', 'away_team')
+        .order_by('scheduled_at', 'id')
+        .first()
+    )
 
 
 def _player_recovery_sentence(latest_soreness, latest_injury):
@@ -518,6 +602,22 @@ def _generate_ai_summary(role_label, stat_payload, fallback_summary):
             'is_ai_enabled': False,
         }
 
+    payload_digest = sha256(
+        json.dumps(
+            {
+                'role_label': role_label,
+                'stat_payload': stat_payload,
+                'model': os.getenv('GROQ_MODEL', 'openai/gpt-oss-20b'),
+            },
+            sort_keys=True,
+            default=str,
+        ).encode('utf-8')
+    ).hexdigest()
+    cache_key = f'ai_summary:{payload_digest}'
+    cached_summary = cache.get(cache_key)
+    if cached_summary is not None:
+        return cached_summary
+
     try:
         client = OpenAI(
             api_key=api_key,
@@ -535,11 +635,13 @@ def _generate_ai_summary(role_label, stat_payload, fallback_summary):
         )
         summary_text = (getattr(response, 'output_text', '') or '').strip()
         if summary_text:
-            return {
+            result = {
                 'text': summary_text,
                 'source': 'AI-generated',
                 'is_ai_enabled': True,
             }
+            cache.set(cache_key, result, AI_SUMMARY_CACHE_SECONDS)
+            return result
     except Exception:
         logger.exception('Groq AI analytics summary generation failed')
 

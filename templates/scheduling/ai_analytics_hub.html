@@ -252,6 +252,17 @@
                 </ul>
             </section>
         {% endif %}
+
+        {% if secondary_items %}
+            <section class="panel">
+                <h2>{{ secondary_section_title }}</h2>
+                <ul class="strategy-list">
+                    {% for item in secondary_items %}
+                        <li class="strategy-item">{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+        {% endif %}
     </main>
 </body>
 </html>

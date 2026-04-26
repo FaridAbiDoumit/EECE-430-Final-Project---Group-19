@@ -1,11 +1,14 @@
 from datetime import timedelta
+import types
 from unittest.mock import patch
 
+from django.core.cache import cache
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from .ai_analytics import _generate_ai_summary
 from .models import (
     Announcement,
     ChatGroup,
@@ -572,7 +575,45 @@ class SchedulingViewsTests(TestCase):
         self.assertContains(response, 'Best contribution')
         self.assertContains(response, 'Next focus')
         self.assertContains(response, 'Recovery status')
+        self.assertContains(response, 'Readiness Focus')
         self.assertNotContains(response, 'GROQ_API_KEY')
+
+    @patch.dict('os.environ', {}, clear=True)
+    def test_player_ai_hub_includes_next_match_prep(self):
+        team = Team.objects.create(name='Prep Team')
+        opponent_team = Team.objects.create(name='Prep Rivals')
+        user = User.objects.create_user(
+            username='prepplayer@example.com',
+            email='prepplayer@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(
+            user=user,
+            name='Prep Player',
+            email='prepplayer@example.com',
+            role=Player.Role.PLAYER,
+            team=team,
+        )
+        PlayerSorenessReport.objects.create(player=player, soreness_level=8, notes='Heavy legs')
+        upcoming_game = UpcomingGame.objects.create(
+            home_team=team,
+            away_team=opponent_team,
+            scheduled_at=timezone.now() + timedelta(days=1),
+            venue='Court A',
+        )
+        GameAttendance.objects.create(
+            game=upcoming_game,
+            player=player,
+            status=GameAttendance.Status.GOING,
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:ai_analytics_hub'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Next Match Prep')
+        self.assertContains(response, 'Next match: Prep Rivals')
+        self.assertContains(response, 'Going')
 
     @patch.dict('os.environ', {}, clear=True)
     def test_coach_ai_hub_shows_team_level_fallback_insights(self):
@@ -619,6 +660,7 @@ class SchedulingViewsTests(TestCase):
         self.assertContains(response, 'Latest result')
         self.assertContains(response, 'Primary focus')
         self.assertContains(response, 'Recovery watch')
+        self.assertContains(response, 'Tactical Recommendations')
         self.assertContains(response, coach.team.name)
 
     @patch.dict('os.environ', {}, clear=True)
@@ -676,6 +718,43 @@ class SchedulingViewsTests(TestCase):
         self.assertContains(response, 'Next opponent: Rivals')
         self.assertContains(response, 'Past record vs Rivals')
         self.assertContains(response, 'Confirmed availability is 1 player')
+
+    @patch.dict('os.environ', {'GROQ_API_KEY': 'test-key', 'GROQ_MODEL': 'demo-model'}, clear=True)
+    def test_ai_summary_is_cached_between_identical_requests(self):
+        cache.clear()
+        call_counter = {'count': 0}
+
+        class FakeClient:
+            def __init__(self, **kwargs):
+                pass
+
+            @property
+            def responses(self):
+                class ResponsesApi:
+                    @staticmethod
+                    def create(**kwargs):
+                        call_counter['count'] += 1
+                        return types.SimpleNamespace(output_text='Cached AI summary')
+
+                return ResponsesApi()
+
+        fake_module = types.SimpleNamespace(OpenAI=FakeClient)
+
+        with patch.dict('sys.modules', {'openai': fake_module}):
+            first = _generate_ai_summary(
+                role_label='player',
+                stat_payload={'player_name': 'Cache Test', 'points': 10},
+                fallback_summary='fallback',
+            )
+            second = _generate_ai_summary(
+                role_label='player',
+                stat_payload={'player_name': 'Cache Test', 'points': 10},
+                fallback_summary='fallback',
+            )
+
+        self.assertEqual(first['text'], 'Cached AI summary')
+        self.assertEqual(second['text'], 'Cached AI summary')
+        self.assertEqual(call_counter['count'], 1)
 
     def test_manage_coach_detail_shows_only_primary_actions(self):
         admin = User.objects.create_user(
