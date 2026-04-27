@@ -3149,9 +3149,40 @@ def upcoming_games(request):
             .values_list('game_id', flat=True)
         )
 
+    is_coach = player_profile is not None and player_profile.role == Player.Role.COACH
+
+    # For coaches: build per-game roster + attendance lookup before enriching.
+    coach_roster_map: dict = {}      # game_id → [Player, ...]
+    coach_roster_att_map: dict = {}  # game_id → {player_id → GameAttendance}
+    if is_coach:
+        from collections import defaultdict as _dd
+        _rmap: dict = _dd(list)
+        _rostered_pids: list = []
+        for r in (
+            GameRoster.objects
+            .filter(game_id__in=game_ids, player__team=team)
+            .select_related('player')
+        ):
+            _rmap[r.game_id].append(r.player)
+            _rostered_pids.append(r.player_id)
+        coach_roster_map = dict(_rmap)
+        if _rostered_pids:
+            _amap: dict = _dd(dict)
+            for a in GameAttendance.objects.filter(
+                game_id__in=game_ids, player_id__in=_rostered_pids
+            ).select_related('player'):
+                _amap[a.game_id][a.player_id] = a
+            coach_roster_att_map = dict(_amap)
+
     enriched_games = []
     for game in games:
         atts = att_by_game[game.pk]
+        roster_players = coach_roster_map.get(game.pk, [])
+        game_att_map = coach_roster_att_map.get(game.pk, {})
+        roster_with_att = [
+            {'player': p, 'attendance': game_att_map.get(p.pk)}
+            for p in roster_players
+        ]
         enriched_games.append({
             'game': game,
             'going': [a for a in atts if a.status == GameAttendance.Status.GOING],
@@ -3162,12 +3193,14 @@ def upcoming_games(request):
             'is_home': game.home_team_id == team.pk,
             'opponent': game.away_team if game.home_team_id == team.pk else game.home_team,
             'is_in_roster': game.pk in roster_game_ids,
+            'roster_with_att': roster_with_att,
         })
 
     context = {
         'team': team,
         'enriched_games': enriched_games,
         'is_player': is_player,
+        'is_coach': is_coach,
         'attendance_choices': GameAttendance.Status.choices,
     }
     return render(request, 'scheduling/upcoming_games.html', context)
@@ -3265,9 +3298,24 @@ def coach_game_roster(request, game_id):
 
     if request.method == 'POST':
         selected_ids = set(request.POST.getlist('players'))
+        valid_players = [p for p in eligible if str(p.pk) in selected_ids]
+        # Gender consistency check: all selected players must be the same gender.
+        genders_chosen = {p.gender for p in valid_players}
+        if len(genders_chosen) > 1:
+            messages.error(request, 'All selected players must be the same gender. Please choose players of one gender only.')
+            selected_player_ids = set(
+                GameRoster.objects.filter(game=game, player__team=coach.team).values_list('player_id', flat=True)
+            )
+            context = {
+                'game': game,
+                'eligible': eligible,
+                'selected_player_ids': selected_player_ids,
+                'gc_label': game.get_gender_category_display(),
+            }
+            return render(request, 'scheduling/coach_game_roster.html', context)
         # Replace roster: delete old entries for this team's players, then bulk-create new
         GameRoster.objects.filter(game=game, player__team=coach.team).delete()
-        valid_ids = [p.pk for p in eligible if str(p.pk) in selected_ids]
+        valid_ids = [p.pk for p in valid_players]
         GameRoster.objects.bulk_create([
             GameRoster(game=game, player_id=pid) for pid in valid_ids
         ])

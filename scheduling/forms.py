@@ -573,6 +573,12 @@ class UpcomingGameForm(forms.ModelForm):
         away = cleaned_data.get('away_team')
         if home and away and home == away:
             raise forms.ValidationError('Home team and away team must be different.')
+        if home and away and home.gender_category != away.gender_category:
+            raise forms.ValidationError(
+                f'Both teams must have the same gender category '
+                f'({home.name} is {home.get_gender_category_display()}, '
+                f'{away.name} is {away.get_gender_category_display()}).'
+            )
         gc = cleaned_data.get('gender_category')
         if home and away and gc:
             for team in (home, away):

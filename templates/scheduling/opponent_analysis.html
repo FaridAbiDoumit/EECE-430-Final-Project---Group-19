@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Opponent Analysis | Volley Project</title>
+    <title>AI Opponent Analysis | Volley Project</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -284,7 +284,7 @@
 <body>
     <header class="handler-header">
         <div>
-            <h1 class="handler-title">Opponent Analysis</h1>
+            <h1 class="handler-title">AI Opponent Analysis</h1>
             <div class="header-actions">
                 <span class="header-chip">League Handler</span>
                 <a class="header-link" href="{% url 'scheduling:league_system_handler_home' %}">Handler Home</a>
@@ -302,7 +302,7 @@
 
         <!-- Team selection form -->
         <div class="form-card">
-            <h2>Compare Two Teams</h2>
+            <h2>AI-Powered Team Comparison</h2>
             <p>Select any two registered teams to see a head-to-head record comparison and an AI-generated tactical brief.</p>
             <form method="post" action="{% url 'scheduling:opponent_analysis' %}">
                 {% csrf_token %}
