@@ -17,7 +17,6 @@ urlpatterns = [
     path('auth/pending/', views.pending_approval, name='pending_approval'),
     path('player/home/', views.player_home, name='player_home'),
     path('player/messages/', views.player_messages, name='player_messages'),
-    path('player/soreness/', views.log_player_soreness, name='log_player_soreness'),
     path('coach/home/', views.coach_home, name='coach_home'),
     path('league-handler/home/', views.league_system_handler_home, name='league_system_handler_home'),
     path('league-handler/teams/', views.league_handler_manage_teams, name='league_handler_manage_teams'),

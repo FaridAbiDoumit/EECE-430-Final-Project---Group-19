@@ -140,6 +140,50 @@
         @media (max-width: 900px) {
             .chart-grid { grid-template-columns: 1fr; }
         }
+        .soreness-form label {
+            display: block;
+            margin-top: 12px;
+            font-weight: 500;
+        }
+        .soreness-form input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #999;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 1rem;
+            margin-top: 4px;
+            background: #fff;
+        }
+        .soreness-form button {
+            margin-top: 18px;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            background: #111;
+            color: #fff;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .soreness-form .errorlist {
+            list-style: none;
+            padding: 0;
+            margin: 6px 0 0;
+            color: #a61b1b;
+        }
+        .soreness-history { display: grid; gap: 10px; }
+        .soreness-item {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 12px 14px;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .soreness-meta { color: #4a4a4a; }
     </style>
 </head>
 <body>
@@ -316,6 +360,36 @@
                 <p class="no-data">No match stats recorded for this player yet.</p>
             {% endif %}
         </section>
+
+        {% if is_own_profile %}
+        <section class="panel">
+            <h2>Log Today's Soreness</h2>
+            <form class="soreness-form" method="post">
+                {% csrf_token %}
+                {% for field in soreness_form %}
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                {% endfor %}
+                <button type="submit">Save Soreness Log</button>
+            </form>
+        </section>
+
+        {% if recent_soreness %}
+        <section class="panel">
+            <h2>Recent Soreness Entries</h2>
+            <div class="soreness-history">
+                {% for report in recent_soreness %}
+                    <div class="soreness-item">
+                        <strong>Level {{ report.soreness_level }}/10</strong>
+                        <span class="soreness-meta">{{ report.created_at|date:"M j, Y H:i" }}</span>
+                        <span>{{ report.notes|default:"No note added." }}</span>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+        {% endif %}
     </main>
 
     {% if matches_played > 0 %}

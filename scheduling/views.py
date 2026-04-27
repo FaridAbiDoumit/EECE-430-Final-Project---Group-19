@@ -368,36 +368,6 @@ def player_messages(request):
 
 
 @login_required(login_url='scheduling:login')
-def log_player_soreness(request):
-    player = getattr(request.user, 'player_profile', None)
-    if player is None or player.role != Player.Role.PLAYER:
-        messages.info(request, 'This page is currently available only for player accounts.')
-        return redirect('scheduling:dashboard')
-
-    if request.method == 'POST':
-        form = PlayerSorenessReportForm(request.POST)
-        if form.is_valid():
-            report = form.save(commit=False)
-            report.player = player
-            report.save()
-            messages.success(request, 'Daily soreness saved.')
-            return redirect('scheduling:log_player_soreness')
-    else:
-        form = PlayerSorenessReportForm()
-
-    recent_reports = player.soreness_reports.all()[:5]
-    return render(
-        request,
-        'scheduling/log_soreness.html',
-        {
-            'player': player,
-            'form': form,
-            'recent_reports': recent_reports,
-        },
-    )
-
-
-@login_required(login_url='scheduling:login')
 def coach_home(request):
     coach = getattr(request.user, 'player_profile', None)
     if coach is None or coach.role != Player.Role.COACH:
@@ -1645,7 +1615,8 @@ def sessions_calendar(request):
         ).order_by('starts_at')
     )
     month_personal_events = []
-    if can_add_personal_events:
+    # Show personal calendar events for any user with a profile (player or coach)
+    if profile is not None:
         month_personal_events = list(
             PersonalCalendarEvent.objects.filter(
                 player=profile,
@@ -2909,6 +2880,24 @@ def player_stats_detail(request, player_id):
         averages['avg_points'],
     ])
 
+    is_own_profile = is_player and profile is not None and profile.id == player_id
+
+    # Soreness form — only for the player viewing their own stats page
+    soreness_form = None
+    recent_soreness = []
+    if is_own_profile:
+        if request.method == 'POST':
+            soreness_form = PlayerSorenessReportForm(request.POST)
+            if soreness_form.is_valid():
+                report = soreness_form.save(commit=False)
+                report.player = player
+                report.save()
+                messages.success(request, 'Soreness logged.')
+                return redirect('scheduling:player_stats_detail', player_id=player_id)
+        else:
+            soreness_form = PlayerSorenessReportForm()
+        recent_soreness = player.soreness_reports.all()[:5]
+
     context = {
         'player': player,
         'stats': stats,
@@ -2926,6 +2915,9 @@ def player_stats_detail(request, player_id):
         'histogram_labels': histogram_labels,
         'histogram_data': histogram_data,
         'average_histogram_data': average_histogram_data,
+        'is_own_profile': is_own_profile,
+        'soreness_form': soreness_form,
+        'recent_soreness': recent_soreness,
     }
     return render(request, 'scheduling/player_stats_detail.html', context)
 
