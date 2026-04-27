@@ -460,7 +460,7 @@
                             {% empty %}
                                 <article class="timeline-event" style="top: 16px; height: 72px;">
                                     <h4>No scheduled events</h4>
-                                    <p class="timeline-event-row">Use the action below to create one.</p>
+                                    <p class="timeline-event-row">{% if can_add_events %}Use the action below to create one.{% else %}Nothing is scheduled for this day yet.{% endif %}</p>
                                 </article>
                             {% endfor %}
                         </div>

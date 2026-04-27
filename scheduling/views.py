@@ -1455,15 +1455,16 @@ def next_session(request):
 
 @login_required(login_url='scheduling:login')
 def sessions_calendar(request):
-    if request.user.is_staff:
-        messages.info(request, 'Scheduling is not available for admin accounts.')
+    profile = getattr(request.user, 'player_profile', None)
+    team, _ = _get_player_or_admin_team(request)
+    is_team_admin = request.user.is_staff and profile is None
+    if is_team_admin and team is None:
+        messages.info(request, 'Scheduling is only available for team-assigned admin accounts.')
         return redirect('scheduling:admin_home')
 
-    profile = getattr(request.user, 'player_profile', None)
     can_rsvp = profile is not None and profile.role == Player.Role.PLAYER
-    can_add_sessions = request.user.is_staff or (
-        profile is not None and profile.role == Player.Role.COACH
-    )
+    is_coach = profile is not None and profile.role == Player.Role.COACH
+    can_add_sessions = is_coach
     can_add_personal_events = profile is not None and profile.role == Player.Role.PLAYER
     can_add_events = can_add_sessions or can_add_personal_events
 
@@ -1625,6 +1626,30 @@ def sessions_calendar(request):
             ).order_by('starts_at')
         )
 
+    month_games = []
+    if team is not None and (is_coach or is_team_admin):
+        month_games = list(
+            UpcomingGame.objects.filter(
+                Q(home_team=team) | Q(away_team=team),
+                scheduled_at__gte=month_start_dt,
+                scheduled_at__lt=next_month_dt,
+            )
+            .select_related('home_team', 'away_team')
+            .order_by('scheduled_at')
+        )
+    elif can_rsvp and team is not None:
+        month_games = list(
+            UpcomingGame.objects.filter(
+                Q(home_team=team) | Q(away_team=team),
+                scheduled_at__gte=month_start_dt,
+                scheduled_at__lt=next_month_dt,
+                roster_entries__player=profile,
+            )
+            .select_related('home_team', 'away_team')
+            .distinct()
+            .order_by('scheduled_at')
+        )
+
     sessions_by_day = {}
     for training_session in month_sessions:
         local_starts = timezone.localtime(training_session.starts_at, local_tz)
@@ -1637,6 +1662,7 @@ def sessions_calendar(request):
                 'starts_at': training_session.starts_at,
                 'ends_at': training_session.ends_at,
                 'is_personal': False,
+                'event_type': 'session',
             }
         )
 
@@ -1651,6 +1677,28 @@ def sessions_calendar(request):
                 'starts_at': personal_event.starts_at,
                 'ends_at': personal_event.ends_at,
                 'is_personal': True,
+                'event_type': 'personal',
+            }
+        )
+
+    for game in month_games:
+        local_starts = timezone.localtime(game.scheduled_at, local_tz)
+        day_key = local_starts.date()
+        opponent = game.away_team if team is not None and game.home_team_id == team.id else game.home_team
+        sessions_by_day.setdefault(day_key, []).append(
+            {
+                'id': game.id,
+                'title': f'Game vs {opponent.name}',
+                'location': game.venue or 'Venue TBD',
+                'starts_at': game.scheduled_at,
+                'ends_at': game.scheduled_at + timedelta(hours=2),
+                'is_personal': False,
+                'event_type': 'game',
+                'detail_url': reverse('scheduling:coach_game_roster', args=[game.id]) if is_coach else reverse('scheduling:upcoming_games'),
+                'detail_label': 'Manage roster' if is_coach else 'Game details',
+                'secondary_url': reverse('scheduling:upcoming_games') if is_coach else '',
+                'secondary_label': 'Game details' if is_coach else '',
+                'status_label': 'Selected in roster' if can_rsvp else 'Team game',
             }
         )
 
@@ -1699,6 +1747,12 @@ def sessions_calendar(request):
                 'title': timeline_event['title'],
                 'location': timeline_event['location'],
                 'is_personal': timeline_event['is_personal'],
+                'event_type': timeline_event.get('event_type', 'personal' if timeline_event['is_personal'] else 'session'),
+                'detail_url': timeline_event.get('detail_url', ''),
+                'detail_label': timeline_event.get('detail_label', ''),
+                'secondary_url': timeline_event.get('secondary_url', ''),
+                'secondary_label': timeline_event.get('secondary_label', ''),
+                'status_label': timeline_event.get('status_label', ''),
                 'start_label': local_start.strftime('%I:%M %p').lstrip('0').lower(),
                 'end_label': local_end.strftime('%I:%M %p').lstrip('0').lower(),
                 'start_minutes': clipped_start,
@@ -1746,7 +1800,7 @@ def sessions_calendar(request):
 
     player_rsvp_by_session_id = {}
     if can_rsvp and profile is not None:
-        month_session_ids = [event['id'] for event in raw_timeline_events if not event['is_personal']]
+        month_session_ids = [event['id'] for event in raw_timeline_events if event['event_type'] == 'session']
         if month_session_ids:
             player_rsvp_by_session_id = {
                 rsvp.session_id: rsvp.status
@@ -1754,7 +1808,7 @@ def sessions_calendar(request):
             }
 
     for event in timeline_events:
-        if event['is_personal']:
+        if event['event_type'] != 'session':
             continue
         event['viewer_rsvp_status'] = player_rsvp_by_session_id.get(event['id'])
 
@@ -1779,9 +1833,7 @@ def sessions_calendar(request):
     prev_month = date(year - 1, 12, 1) if month == 1 else date(year, month - 1, 1)
     next_month_nav = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
 
-    can_manage_availability_polls = request.user.is_staff or (
-        profile is not None and profile.role == Player.Role.COACH
-    )
+    can_manage_availability_polls = is_coach
 
     context = {
         'home_url': _post_login_route_for(request.user),
@@ -3608,13 +3660,19 @@ def player_scouting_report(request, player_id):
 
 @login_required
 def opponent_analysis(request):
-    """Opponent analysis page for league system handler."""
+    """Opponent analysis page for coaches."""
     profile = getattr(request.user, 'player_profile', None)
-    if profile is None or profile.role != Player.Role.LEAGUE_SYSTEM_HANDLER:
-        messages.error(request, 'Only the league system handler can access opponent analysis.')
-        return redirect('scheduling:dashboard')
+    if profile is None or profile.role != Player.Role.COACH:
+        messages.error(request, 'Only coaches can access opponent analysis.')
+        return redirect(_post_login_route_for(request.user))
 
     teams = Team.objects.all().order_by('name')
+    base_context = {
+        'teams': teams,
+        'role_chip_label': 'Coach',
+        'home_url': reverse('scheduling:coach_home'),
+        'home_label': 'Coach Home',
+    }
 
     if request.method == 'POST':
         team1_id = request.POST.get('team1')
@@ -3622,11 +3680,11 @@ def opponent_analysis(request):
 
         if not team1_id or not team2_id:
             messages.error(request, 'Please select two teams.')
-            return render(request, 'scheduling/opponent_analysis.html', {'teams': teams})
+            return render(request, 'scheduling/opponent_analysis.html', base_context)
 
         if team1_id == team2_id:
             messages.error(request, 'Please select two different teams.')
-            return render(request, 'scheduling/opponent_analysis.html', {'teams': teams})
+            return render(request, 'scheduling/opponent_analysis.html', base_context)
 
         team1 = get_object_or_404(Team, pk=team1_id)
         team2 = get_object_or_404(Team, pk=team2_id)
@@ -3668,7 +3726,7 @@ def opponent_analysis(request):
         )
 
         context = {
-            'teams': teams,
+            **base_context,
             'team1': team1,
             'team2': team2,
             't1_record': t1_record,
@@ -3682,7 +3740,7 @@ def opponent_analysis(request):
         }
         return render(request, 'scheduling/opponent_analysis.html', context)
 
-    return render(request, 'scheduling/opponent_analysis.html', {'teams': teams})
+    return render(request, 'scheduling/opponent_analysis.html', base_context)
 
 
 # ---------------------------------------------------------------------------

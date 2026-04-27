@@ -286,8 +286,8 @@
         <div>
             <h1 class="handler-title">AI Opponent Analysis</h1>
             <div class="header-actions">
-                <span class="header-chip">League Handler</span>
-                <a class="header-link" href="{% url 'scheduling:league_system_handler_home' %}">Handler Home</a>
+                <span class="header-chip">{{ role_chip_label }}</span>
+                <a class="header-link" href="{{ home_url }}">{{ home_label }}</a>
                 <a class="header-link" href="{% url 'scheduling:ai_analytics_hub' %}">AI Analytics</a>
             </div>
         </div>

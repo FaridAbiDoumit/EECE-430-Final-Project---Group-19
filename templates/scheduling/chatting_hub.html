@@ -419,6 +419,7 @@
         }
         .message {
             display: flex;
+            align-items: flex-start;
         }
         .message-sent {
             justify-content: flex-end;
@@ -427,10 +428,10 @@
             justify-content: flex-start;
         }
         .message-bubble {
-            display: inline-block;
-            width: fit-content;
+            display: inline-flex;
+            flex-direction: column;
+            width: auto;
             max-width: 78%;
-            min-width: 80px;
             background: #f1f7ef;
             border: 1px solid #d8e2d3;
             border-radius: 18px;
@@ -456,10 +457,11 @@
             background: #e8f3e7;
         }
         .message-meta {
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 12px;
+            justify-content: flex-start;
+            flex-wrap: wrap;
+            gap: 6px 12px;
             font-size: 0.82rem;
             color: #5e6a5b;
             margin-bottom: 8px;

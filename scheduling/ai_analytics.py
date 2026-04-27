@@ -137,7 +137,7 @@ def _build_league_handler_context(handler):
         'insight_cards': insight_cards,
         'action_items': [
             'Record match results for all teams to keep standings current.',
-            'Use Opponent Analysis to compare any two teams head-to-head.',
+            'Review the latest standings shifts to spot teams gaining momentum.',
         ] + (['Watch hot-streak teams: ' + ', '.join(hot_teams) + '.'] if hot_teams else []),
         'snapshot_items': [
             {'label': 'Teams', 'value': str(total_teams)},

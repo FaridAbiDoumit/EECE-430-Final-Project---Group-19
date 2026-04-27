@@ -13,6 +13,7 @@ from .models import (
     Announcement,
     ChatGroup,
     GameAttendance,
+    GameRoster,
     GroupMessage,
     Match,
     Message,
@@ -331,6 +332,7 @@ class SchedulingViewsTests(TestCase):
         self.assertContains(response, 'Log out')
         self.assertContains(response, reverse('scheduling:record_match'))
         self.assertNotContains(response, 'Add Team Goal')
+        self.assertNotContains(response, 'Opponent Analysis')
 
     def test_league_system_handler_can_add_team_from_manage_teams_page(self):
         user = User.objects.create_user(
@@ -518,7 +520,7 @@ class SchedulingViewsTests(TestCase):
         self.assertNotContains(response, 'AI Analytics')
         self.assertNotContains(response, 'Tryouts')
 
-    def test_admin_cannot_access_schedule_ai_or_tryout_pages(self):
+    def test_unassigned_admin_cannot_access_schedule_ai_or_tryout_pages(self):
         user = User.objects.create_user(
             username='hubadmin@example.com',
             email='hubadmin@example.com',
@@ -529,13 +531,105 @@ class SchedulingViewsTests(TestCase):
         self.client.force_login(user)
         for route_name in [
             'scheduling:create_session',
-            'scheduling:sessions_calendar',
             'scheduling:ai_analytics_hub',
             'scheduling:create_tryout_session',
             'scheduling:tryout_list',
         ]:
             response = self.client.get(reverse(route_name))
             self.assertRedirects(response, reverse('scheduling:admin_home'))
+
+        calendar_response = self.client.get(reverse('scheduling:sessions_calendar'))
+        self.assertRedirects(calendar_response, reverse('scheduling:admin_home'))
+
+    def test_team_assigned_admin_calendar_shows_team_game(self):
+        team = self.make_team('Admin Calendar Team')
+        opponent = self.make_team('Admin Calendar Opponent')
+        scheduled_at = timezone.now() + timedelta(days=3)
+        UpcomingGame.objects.create(
+            home_team=team,
+            away_team=opponent,
+            scheduled_at=scheduled_at,
+            venue='Center Court',
+        )
+        admin_user = User.objects.create_user(
+            username='teamadmincalendar@example.com',
+            email='teamadmincalendar@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+        StaffTeamAssignment.objects.create(user=admin_user, team=team, is_approved=True)
+
+        self.client.force_login(admin_user)
+        response = self.client.get(
+            reverse('scheduling:sessions_calendar'),
+            {'year': scheduled_at.year, 'month': scheduled_at.month, 'day': scheduled_at.day},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Game vs Admin Calendar Opponent')
+
+    def test_calendar_shows_games_for_coach_and_rostered_players_only(self):
+        team = self.make_team('Calendar Team')
+        opponent = self.make_team('Calendar Opponent')
+        scheduled_at = timezone.now() + timedelta(days=4)
+        game = UpcomingGame.objects.create(
+            home_team=team,
+            away_team=opponent,
+            scheduled_at=scheduled_at,
+            venue='Match Arena',
+        )
+        coach_user = User.objects.create_user(
+            username='calendarcoach@example.com',
+            email='calendarcoach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=coach_user,
+            name='Calendar Coach',
+            email='calendarcoach@example.com',
+            role=Player.Role.COACH,
+            team=team,
+        )
+        player_user = User.objects.create_user(
+            username='calendarplayer@example.com',
+            email='calendarplayer@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(
+            user=player_user,
+            name='Calendar Player',
+            email='calendarplayer@example.com',
+            role=Player.Role.PLAYER,
+            team=team,
+        )
+
+        self.client.force_login(coach_user)
+        coach_response = self.client.get(
+            reverse('scheduling:sessions_calendar'),
+            {'year': scheduled_at.year, 'month': scheduled_at.month, 'day': scheduled_at.day},
+        )
+
+        self.assertEqual(coach_response.status_code, 200)
+        self.assertContains(coach_response, 'Game vs Calendar Opponent')
+
+        self.client.force_login(player_user)
+        player_response = self.client.get(
+            reverse('scheduling:sessions_calendar'),
+            {'year': scheduled_at.year, 'month': scheduled_at.month, 'day': scheduled_at.day},
+        )
+
+        self.assertEqual(player_response.status_code, 200)
+        self.assertNotContains(player_response, 'Game vs Calendar Opponent')
+
+        GameRoster.objects.create(game=game, player=player)
+        rostered_player_response = self.client.get(
+            reverse('scheduling:sessions_calendar'),
+            {'year': scheduled_at.year, 'month': scheduled_at.month, 'day': scheduled_at.day},
+        )
+
+        self.assertEqual(rostered_player_response.status_code, 200)
+        self.assertContains(rostered_player_response, 'Game vs Calendar Opponent')
+        self.assertContains(rostered_player_response, 'Selected in roster')
 
     @patch.dict('os.environ', {}, clear=True)
     def test_player_ai_hub_shows_stat_based_fallback_insights(self):
@@ -657,11 +751,12 @@ class SchedulingViewsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Team-level match intelligence')
-        self.assertContains(response, 'Latest result')
-        self.assertContains(response, 'Primary focus')
-        self.assertContains(response, 'Recovery watch')
-        self.assertContains(response, 'Tactical Recommendations')
+        self.assertContains(response, 'Latest Result')
+        self.assertContains(response, 'AI-Recommended Focus Areas')
+        self.assertContains(response, 'Next Opponent Brief')
         self.assertContains(response, coach.team.name)
+        self.assertContains(response, 'Opponent Analysis')
+        self.assertContains(response, reverse('scheduling:opponent_analysis'))
 
     @patch.dict('os.environ', {}, clear=True)
     def test_coach_ai_hub_includes_upcoming_opponent_brief(self):
@@ -718,6 +813,65 @@ class SchedulingViewsTests(TestCase):
         self.assertContains(response, 'Next opponent: Rivals')
         self.assertContains(response, 'Past record vs Rivals')
         self.assertContains(response, 'Confirmed availability is 1 player')
+
+    def test_opponent_analysis_is_coach_only(self):
+        team = Team.objects.create(name='Coach Analysis Team')
+        coach_user = User.objects.create_user(
+            username='opponentcoach@example.com',
+            email='opponentcoach@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=coach_user,
+            name='Opponent Coach',
+            email='opponentcoach@example.com',
+            role=Player.Role.COACH,
+            team=team,
+        )
+        handler_user = User.objects.create_user(
+            username='opponenthandler@example.com',
+            email='opponenthandler@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=handler_user,
+            name='Opponent Handler',
+            email='opponenthandler@example.com',
+            role=Player.Role.LEAGUE_SYSTEM_HANDLER,
+        )
+
+        self.client.force_login(coach_user)
+        coach_response = self.client.get(reverse('scheduling:opponent_analysis'))
+
+        self.assertEqual(coach_response.status_code, 200)
+        self.assertContains(coach_response, 'AI Opponent Analysis')
+        self.assertContains(coach_response, 'Coach')
+        self.assertContains(coach_response, reverse('scheduling:coach_home'))
+
+        self.client.force_login(handler_user)
+        handler_response = self.client.get(reverse('scheduling:opponent_analysis'))
+
+        self.assertRedirects(handler_response, reverse('scheduling:league_system_handler_home'))
+
+    @patch.dict('os.environ', {}, clear=True)
+    def test_league_handler_ai_hub_does_not_suggest_opponent_analysis(self):
+        user = User.objects.create_user(
+            username='handleranalytics@example.com',
+            email='handleranalytics@example.com',
+            password='strong-pass-123',
+        )
+        Player.objects.create(
+            user=user,
+            name='Handler Analytics',
+            email='handleranalytics@example.com',
+            role=Player.Role.LEAGUE_SYSTEM_HANDLER,
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('scheduling:ai_analytics_hub'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Use Opponent Analysis to compare any two teams head-to-head.')
 
     @patch.dict('os.environ', {'GROQ_API_KEY': 'test-key', 'GROQ_MODEL': 'demo-model'}, clear=True)
     def test_ai_summary_is_cached_between_identical_requests(self):
