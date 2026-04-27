@@ -564,11 +564,11 @@
                             {% if contacts %}
                                 <ul class="chat-list">
                                     {% for contact in contacts %}
-                                        <li class="chat-list__item {% if selected_user and contact.id == selected_user.id %}active{% endif %}" data-contact-id="{{ contact.id }}">
-                                            <a href="?selected={{ contact.id }}{% if search_query %}&search={{ search_query|urlencode }}{% endif %}">
+                                        <li class="chat-list__item {% if contact.is_selected %}active{% endif %}" data-contact-key="{{ contact.key }}">
+                                            <a href="{{ contact.url }}">
                                                 <span class="chat-list__name">
                                                     {{ contact.name }}
-                                                    {% if contact.id in unread_contact_ids %}
+                                                    {% if contact.key in unread_contact_keys %}
                                                         <span class="chat-unread-dot"></span>
                                                     {% endif %}
                                                 </span>
@@ -711,6 +711,9 @@
                             {% if selected_group %}
                                 <h1>{{ selected_group.name }}</h1>
                                 <p>Group • {{ selected_group.member_count }} members</p>
+                            {% elif selected_admin %}
+                                <h1>{{ selected_admin_name }}</h1>
+                                <p>Admin</p>
                             {% elif selected_user %}
                                 <h1>{{ selected_user.name }}</h1>
                                 <p>{{ selected_user_status|title }}</p>
@@ -720,12 +723,12 @@
                             {% endif %}
                         </div>
 
-                        {% if selected_group or selected_user %}
+                        {% if selected_group or selected_user or selected_admin %}
                             <div
                                 class="messages-scroll"
                                 id="messagesContainer"
-                                data-selected-id="{% if selected_group %}{{ selected_group.id }}{% else %}{{ selected_user.id }}{% endif %}"
-                                data-selected-type="{% if selected_group %}group{% else %}individual{% endif %}"
+                                data-selected-id="{% if selected_group %}{{ selected_group.id }}{% elif selected_admin %}{{ selected_admin.id }}{% else %}{{ selected_user.id }}{% endif %}"
+                                data-selected-type="{% if selected_group %}group{% elif selected_admin %}admin{% else %}individual{% endif %}"
                             >
                                 {% if conversation_messages %}
                                     {% for message in conversation_messages %}
@@ -751,12 +754,15 @@
                         {% endif %}
                     </div>
 
-                    {% if selected_group or selected_user %}
+                    {% if selected_group or selected_user or selected_admin %}
                         <form method="post" class="chat-compose panel">
                             {% csrf_token %}
                             {% if selected_group %}
                                 <input type="hidden" name="chat_action" value="send_group" />
                                 <input type="hidden" name="group_id" value="{{ selected_group.id }}" />
+                            {% elif selected_admin %}
+                                <input type="hidden" name="chat_action" value="send_individual" />
+                                <input type="hidden" name="selected_admin_id" value="{{ selected_admin.id }}" />
                             {% else %}
                                 <input type="hidden" name="chat_action" value="send_individual" />
                                 <input type="hidden" name="selected_id" value="{{ selected_user.id }}" />
@@ -860,7 +866,12 @@
 
             async function fetchMessages() {
                 try {
-                    const queryKey = selectedType === 'group' ? 'group' : 'selected';
+                    let queryKey = 'selected';
+                    if (selectedType === 'group') {
+                        queryKey = 'group';
+                    } else if (selectedType === 'admin') {
+                        queryKey = 'admin';
+                    }
                     const response = await fetch(`${messagesEndpoint}?${queryKey}=${encodeURIComponent(selectedId)}`);
                     if (!response.ok) {
                         return;
@@ -872,10 +883,10 @@
                 }
             }
 
-            function updateUnreadDots(unreadIds) {
-                document.querySelectorAll('[data-contact-id]').forEach(item => {
-                    const contactId = item.dataset.contactId;
-                    const hasUnread = unreadIds.includes(Number(contactId));
+            function updateUnreadDots(unreadKeys) {
+                document.querySelectorAll('[data-contact-key]').forEach(item => {
+                    const contactKey = item.dataset.contactKey;
+                    const hasUnread = unreadKeys.includes(contactKey);
                     const dot = item.querySelector('.chat-unread-dot');
 
                     if (hasUnread && !dot) {
@@ -900,7 +911,7 @@
                         return;
                     }
                     const data = await response.json();
-                    updateUnreadDots(data.unread_contact_ids || []);
+                    updateUnreadDots(data.unread_contact_keys || []);
                 } catch (error) {
                     console.error('Unable to refresh unread chat status:', error);
                 }

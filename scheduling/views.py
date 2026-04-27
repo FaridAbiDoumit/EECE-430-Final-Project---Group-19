@@ -1,6 +1,7 @@
 import calendar
 from datetime import date, datetime, time, timedelta
 
+from django.contrib.auth import get_user_model
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.decorators import login_required
@@ -73,6 +74,9 @@ from .models import (
     TeamSubscriptionFee,
     MembershipPayment,
 )
+
+
+User = get_user_model()
 
 
 TEAM_STAT_METRICS = {
@@ -760,6 +764,48 @@ def _chat_sender_name(user, profile=None):
     return user.get_full_name().strip() or user.username or 'Admin'
 
 
+def _admin_chat_contacts_for(user, profile):
+    admins = User.objects.filter(
+        is_staff=True,
+        is_active=True,
+        staff_team_assignment__is_approved=True,
+    ).select_related('staff_team_assignment__team')
+
+    if user.is_staff:
+        return admins.none()
+    if profile is None:
+        return admins.none()
+    if profile.role == Player.Role.LEAGUE_SYSTEM_HANDLER:
+        return admins.distinct()
+    if profile.team_id is None:
+        return admins.none()
+    return admins.filter(staff_team_assignment__team=profile.team).distinct()
+
+
+def _chat_contact_entry(contact, search_query, is_selected=False, is_admin_contact=False):
+    if is_admin_contact:
+        params = {'admin': contact.id}
+        name = _chat_sender_name(contact)
+        key = f'admin-{contact.id}'
+        status = 'admin'
+    else:
+        params = {'selected': contact.id}
+        name = contact.name
+        key = f'player-{contact.id}'
+        status = _chat_contact_status(contact)
+
+    if search_query:
+        params['search'] = search_query
+
+    return {
+        'key': key,
+        'name': name,
+        'chat_status': status,
+        'url': f"?{urlencode(params)}",
+        'is_selected': is_selected,
+    }
+
+
 def _create_chat_notification(recipient, sender_name, content):
     preview = ' '.join((content or '').split())
     if len(preview) > 120:
@@ -786,14 +832,39 @@ def _chat_groups_for_user(user, profile):
     return groups.none()
 
 
-def _build_direct_conversation_messages(user_profile, selected_user, is_admin, request_user):
+def _build_direct_conversation_messages(
+    user_profile,
+    selected_user,
+    is_admin,
+    request_user,
+    selected_admin=None,
+    include_legacy_admin_messages=False,
+):
     """Fetch Message + AnnouncementReply records for a 1:1 chat and return a merged, sorted, serialized list."""
-    if user_profile is not None:
+    if selected_admin is not None and user_profile is not None:
+        admin_message_filter = Q(player=user_profile, sender_is_admin=True, sender_user=selected_admin)
+        if include_legacy_admin_messages:
+            admin_message_filter |= Q(player=user_profile, sender_is_admin=True, sender_user__isnull=True)
+
+        raw_messages = list(
+            Message.objects.filter(
+                admin_message_filter
+                | Q(sender=user_profile, recipient_user=selected_admin)
+            ).order_by('created_at').select_related('sender', 'sender_user')
+        )
+        ann_replies = list(
+            AnnouncementReply.objects.filter(
+                sender=user_profile,
+                announcement__created_by_player=None,
+                announcement__created_by_user=selected_admin,
+            ).select_related('announcement', 'sender').order_by('created_at')
+        )
+    elif user_profile is not None:
         raw_messages = list(
             Message.objects.filter(
                 Q(player=selected_user, sender=user_profile)
                 | Q(player=user_profile, sender=selected_user)
-            ).order_by('created_at').select_related('sender')
+            ).order_by('created_at').select_related('sender', 'sender_user')
         )
         ann_replies = list(
             AnnouncementReply.objects.filter(
@@ -804,9 +875,10 @@ def _build_direct_conversation_messages(user_profile, selected_user, is_admin, r
     elif is_admin:
         raw_messages = list(
             Message.objects.filter(
-                player=selected_user,
-                sender_is_admin=True,
-            ).order_by('created_at').select_related('sender')
+                Q(player=selected_user, sender_is_admin=True, sender_user=request_user)
+                | Q(player=selected_user, sender_is_admin=True, sender_user__isnull=True)
+                | Q(sender=selected_user, recipient_user=request_user)
+            ).order_by('created_at').select_related('sender', 'sender_user')
         )
         ann_replies = list(
             AnnouncementReply.objects.filter(
@@ -823,13 +895,27 @@ def _build_direct_conversation_messages(user_profile, selected_user, is_admin, r
 
     combined = []
     for msg in raw_messages:
-        is_sent = (
-            (user_profile is not None and msg.sender_id == user_profile.id)
-            or (is_admin and msg.sender_is_admin)
-        )
+        if selected_admin is not None and user_profile is not None:
+            is_sent = msg.sender_id == user_profile.id
+        elif is_admin:
+            is_sent = msg.sender_is_admin and (msg.sender_user_id == request_user.id or msg.sender_user_id is None)
+        else:
+            is_sent = user_profile is not None and msg.sender_id == user_profile.id
+
+        if is_sent:
+            author = 'You'
+        elif msg.sender is not None:
+            author = msg.sender.name
+        elif msg.sender_user is not None:
+            author = _chat_sender_name(msg.sender_user)
+        elif selected_admin is not None:
+            author = _chat_sender_name(selected_admin)
+        else:
+            author = selected_user.name
+
         combined.append({
             'id': f'msg_{msg.id}',
-            'author': 'You' if is_sent else (msg.sender.name if msg.sender else selected_user.name),
+            'author': author,
             'content': msg.content,
             'created_at': msg.created_at,
             'sent_by_current_user': is_sent,
@@ -956,17 +1042,32 @@ def chatting_hub(request):
     can_manage_announcements = _can_manage_announcements(request.user, user_profile)
 
     all_contacts = Player.objects.filter(is_active=True)
-    if user_profile is not None:
+    if is_admin:
+        admin_team = _get_admin_team(request.user)
+        all_contacts = all_contacts.filter(team=admin_team) if admin_team is not None else Player.objects.none()
+    elif user_profile is not None:
         all_contacts = all_contacts.exclude(pk=user_profile.pk)
+
+    all_admin_contacts = _admin_chat_contacts_for(request.user, user_profile)
+    all_admin_contact_ids = list(all_admin_contacts.values_list('pk', flat=True))
+    sole_admin_contact_id = all_admin_contact_ids[0] if len(all_admin_contact_ids) == 1 else None
 
     search_query = request.GET.get('search', '').strip()
     contacts = all_contacts
+    admin_contacts = all_admin_contacts
     if search_query:
         contacts = contacts.filter(
             Q(name__icontains=search_query) | Q(email__icontains=search_query)
         )
+        admin_contacts = admin_contacts.filter(
+            Q(username__icontains=search_query)
+            | Q(email__icontains=search_query)
+            | Q(first_name__icontains=search_query)
+            | Q(last_name__icontains=search_query)
+        )
 
-    contacts = contacts.order_by('name')
+    contacts = list(contacts.order_by('name'))
+    admin_contacts = list(admin_contacts.order_by('username'))
     group_member_queryset = all_contacts.order_by('name')
 
     accessible_groups = _chat_groups_for_user(request.user, user_profile).prefetch_related('members').order_by('name')
@@ -974,9 +1075,9 @@ def chatting_hub(request):
     if search_query:
         groups = groups.filter(name__icontains=search_query)
 
-    unread_contact_ids = []
+    unread_contact_keys = []
     if user_profile is not None:
-        unread_contact_ids = list(
+        unread_player_ids = list(
             Message.objects.filter(
                 player=user_profile,
                 sender__in=all_contacts,
@@ -985,6 +1086,40 @@ def chatting_hub(request):
             .values_list('sender_id', flat=True)
             .distinct()
         )
+        unread_contact_keys.extend(f'player-{contact_id}' for contact_id in unread_player_ids if contact_id is not None)
+
+        unread_admin_ids = list(
+            Message.objects.filter(
+                player=user_profile,
+                sender_is_admin=True,
+                sender_user_id__in=all_admin_contact_ids,
+                is_read=False,
+            )
+            .values_list('sender_user_id', flat=True)
+            .distinct()
+        )
+        if sole_admin_contact_id is not None and Message.objects.filter(
+            player=user_profile,
+            sender_is_admin=True,
+            sender_user__isnull=True,
+            is_read=False,
+        ).exists():
+            unread_admin_ids.append(sole_admin_contact_id)
+        unread_contact_keys.extend(
+            f'admin-{contact_id}'
+            for contact_id in sorted({contact_id for contact_id in unread_admin_ids if contact_id is not None})
+        )
+    elif is_admin:
+        unread_player_ids = list(
+            Message.objects.filter(
+                recipient_user=request.user,
+                sender__in=all_contacts,
+                is_read=False,
+            )
+            .values_list('sender_id', flat=True)
+            .distinct()
+        )
+        unread_contact_keys.extend(f'player-{contact_id}' for contact_id in unread_player_ids if contact_id is not None)
 
     message_form = ChatMessageForm()
     group_form = ChatGroupCreateForm(member_queryset=group_member_queryset)
@@ -1029,13 +1164,21 @@ def chatting_hub(request):
         if selected_group is not None:
             selected_group.member_count = selected_group.members.count()
 
+    selected_admin_id = request.GET.get('admin')
+    selected_admin = None
+    if selected_group is None and selected_admin_id:
+        selected_admin = next((admin for admin in admin_contacts if str(admin.pk) == str(selected_admin_id)), None)
+
     selected_id = request.GET.get('selected')
     selected_user = None
-    if selected_group is None and selected_id:
-        selected_user = contacts.filter(pk=selected_id).first()
+    if selected_group is None and selected_admin is None and selected_id:
+        selected_user = next((contact for contact in contacts if str(contact.pk) == str(selected_id)), None)
 
-    if selected_group is None and selected_user is None and contacts.exists():
-        selected_user = contacts.first()
+    if selected_group is None and selected_user is None and selected_admin is None:
+        if contacts:
+            selected_user = contacts[0]
+        elif admin_contacts:
+            selected_admin = admin_contacts[0]
 
     if request.method == 'POST':
         action = request.POST.get('chat_action', 'send_individual')
@@ -1071,10 +1214,14 @@ def chatting_hub(request):
                 author_player = announcement_obj.created_by_player
                 if author_player is not None and author_player != user_profile:
                     params['selected'] = author_player.id
+                elif announcement_obj is not None and announcement_obj.created_by_user_id and user_profile is not None:
+                    params['admin'] = announcement_obj.created_by_user_id
                 elif selected_group is not None:
                     params['group'] = selected_group.id
                 elif selected_user is not None:
                     params['selected'] = selected_user.id
+                elif selected_admin is not None:
+                    params['admin'] = selected_admin.id
                 if search_query:
                     params['search'] = search_query
                 target = reverse('scheduling:chatting_hub')
@@ -1102,6 +1249,8 @@ def chatting_hub(request):
                         params['group'] = selected_group.id
                     elif selected_user is not None:
                         params['selected'] = selected_user.id
+                    elif selected_admin is not None:
+                        params['admin'] = selected_admin.id
                     if search_query:
                         params['search'] = search_query
 
@@ -1162,26 +1311,39 @@ def chatting_hub(request):
 
         else:
             selected_id = request.POST.get('selected_id')
-            selected_user = all_contacts.filter(pk=selected_id).first()
+            selected_admin_id = request.POST.get('selected_admin_id')
+            selected_user = next((contact for contact in contacts if str(contact.pk) == str(selected_id)), None)
+            selected_admin = next((admin for admin in admin_contacts if str(admin.pk) == str(selected_admin_id)), None)
             message_form = ChatMessageForm(request.POST)
-            if selected_user is None:
+            if selected_user is None and selected_admin is None:
                 messages.error(request, 'Please select a contact to send your message.')
+            elif selected_admin is not None and user_profile is None:
+                messages.error(request, 'Admins cannot start direct chats with admin contacts.')
             elif message_form.is_valid():
                 message = message_form.save(commit=False)
-                message.player = selected_user
-                message.subject = f'Chat with {selected_user.name}'
-                message.sender_is_admin = is_admin
-                message.sender = user_profile if user_profile is not None else None
+                if selected_admin is not None:
+                    message.player = user_profile
+                    message.subject = f'Chat with {_chat_sender_name(selected_admin)}'
+                    message.sender_is_admin = False
+                    message.sender = user_profile
+                    message.sender_user = request.user
+                    message.recipient_user = selected_admin
+                else:
+                    message.player = selected_user
+                    message.subject = f'Chat with {selected_user.name}'
+                    message.sender_is_admin = is_admin
+                    message.sender = user_profile if user_profile is not None else None
+                    message.sender_user = request.user if is_admin else None
                 message.save()
 
-                if user_profile is None or selected_user.pk != user_profile.pk:
+                if selected_user is not None and (user_profile is None or selected_user.pk != user_profile.pk):
                     _create_chat_notification(
                         recipient=selected_user,
                         sender_name=_chat_sender_name(request.user, user_profile),
                         content=message.content,
                     )
 
-                params = {'selected': selected_user.id}
+                params = {'admin': selected_admin.id} if selected_admin is not None else {'selected': selected_user.id}
                 if search_query:
                     params['search'] = search_query
                 return redirect(f"{reverse('scheduling:chatting_hub')}?{urlencode(params)}")
@@ -1192,11 +1354,31 @@ def chatting_hub(request):
             sender=selected_user,
             is_read=False,
         ).update(is_read=True)
+    elif selected_group is None and selected_user is not None and is_admin:
+        Message.objects.filter(
+            recipient_user=request.user,
+            sender=selected_user,
+            is_read=False,
+        ).update(is_read=True)
+    elif selected_group is None and selected_admin is not None and user_profile is not None:
+        admin_read_filter = Q(player=user_profile, sender_is_admin=True, sender_user=selected_admin)
+        if sole_admin_contact_id == selected_admin.id:
+            admin_read_filter |= Q(player=user_profile, sender_is_admin=True, sender_user__isnull=True)
+        Message.objects.filter(admin_read_filter, is_read=False).update(is_read=True)
 
     conversation_messages = []
     if selected_group is not None:
         group_messages = GroupMessage.objects.filter(group=selected_group).order_by('created_at')
         conversation_messages = _serialize_group_messages(group_messages, request.user, user_profile)
+    elif selected_admin is not None:
+        conversation_messages = _build_direct_conversation_messages(
+            user_profile=user_profile,
+            selected_user=None,
+            is_admin=is_admin,
+            request_user=request.user,
+            selected_admin=selected_admin,
+            include_legacy_admin_messages=sole_admin_contact_id == selected_admin.id,
+        )
     elif selected_user is not None:
         conversation_messages = _build_direct_conversation_messages(
             user_profile=user_profile,
@@ -1205,9 +1387,25 @@ def chatting_hub(request):
             request_user=request.user,
         )
 
-    contact_list = list(contacts)
-    for contact in contact_list:
-        contact.chat_status = _chat_contact_status(contact)
+    contact_list = []
+    for contact in contacts:
+        contact_list.append(
+            _chat_contact_entry(
+                contact,
+                search_query,
+                is_selected=selected_user is not None and contact.id == selected_user.id,
+            )
+        )
+    for admin_contact in admin_contacts:
+        contact_list.append(
+            _chat_contact_entry(
+                admin_contact,
+                search_query,
+                is_selected=selected_admin is not None and admin_contact.id == selected_admin.id,
+                is_admin_contact=True,
+            )
+        )
+    contact_list.sort(key=lambda contact: (contact['name'].lower(), contact['key']))
 
     group_list = list(groups)
     for group in group_list:
@@ -1222,6 +1420,8 @@ def chatting_hub(request):
         'contacts': contact_list,
         'groups': group_list,
         'selected_user': selected_user,
+        'selected_admin': selected_admin,
+        'selected_admin_name': _chat_sender_name(selected_admin) if selected_admin is not None else None,
         'selected_group': selected_group,
         'selected_user_status': _chat_contact_status(selected_user) if selected_user is not None else None,
         'conversation_messages': conversation_messages,
@@ -1235,7 +1435,7 @@ def chatting_hub(request):
         'can_manage_announcements': can_manage_announcements,
         'player_can_reply': player_can_reply,
         'is_admin': is_admin,
-        'unread_contact_ids': unread_contact_ids,
+        'unread_contact_keys': unread_contact_keys,
     }
     return render(request, 'scheduling/chatting_hub.html', context)
 
@@ -1255,6 +1455,30 @@ def chatting_messages(request):
         messages_data = _serialize_group_messages(group_messages, request.user, user_profile)
         return JsonResponse({'messages': messages_data})
 
+    admin_id = request.GET.get('admin')
+    if admin_id and user_profile is not None:
+        admin_contacts = _admin_chat_contacts_for(request.user, user_profile)
+        selected_admin = admin_contacts.filter(pk=admin_id).first()
+        if selected_admin is None:
+            return JsonResponse({'messages': []})
+
+        admin_ids = list(admin_contacts.values_list('pk', flat=True))
+        sole_admin_id = admin_ids[0] if len(admin_ids) == 1 else None
+        read_filter = Q(player=user_profile, sender_is_admin=True, sender_user=selected_admin)
+        if sole_admin_id == selected_admin.id:
+            read_filter |= Q(player=user_profile, sender_is_admin=True, sender_user__isnull=True)
+        Message.objects.filter(read_filter, is_read=False).update(is_read=True)
+
+        messages_data = _build_direct_conversation_messages(
+            user_profile=user_profile,
+            selected_user=None,
+            is_admin=is_admin,
+            request_user=request.user,
+            selected_admin=selected_admin,
+            include_legacy_admin_messages=sole_admin_id == selected_admin.id,
+        )
+        return JsonResponse({'messages': messages_data})
+
     selected_id = request.GET.get('selected')
     selected_user = None
     if selected_id:
@@ -1262,6 +1486,19 @@ def chatting_messages(request):
 
     if selected_user is None:
         return JsonResponse({'messages': []})
+
+    if user_profile is not None:
+        Message.objects.filter(
+            player=user_profile,
+            sender=selected_user,
+            is_read=False,
+        ).update(is_read=True)
+    elif is_admin:
+        Message.objects.filter(
+            recipient_user=request.user,
+            sender=selected_user,
+            is_read=False,
+        ).update(is_read=True)
 
     messages_data = _build_direct_conversation_messages(
         user_profile=user_profile,
@@ -1275,21 +1512,60 @@ def chatting_messages(request):
 @login_required(login_url='scheduling:login')
 def chatting_unread_status(request):
     user_profile = getattr(request.user, 'player_profile', None)
-    unread_contact_ids = []
+    unread_contact_keys = []
 
     if user_profile is not None:
         contacts = Player.objects.filter(is_active=True).exclude(pk=user_profile.pk)
-        unread_contact_ids = list(
-            Message.objects.filter(
+        unread_contact_keys.extend(
+            f'player-{contact_id}'
+            for contact_id in Message.objects.filter(
                 player=user_profile,
                 sender__in=contacts,
                 is_read=False,
             )
             .values_list('sender_id', flat=True)
             .distinct()
+            if contact_id is not None
         )
 
-    return JsonResponse({'unread_contact_ids': unread_contact_ids})
+        admin_contacts = _admin_chat_contacts_for(request.user, user_profile)
+        admin_ids = list(admin_contacts.values_list('pk', flat=True))
+        unread_contact_keys.extend(
+            f'admin-{contact_id}'
+            for contact_id in Message.objects.filter(
+                player=user_profile,
+                sender_is_admin=True,
+                sender_user_id__in=admin_ids,
+                is_read=False,
+            )
+            .values_list('sender_user_id', flat=True)
+            .distinct()
+            if contact_id is not None
+        )
+
+        if len(admin_ids) == 1 and Message.objects.filter(
+            player=user_profile,
+            sender_is_admin=True,
+            sender_user__isnull=True,
+            is_read=False,
+        ).exists():
+            unread_contact_keys.append(f'admin-{admin_ids[0]}')
+    elif request.user.is_staff:
+        admin_team = _get_admin_team(request.user)
+        contacts = Player.objects.filter(is_active=True, team=admin_team) if admin_team is not None else Player.objects.none()
+        unread_contact_keys.extend(
+            f'player-{contact_id}'
+            for contact_id in Message.objects.filter(
+                recipient_user=request.user,
+                sender__in=contacts,
+                is_read=False,
+            )
+            .values_list('sender_id', flat=True)
+            .distinct()
+            if contact_id is not None
+        )
+
+    return JsonResponse({'unread_contact_keys': sorted(set(unread_contact_keys))})
 
 
 @login_required(login_url='scheduling:login')
@@ -2557,7 +2833,8 @@ def chat_with_player(request, player_id):
         messages.info(request, 'This page is currently available only for admin accounts.')
         return redirect('scheduling:dashboard')
     
-    player = get_object_or_404(Player, pk=player_id, role=Player.Role.PLAYER)
+    admin_team = _get_admin_team(request.user)
+    player = get_object_or_404(Player, pk=player_id, role=Player.Role.PLAYER, team=admin_team)
     
     if request.method == 'POST':
         form = MessageForm(request.POST)
@@ -2565,6 +2842,7 @@ def chat_with_player(request, player_id):
             message = form.save(commit=False)
             message.player = player
             message.sender_is_admin = True
+            message.sender_user = request.user
             message.save()
             _create_chat_notification(
                 recipient=player,
@@ -2650,7 +2928,8 @@ def chat_with_coach(request, coach_id):
         messages.info(request, 'This page is currently available only for admin accounts.')
         return redirect('scheduling:dashboard')
     
-    coach = get_object_or_404(Player, pk=coach_id, role=Player.Role.COACH)
+    admin_team = _get_admin_team(request.user)
+    coach = get_object_or_404(Player, pk=coach_id, role=Player.Role.COACH, team=admin_team)
     
     if request.method == 'POST':
         form = MessageForm(request.POST)
@@ -2658,6 +2937,7 @@ def chat_with_coach(request, coach_id):
             message = form.save(commit=False)
             message.player = coach
             message.sender_is_admin = True
+            message.sender_user = request.user
             message.save()
             _create_chat_notification(
                 recipient=coach,
@@ -3980,7 +4260,7 @@ def pending_cash_payments(request):
     ).select_related('player').order_by('-created_at')
 
     return render(request, 'scheduling/pending_cash_payments.html', {
-        'pending': pending,
+        'pending_payments': pending,
         'admin_team': admin_team,
     })
 

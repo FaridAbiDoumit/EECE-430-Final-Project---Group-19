@@ -16,6 +16,7 @@ from .models import (
     GameRoster,
     GroupMessage,
     Match,
+    MembershipPayment,
     Message,
     Notification,
     Player,
@@ -567,6 +568,78 @@ class SchedulingViewsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Game vs Admin Calendar Opponent')
+
+    def test_team_assigned_admin_can_view_and_confirm_pending_cash_payment(self):
+        team = self.make_team('Cash Admin Team')
+        other_team = self.make_team('Other Cash Team')
+        admin_user = User.objects.create_user(
+            username='cashadmin@example.com',
+            email='cashadmin@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+        StaffTeamAssignment.objects.create(user=admin_user, team=team, is_approved=True)
+        player_user = User.objects.create_user(
+            username='cashplayer@example.com',
+            email='cashplayer@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(
+            user=player_user,
+            name='Cash Player',
+            email='cashplayer@example.com',
+            role=Player.Role.PLAYER,
+            team=team,
+        )
+        other_player_user = User.objects.create_user(
+            username='othercashplayer@example.com',
+            email='othercashplayer@example.com',
+            password='strong-pass-123',
+        )
+        other_player = Player.objects.create(
+            user=other_player_user,
+            name='Other Cash Player',
+            email='othercashplayer@example.com',
+            role=Player.Role.PLAYER,
+            team=other_team,
+        )
+        payment = MembershipPayment.objects.create(
+            player=player,
+            amount='45.00',
+            period_month=4,
+            period_year=2026,
+            method=MembershipPayment.Method.CASH,
+            status=MembershipPayment.Status.PENDING,
+        )
+        MembershipPayment.objects.create(
+            player=other_player,
+            amount='55.00',
+            period_month=4,
+            period_year=2026,
+            method=MembershipPayment.Method.CASH,
+            status=MembershipPayment.Status.PENDING,
+        )
+
+        self.client.force_login(admin_user)
+
+        list_response = self.client.get(reverse('scheduling:pending_cash_payments'))
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertContains(list_response, 'Cash Player')
+        self.assertNotContains(list_response, 'Other Cash Player')
+
+        confirm_response = self.client.post(reverse('scheduling:confirm_cash_payment', args=[payment.id]))
+
+        self.assertRedirects(confirm_response, reverse('scheduling:pending_cash_payments'))
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, MembershipPayment.Status.PAID)
+        self.assertIsNotNone(payment.paid_at)
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=player,
+                title='Subscription payment confirmed',
+            ).exists()
+        )
 
     def test_calendar_shows_games_for_coach_and_rostered_players_only(self):
         team = self.make_team('Calendar Team')
@@ -1456,6 +1529,136 @@ class SchedulingViewsTests(TestCase):
         notification = Notification.objects.get(recipient=recipient)
         self.assertEqual(notification.title, 'New message from Notify Sender')
         self.assertIn('Hello from sender', notification.message)
+
+    def test_admin_chat_message_is_visible_to_team_player_in_chatting_hub(self):
+        team = self.make_team('Chat Admin Team')
+        admin_user = User.objects.create_user(
+            username='clubadminchat@example.com',
+            email='clubadminchat@example.com',
+            password='strong-pass-123',
+            first_name='Club',
+            last_name='Admin',
+            is_staff=True,
+        )
+        StaffTeamAssignment.objects.create(user=admin_user, team=team, is_approved=True)
+        player_user = User.objects.create_user(
+            username='teamplayerchat@example.com',
+            email='teamplayerchat@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(
+            user=player_user,
+            name='Team Player',
+            email='teamplayerchat@example.com',
+            role=Player.Role.PLAYER,
+            team=team,
+        )
+
+        self.client.force_login(admin_user)
+        response = self.client.post(
+            reverse('scheduling:chatting_hub'),
+            data={
+                'chat_action': 'send_individual',
+                'selected_id': player.id,
+                'content': 'Admin broadcast check',
+            },
+        )
+
+        self.assertRedirects(response, f"{reverse('scheduling:chatting_hub')}?selected={player.id}")
+        self.assertTrue(
+            Message.objects.filter(
+                player=player,
+                sender_is_admin=True,
+                sender_user=admin_user,
+                content='Admin broadcast check',
+            ).exists()
+        )
+
+        self.client.force_login(player_user)
+        hub_response = self.client.get(reverse('scheduling:chatting_hub'), {'admin': admin_user.id})
+
+        self.assertEqual(hub_response.status_code, 200)
+        self.assertContains(hub_response, 'Club Admin')
+        self.assertContains(hub_response, 'Admin broadcast check')
+        self.assertContains(hub_response, '<p>Admin</p>', html=False)
+
+    def test_player_can_reply_to_team_admin_in_chatting_hub(self):
+        team = self.make_team('Reply Admin Team')
+        admin_user = User.objects.create_user(
+            username='replyadmin@example.com',
+            email='replyadmin@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+        StaffTeamAssignment.objects.create(user=admin_user, team=team, is_approved=True)
+        player_user = User.objects.create_user(
+            username='replyplayer@example.com',
+            email='replyplayer@example.com',
+            password='strong-pass-123',
+        )
+        player = Player.objects.create(
+            user=player_user,
+            name='Reply Player',
+            email='replyplayer@example.com',
+            role=Player.Role.PLAYER,
+            team=team,
+        )
+
+        self.client.force_login(player_user)
+        response = self.client.post(
+            reverse('scheduling:chatting_hub'),
+            data={
+                'chat_action': 'send_individual',
+                'selected_admin_id': admin_user.id,
+                'content': 'Need help with registration',
+            },
+        )
+
+        self.assertRedirects(response, f"{reverse('scheduling:chatting_hub')}?admin={admin_user.id}")
+        self.assertTrue(
+            Message.objects.filter(
+                player=player,
+                sender=player,
+                recipient_user=admin_user,
+                content='Need help with registration',
+            ).exists()
+        )
+
+        self.client.force_login(admin_user)
+        hub_response = self.client.get(reverse('scheduling:chatting_hub'), {'selected': player.id})
+
+        self.assertEqual(hub_response.status_code, 200)
+        self.assertContains(hub_response, 'Need help with registration')
+
+    def test_admin_chat_contacts_are_limited_to_assigned_team(self):
+        home_team = self.make_team('Scoped Admin Team')
+        other_team = self.make_team('Other Scoped Team')
+        admin_user = User.objects.create_user(
+            username='scopedadmin@example.com',
+            email='scopedadmin@example.com',
+            password='strong-pass-123',
+            is_staff=True,
+        )
+        StaffTeamAssignment.objects.create(user=admin_user, team=home_team, is_approved=True)
+        Player.objects.create(
+            name='Home Team Player',
+            email='home-team-player@example.com',
+            role=Player.Role.PLAYER,
+            team=home_team,
+        )
+        Player.objects.create(
+            name='Other Team Player',
+            email='other-team-player@example.com',
+            role=Player.Role.PLAYER,
+            team=other_team,
+        )
+
+        self.client.force_login(admin_user)
+        response = self.client.get(reverse('scheduling:chatting_hub'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Home Team Player')
+        self.assertNotContains(response, 'Other Team Player')
 
     def test_chatting_hub_can_create_group_with_selected_members(self):
         creator_user = User.objects.create_user(

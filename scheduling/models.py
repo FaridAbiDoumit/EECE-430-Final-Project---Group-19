@@ -353,6 +353,20 @@ class Message(models.Model):
         null=True,
         blank=True,
     )
+    sender_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='sent_chat_messages',
+        null=True,
+        blank=True,
+    )
+    recipient_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='received_chat_messages',
+        null=True,
+        blank=True,
+    )
     subject = models.CharField(max_length=200)
     content = models.TextField()
     sender_is_admin = models.BooleanField(default=True)
