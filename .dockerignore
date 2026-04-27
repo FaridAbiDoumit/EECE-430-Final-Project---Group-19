@@ -1,0 +1,12 @@
+.git
+.github
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3-shm
+*.sqlite3-wal
+.venv/
+venv/
+dist/
+build/
